@@ -2,6 +2,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Divider,
@@ -10,7 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { useBinderItems, useBinderMatches, useSharedBinder } from '../api/queries';
+import { flattenPages, useBinderItems, useBinderMatches, useSharedBinder } from '../api/queries';
 import { CardGrid } from '../components/CardGrid';
 import { CardTile } from '../components/CardTile';
 import { palette } from '../theme';
@@ -86,7 +87,7 @@ export function SharedBinderPage() {
       {itemsQuery.error && <Alert severity="error">{itemsQuery.error.message}</Alert>}
 
       <CardGrid>
-        {itemsQuery.data?.items.map((item) =>
+        {flattenPages(itemsQuery.data?.pages).map((item) =>
           item.card ? (
             <CardTile
               key={item.id}
@@ -97,6 +98,18 @@ export function SharedBinderPage() {
           ) : null,
         )}
       </CardGrid>
+
+      {itemsQuery.hasNextPage && (
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Button
+            variant="outlined"
+            onClick={() => void itemsQuery.fetchNextPage()}
+            disabled={itemsQuery.isFetchingNextPage}
+          >
+            {itemsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
+          </Button>
+        </Box>
+      )}
     </Stack>
   );
 }

@@ -8,9 +8,11 @@ import type {
   Me,
   Page,
   TradeMatch,
+  UpdateBinderInput,
+  UpdateBinderItemInput,
   WantItem,
 } from '@opulent/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from './ApiProvider';
 
 /** Query key factory. Keeping the keys in one place makes cache busting reliable. */
@@ -60,16 +62,45 @@ export function useBinders(enabled: boolean) {
   });
 }
 
-export function useBinderItems(binderId: string | undefined, shareToken?: string) {
+export function useBinder(binderId: string | undefined, shareToken?: string) {
   const api = useApi();
   return useQuery({
-    queryKey: queryKeys.binderItems(binderId ?? 'none'),
+    queryKey: queryKeys.binder(binderId ?? 'none'),
     queryFn: () =>
-      api<Page<BinderItem>>(`/v1/binders/${binderId}/items`, {
-        ...(shareToken ? { shareToken } : {}),
-      }),
+      api<Binder>(`/v1/binders/${binderId}`, { ...(shareToken ? { shareToken } : {}) }),
     enabled: Boolean(binderId),
   });
+}
+
+/** A page size that fills a few rows of the card grid without a long first load. */
+const BINDER_PAGE_SIZE = 24;
+
+/**
+ * Keyset pagination over a binder's cards.
+ *
+ * The server hands back an opaque `nextCursor` rather than a page number, so
+ * adding a card mid-scroll cannot duplicate or skip a row.
+ */
+export function useBinderItems(binderId: string | undefined, shareToken?: string) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.binderItems(binderId ?? 'none'),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(BINDER_PAGE_SIZE) });
+      if (pageParam) params.set('cursor', pageParam);
+      return api<Page<BinderItem>>(`/v1/binders/${binderId}/items?${params.toString()}`, {
+        ...(shareToken ? { shareToken } : {}),
+      });
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: Boolean(binderId),
+  });
+}
+
+/** Flattens the paged result into the single list the card grid wants. */
+export function flattenPages<T>(pages: { items: T[] }[] | undefined): T[] {
+  return pages?.flatMap((page) => page.items) ?? [];
 }
 
 /** The headline feature: what the signed-in viewer wants from this binder. */
@@ -126,13 +157,67 @@ export function useAddBinderItem(binderId: string) {
   });
 }
 
+export function useUpdateBinderItem(binderId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, input }: { itemId: string; input: UpdateBinderItemInput }) =>
+      api<BinderItem>(`/v1/binders/${binderId}/items/${itemId}`, {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.binderItems(binderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.binders });
+    },
+  });
+}
+
 export function useRemoveBinderItem(binderId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) =>
       api<void>(`/v1/binders/${binderId}/items/${itemId}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.binderItems(binderId) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.binderItems(binderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.binders });
+    },
+  });
+}
+
+export function useUpdateBinder(binderId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateBinderInput) =>
+      api<Binder>(`/v1/binders/${binderId}`, { method: 'PATCH', body: input }),
+    onSuccess: (binder) => {
+      queryClient.setQueryData(queryKeys.binder(binderId), binder);
+      queryClient.invalidateQueries({ queryKey: queryKeys.binders });
+    },
+  });
+}
+
+export function useDeleteBinder() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (binderId: string) => api<void>(`/v1/binders/${binderId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.binders }),
+  });
+}
+
+/** Invalidates every share link the owner has handed out so far. */
+export function useRotateShareToken(binderId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ shareToken: string }>(`/v1/binders/${binderId}/share-token/rotate`, {
+        method: 'POST',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.binder(binderId) }),
   });
 }
 

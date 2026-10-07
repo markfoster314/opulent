@@ -17,6 +17,8 @@ export const binderSchema = z.object({
   description: z.string().nullable(),
   visibility: binderVisibilitySchema,
   itemCount: z.number().int().nonnegative().optional(),
+  /** Present only when the caller owns the binder. Strangers never receive it. */
+  shareToken: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -44,6 +46,11 @@ export const binderItemSchema = z.object({
   notes: z.string().nullable(),
   forTrade: z.boolean(),
   card: cardSchema.optional(),
+  /**
+   * Which finishes this printing was actually produced in. The edit form uses
+   * it to avoid offering, say, etched foil for a card that never had one.
+   */
+  availableFinishes: z.array(cardFinishSchema).optional(),
 });
 export type BinderItem = z.infer<typeof binderItemSchema>;
 

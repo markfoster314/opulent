@@ -264,22 +264,47 @@ wrong:
 - [ ] Check that double-faced cards have a picture (162 rows have no `image_uris`; confirm these are genuinely art-less objects rather than a bug in the front-face fallback)
 - [ ] Add a unit test for `toCardRow`, covering a normal card, a double-faced card, and a card with no `oracle_id`
 
-### Phase 3 — Real Auth0 tenant
+### Phase 3 — Real Auth0 tenant — **done**
 
-- [ ] Create an Auth0 tenant
-- [ ] Create a Single Page Application for the web app
-- [ ] Create an API in Auth0 with the identifier `https://api.opulenttutor.com`
-- [ ] Add `http://localhost:5173` to the allowed callback, logout, and web origin lists
-- [ ] Fill in `.env` from `.env.example`
-- [ ] Sign in end to end and confirm a `users` row is created automatically
+- [x] Create an Auth0 tenant
+- [x] Create a Single Page Application for the web app
+- [x] Create an API in Auth0 with the identifier `https://api.opulenttutor.com`
+- [x] Add `http://localhost:5173` to the allowed callback, logout, and web origin lists
+- [x] Fill in `.env` from `.env.example`
+- [x] Sign in end to end and confirm a `users` row is created automatically
 
-### Phase 4 — Binders, for real
+Two traps caught during this phase, recorded so they are not rediscovered:
 
-- [ ] Create a binder, add cards, confirm quantity stacking works
-- [ ] Add a binder settings screen: rename, description, visibility, rotate share token
-- [ ] Wire up the "Load more" button, which currently renders but does nothing
-- [ ] Add edit controls for quantity, finish, and condition on each stack
-- [ ] Add a bulk paste importer, so a user can paste a decklist instead of searching 200 times
+- Vite resolves `.env` against its own project root, which is `apps/web`, not the
+  repo root. `envDir: '../../'` in `apps/web/vite.config.ts` fixes it. Without
+  that, every `VITE_` variable is `undefined` and the login redirect goes to
+  `https://undefined/authorize`.
+- An Auth0 API defaults to the `require_client_grant` access policy, which
+  blocks browser logins until the SPA is authorized on the API's
+  "Machine to Machine Applications" tab, despite the tab's name.
+
+### Phase 4 — Binders, for real — **done**
+
+- [x] Create a binder, add cards, confirm quantity stacking works
+- [x] Add a binder settings screen: rename, description, visibility, rotate share token
+- [x] Wire up the "Load more" button, which currently renders but does nothing
+- [x] Add edit controls for quantity, finish, and condition on each stack
+
+Decisions worth remembering:
+
+- **Renaming a binder does not re-slug it.** The slug is part of every share link
+  already handed out, so it changes only when edited directly. The settings form
+  sends only the fields that actually changed, so a no-op save cannot touch it.
+- **The share token is withheld from everyone but the owner.** It used to be
+  returned to anyone who could open a binder. That leaked the secret door for
+  public binders, and the captured token would still have worked if the owner
+  later switched the binder to unlisted. `toBinderResponse` now strips it.
+- **The quantity stepper sends an absolute number, not a delta.** Clicks are
+  debounced into one request, and because the value is absolute, two overlapping
+  requests still settle on what the user sees.
+- **The finish dropdown only offers finishes the printing was actually made in.**
+  Binder items now carry `availableFinishes`, filtered against the finishes we
+  model so a new Scryfall finish cannot reach the form as a broken option.
 
 ### Phase 5 — Sharing
 
@@ -323,7 +348,9 @@ wrong:
 
 Honest list. None of these block Phase 2.
 
-- **Only one test, and it is a smoke test.** `pnpm smoke` covers the queries that matter, but it needs a live database and it is not a unit test suite. `toCardRow` and `slugify` are pure functions and deserve real unit tests with no database at all.
+- **Only one test, and it is a smoke test.** `pnpm smoke` is up to 29 checks and covers the queries that matter, but it needs a live database and it is not a unit test suite. `toCardRow` and `slugify` are pure functions and deserve real unit tests with no database at all.
+- **No bulk import.** Adding 200 cards means 200 searches. Pasting a decklist is the obvious fix and the single biggest quality-of-life gap right now.
+- **Nothing in the web app has been clicked by me.** Phase 4's UI typechecks and builds, and the service functions behind it are covered by the smoke test, but the dialogs and the stepper have not been exercised in a browser.
 - **162 cards have no image.** Out of 118,517. Probably art-less objects such as tokens or placeholder cards, but the front-face fallback in `pickImageUris` has not been confirmed against a real double-faced card.
 - **No linter.** Only Prettier and the TypeScript compiler run today. ESLint is worth adding before the team grows.
 - **"Load more" does nothing.** The API returns a cursor and the button renders, but they are not connected.

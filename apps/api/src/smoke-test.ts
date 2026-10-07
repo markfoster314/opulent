@@ -1,7 +1,17 @@
 import { binderItems, binders, cards, createDatabase, users, wantItems } from '@opulent/db';
 import { loadEnv } from '@opulent/db/env';
 import { and, eq, sql } from 'drizzle-orm';
-import { addBinderItem, assertCanView, findTradeMatches } from './modules/binders/service';
+import {
+  addBinderItem,
+  assertCanView,
+  findTradeMatches,
+  getBinderById,
+  listBinderItems,
+  rotateShareToken,
+  toBinderResponse,
+  updateBinder,
+  updateBinderItem,
+} from './modules/binders/service';
 import { searchCards } from './modules/cards/service';
 
 loadEnv();
@@ -44,6 +54,10 @@ async function main() {
         name: 'Smoke Test Bolt',
         setCode: 'zzz',
         collectorNumber: '1',
+        // The third value is deliberately not a finish we model. Scryfall can
+        // add new ones, and unknown values must be dropped rather than offered
+        // to the user in the edit form.
+        finishes: ['nonfoil', 'foil', 'not_a_real_finish'],
         raw: {},
       },
       {
@@ -164,6 +178,65 @@ async function main() {
       'not-for-trade cards excluded',
       (await findTradeMatches(db, binder.id, viewer.id)).length === 0,
     );
+
+    // --- Phase 4: binder settings ---
+
+    const renamed = await updateBinder(db, binder.id, owner.id, { name: 'Renamed Binder' });
+    check('binder rename applied', renamed.name === 'Renamed Binder', renamed.name);
+    // A rename must not re-slug, or every share link already sent would break.
+    check('rename left the slug alone', renamed.slug === binder.slug, renamed.slug);
+
+    await updateBinder(db, binder.id, owner.id, { visibility: 'public' });
+    const madePublic = await getBinderById(db, binder.id);
+    check('visibility change applied', madePublic.visibility === 'public', madePublic.visibility);
+
+    const rotated = await rotateShareToken(db, binder.id);
+    check('rotated token is a new value', rotated !== binder.shareToken);
+    check('rotated token is well formed', /^[0-9a-f]{32}$/.test(rotated), rotated);
+
+    // The owner sees the token; nobody else does. Leaking it from a public
+    // binder would survive a later switch back to unlisted.
+    const ownerView = toBinderResponse(madePublic, owner.id) as Record<string, unknown>;
+    const strangerView = toBinderResponse(madePublic, viewer.id) as Record<string, unknown>;
+    check('owner response includes the share token', 'shareToken' in ownerView);
+    check('stranger response omits the share token', !('shareToken' in strangerView));
+
+    // --- Phase 4: per-stack edits ---
+
+    const edited = await updateBinderItem(db, binder.id, bumped.id, {
+      condition: 'LP',
+      quantity: 4,
+      forTrade: true,
+    });
+    check('stack condition edited', edited.condition === 'LP', edited.condition);
+    check('stack quantity edited', edited.quantity === 4, `${edited.quantity}`);
+    check(
+      'edited stack reports the printing finishes',
+      edited.availableFinishes?.join(',') === 'nonfoil,foil',
+      JSON.stringify(edited.availableFinishes),
+    );
+
+    // --- Phase 4: keyset pagination ---
+
+    const firstPage = await listBinderItems(db, binder.id, { limit: 2 });
+    check(
+      'first page respects the limit',
+      firstPage.items.length === 2,
+      `${firstPage.items.length}`,
+    );
+    check('first page returns a cursor', Boolean(firstPage.nextCursor));
+
+    const secondPage = await listBinderItems(db, binder.id, {
+      limit: 2,
+      cursor: firstPage.nextCursor ?? undefined,
+    });
+    const firstIds = new Set(firstPage.items.map((item) => item.id));
+    const overlap = secondPage.items.filter((item) => firstIds.has(item.id));
+    check('second page does not repeat the first', overlap.length === 0, `${overlap.length} dupes`);
+    check('pagination ended cleanly', secondPage.nextCursor === null);
+
+    // Restore for the access-control checks below.
+    await updateBinder(db, binder.id, owner.id, { visibility: 'unlisted' });
 
     // Access control.
     check(

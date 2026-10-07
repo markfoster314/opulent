@@ -36,3 +36,41 @@ export type TradeStatus = z.infer<typeof tradeStatusSchema>;
 
 export const tradeSideSchema = z.enum(['offered', 'requested']);
 export type TradeSide = z.infer<typeof tradeSideSchema>;
+
+/**
+ * Display text for the enums above.
+ *
+ * These live beside the schemas rather than in the web app so that the eventual
+ * mobile app cannot drift from the website on what "LP" means.
+ */
+export const cardConditionLabels: Record<CardCondition, string> = {
+  NM: 'Near mint',
+  LP: 'Lightly played',
+  MP: 'Moderately played',
+  HP: 'Heavily played',
+  DMG: 'Damaged',
+};
+
+export const cardFinishLabels: Record<CardFinish, string> = {
+  nonfoil: 'Non-foil',
+  foil: 'Foil',
+  etched: 'Etched foil',
+};
+
+export const binderVisibilityLabels: Record<BinderVisibility, string> = {
+  private: 'Private',
+  unlisted: 'Unlisted',
+  public: 'Public',
+};
+
+export const binderVisibilityDescriptions: Record<BinderVisibility, string> = {
+  private: 'Only you can open it.',
+  unlisted: 'Anyone with the share link can open it. It is never listed publicly.',
+  public: 'Listed on your profile and open to anyone.',
+};
+
+export const wantPriorityLabels: Record<WantPriority, string> = {
+  1: 'High',
+  2: 'Medium',
+  3: 'Low',
+};

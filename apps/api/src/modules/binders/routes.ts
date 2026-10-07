@@ -27,6 +27,7 @@ import {
   listPublicBindersByHandle,
   removeBinderItem,
   rotateShareToken,
+  toBinderResponse,
   updateBinder,
   updateBinderItem,
 } from './service';
@@ -55,17 +56,19 @@ binderRoutes.post(
   requireUser,
   zValidator('json', createBinderSchema),
   async (c) => {
-    const binder = await createBinder(c.get('db'), c.get('user').id, c.req.valid('json'));
-    return c.json(binder, 201);
+    const userId = c.get('user').id;
+    const binder = await createBinder(c.get('db'), userId, c.req.valid('json'));
+    return c.json(toBinderResponse(binder, userId), 201);
   },
 );
 
 // --- Single binder ---
 
 binderRoutes.get('/:id', optionalAuth, zValidator('param', binderIdParam), async (c) => {
+  const viewerId = c.get('user')?.id;
   const binder = await getBinderById(c.get('db'), c.req.valid('param').id);
-  assertCanView(binder, viewer(c.req.query('t'), c.get('user')?.id));
-  return c.json(binder);
+  assertCanView(binder, viewer(c.req.query('t'), viewerId));
+  return c.json(toBinderResponse(binder, viewerId));
 });
 
 binderRoutes.patch(
@@ -76,9 +79,11 @@ binderRoutes.patch(
   zValidator('json', updateBinderSchema),
   async (c) => {
     const db = c.get('db');
+    const userId = c.get('user').id;
     const binder = await getBinderById(db, c.req.valid('param').id);
-    assertCanEdit(binder, { userId: c.get('user').id });
-    return c.json(await updateBinder(db, binder.id, c.req.valid('json')));
+    assertCanEdit(binder, { userId });
+    const updated = await updateBinder(db, binder.id, userId, c.req.valid('json'));
+    return c.json(toBinderResponse(updated, userId));
   },
 );
 
@@ -204,7 +209,8 @@ binderRoutes.get(
 
 binderRoutes.get('/by/:handle/:slug', optionalAuth, zValidator('param', shareParam), async (c) => {
   const { handle, slug } = c.req.valid('param');
+  const viewerId = c.get('user')?.id;
   const binder = await getBinderByHandleAndSlug(c.get('db'), handle, slug);
-  assertCanView(binder, viewer(c.req.query('t'), c.get('user')?.id));
-  return c.json(binder);
+  assertCanView(binder, viewer(c.req.query('t'), viewerId));
+  return c.json(toBinderResponse(binder, viewerId));
 });

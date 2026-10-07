@@ -3,6 +3,7 @@ import { binderItems, binders, cards, users } from '@opulent/db';
 import type {
   AddBinderItemInput,
   BinderItem,
+  CardFinish,
   CreateBinderInput,
   Page,
   PaginationQuery,
@@ -10,8 +11,14 @@ import type {
   UpdateBinderInput,
   UpdateBinderItemInput,
 } from '@opulent/shared';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { cardFinishSchema } from '@opulent/shared';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
+
+/** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
+function isCardFinish(value: string): value is CardFinish {
+  return cardFinishSchema.safeParse(value).success;
+}
 
 export interface ViewerContext {
   /** Internal user id of the signed-in caller, if any. */
@@ -37,6 +44,18 @@ export function assertCanEdit(binder: BinderRow, viewer: ViewerContext): void {
   if (!viewer.userId || binder.userId !== viewer.userId) {
     throw ApiError.notFound('Binder not found');
   }
+}
+
+/**
+ * Shapes a binder row for the wire.
+ *
+ * The share token is withheld from everyone but the owner. Without this, a
+ * stranger who opens a public binder would learn its token, and that token
+ * would still work if the owner later switched the binder to unlisted.
+ */
+export function toBinderResponse(binder: BinderRow, viewerUserId: string | undefined) {
+  const { shareToken, ...rest } = binder;
+  return viewerUserId && binder.userId === viewerUserId ? { ...rest, shareToken } : rest;
 }
 
 export async function listBindersForOwner(db: Database, userId: string) {
@@ -135,11 +154,29 @@ export async function getBinderByHandleAndSlug(
   return row.binders;
 }
 
+/**
+ * Note that renaming a binder does not re-slug it. The slug is part of every
+ * share link already handed out, so it only changes when asked for explicitly.
+ */
 export async function updateBinder(
   db: Database,
   binderId: string,
+  userId: string,
   input: UpdateBinderInput,
 ): Promise<BinderRow> {
+  if (input.slug) {
+    const taken = await db
+      .select({ id: binders.id })
+      .from(binders)
+      .where(
+        and(eq(binders.userId, userId), eq(binders.slug, input.slug), ne(binders.id, binderId)),
+      )
+      .limit(1);
+    if (taken.length > 0) {
+      throw ApiError.conflict(`You already have a binder at /${input.slug}`);
+    }
+  }
+
   const updated = await db
     .update(binders)
     .set({ ...input, updatedAt: new Date() })
@@ -186,6 +223,7 @@ const binderItemSelection = {
   cardOracleId: cards.oracleId,
   cardImageUris: cards.imageUris,
   cardPrices: cards.prices,
+  cardFinishes: cards.finishes,
 };
 
 type BinderItemJoinRow = Awaited<ReturnType<typeof selectBinderItems>>[number];
@@ -208,6 +246,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
     language: row.language,
     notes: row.notes,
     forTrade: row.forTrade,
+    availableFinishes: (row.cardFinishes ?? []).filter(isCardFinish),
     card: {
       scryfallId: row.scryfallId,
       oracleId: row.cardOracleId,
@@ -220,7 +259,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
       layout: null,
       typeLine: null,
       manaCost: null,
-      finishes: [],
+      finishes: (row.cardFinishes ?? []).filter(isCardFinish),
       imageUris: row.cardImageUris ?? null,
       prices: row.cardPrices ?? null,
       scryfallUri: null,
