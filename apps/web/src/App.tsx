@@ -1,0 +1,24 @@
+import { Route, Routes } from 'react-router-dom';
+import { AppLayout } from './components/AppLayout';
+import { BinderDetailPage } from './pages/BinderDetailPage';
+import { BindersPage } from './pages/BindersPage';
+import { HomePage } from './pages/HomePage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { SharedBinderPage } from './pages/SharedBinderPage';
+import { WantsPage } from './pages/WantsPage';
+
+export function App() {
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/binders" element={<BindersPage />} />
+        <Route path="/binders/:binderId" element={<BinderDetailPage />} />
+        <Route path="/wants" element={<WantsPage />} />
+        {/* Public share URL. Matches the API's /binders/by/:handle/:slug route. */}
+        <Route path="/u/:handle/:slug" element={<SharedBinderPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
+}

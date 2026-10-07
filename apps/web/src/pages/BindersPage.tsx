@@ -1,0 +1,99 @@
+import { useAuth0 } from '@auth0/auth0-react';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { useBinders, useCreateBinder } from '../api/queries';
+
+export function BindersPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { data, isLoading, error } = useBinders(isAuthenticated);
+  const createBinder = useCreateBinder();
+  const [name, setName] = useState('');
+
+  if (authLoading) return <CircularProgress />;
+  if (!isAuthenticated) return <Alert severity="info">Sign in to manage your binders.</Alert>;
+
+  function handleCreate() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    createBinder.mutate({ name: trimmed, visibility: 'private' }, { onSuccess: () => setName('') });
+  }
+
+  return (
+    <Stack spacing={4}>
+      <Typography variant="h1">My binders</Typography>
+
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h3" sx={{ mb: 2 }}>
+          New binder
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <TextField
+            label="Binder name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => event.key === 'Enter' && handleCreate()}
+            fullWidth
+            placeholder="Modern staples for trade"
+          />
+          <Button
+            variant="contained"
+            onClick={handleCreate}
+            disabled={!name.trim() || createBinder.isPending}
+            sx={{ minWidth: 140 }}
+          >
+            Create
+          </Button>
+        </Stack>
+        {createBinder.error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {createBinder.error.message}
+          </Alert>
+        )}
+      </Paper>
+
+      {isLoading && <CircularProgress />}
+      {error && <Alert severity="error">{error.message}</Alert>}
+
+      {data && data.items.length === 0 && (
+        <Alert severity="info">No binders yet. Create one above to get started.</Alert>
+      )}
+
+      <Box
+        sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' } }}
+      >
+        {data?.items.map((binder) => (
+          <Paper
+            key={binder.id}
+            component={RouterLink}
+            to={`/binders/${binder.id}`}
+            sx={{ p: 2.5, textDecoration: 'none', display: 'block' }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h3">{binder.name}</Typography>
+              <Chip
+                label={binder.visibility}
+                size="small"
+                variant="outlined"
+                color={binder.visibility === 'public' ? 'primary' : 'default'}
+              />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {binder.itemCount ?? 0} cards
+            </Typography>
+          </Paper>
+        ))}
+      </Box>
+    </Stack>
+  );
+}

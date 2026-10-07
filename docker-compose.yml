@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opulent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: opulent
+      POSTGRES_PASSWORD: opulent
+      POSTGRES_DB: opulent_tutor
+    ports:
+      - '5432:5432'
+    volumes:
+      - opulent-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opulent -d opulent_tutor']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  opulent-pgdata:
