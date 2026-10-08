@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cardFinishSchema } from './enums';
+import { cardFinishSchema, type CardFinish } from './enums';
 
 /**
  * Scryfall serves several image sizes per card. We keep them all so the UI can
@@ -60,3 +60,43 @@ export const cardSearchQuerySchema = z.object({
   uniqueByOracle: z.coerce.boolean().default(false),
 });
 export type CardSearchQuery = z.infer<typeof cardSearchQuerySchema>;
+
+export const cardPrintingsQuerySchema = z.object({
+  /**
+   * Narrows by set name or set code. Not a nicety: Plains has over 900
+   * printings, and scrolling is not a realistic way to find one of them.
+   */
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(60),
+  cursor: z.string().optional(),
+});
+export type CardPrintingsQuery = z.infer<typeof cardPrintingsQuerySchema>;
+
+/**
+ * The price that applies to one finish of one printing.
+ *
+ * Foils are priced separately and the gap is large, so reading `usd` alone is
+ * actively misleading. A foil-only Secret Lair printing has no `usd` at all,
+ * and would look free.
+ */
+export function priceForFinish(
+  prices: CardPrices | null | undefined,
+  finish: CardFinish,
+): string | null {
+  if (!prices) return null;
+  if (finish === 'foil') return prices.usd_foil ?? null;
+  if (finish === 'etched') return prices.usd_etched ?? null;
+  return prices.usd ?? null;
+}
+
+/**
+ * Formats a Scryfall money string for display, or returns null when there is no
+ * price. Roughly a quarter of printings have never been priced, so "no price"
+ * is a normal outcome rather than an error.
+ */
+export function formatUsd(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}

@@ -2,7 +2,7 @@ import { zValidator } from '@hono/zod-validator';
 import {
   addBinderItemSchema,
   createBinderSchema,
-  handleSchema,
+  usernameSchema,
   paginationQuerySchema,
   slugSchema,
   updateBinderItemSchema,
@@ -36,7 +36,7 @@ export const binderRoutes = new Hono<AppEnv>();
 
 const binderIdParam = z.object({ id: z.string().uuid() });
 const itemParam = z.object({ id: z.string().uuid(), itemId: z.string().uuid() });
-const shareParam = z.object({ handle: handleSchema, slug: slugSchema });
+const shareParam = z.object({ handle: usernameSchema, slug: slugSchema });
 
 /** Share links carry the token in the query string: ?t=abc123 */
 function viewer(shareToken: string | undefined, userId: string | undefined) {
@@ -200,7 +200,7 @@ binderRoutes.get(
 
 binderRoutes.get(
   '/by/:handle',
-  zValidator('param', z.object({ handle: handleSchema })),
+  zValidator('param', z.object({ handle: usernameSchema })),
   async (c) => {
     const items = await listPublicBindersByHandle(c.get('db'), c.req.valid('param').handle);
     return c.json({ items });

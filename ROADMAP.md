@@ -238,7 +238,7 @@ Tooling: **pnpm workspaces** for linking, **Turborepo** for task running and cac
 ### Phase 1 — Get it running locally — **done**
 
 - [x] A local PostgreSQL reachable on `localhost:5432`
-- [x] `pnpm db:bootstrap` — creates the `pgcrypto` and `pg_trgm` extensions
+- [x] `pnpm db:bootstrap` — creates the `pgcrypto`, `pg_trgm`, and `postgis` extensions
 - [x] `pnpm db:migrate` — creates the seven tables
 - [x] `pnpm db:bootstrap` again — adds the fuzzy-name index, now that `cards` exists
 - [x] `pnpm smoke` — 14 checks against the real database, all passing
@@ -306,6 +306,91 @@ Decisions worth remembering:
   Binder items now carry `availableFinishes`, filtered against the finishes we
   model so a new Scryfall finish cannot reach the form as a broken option.
 
+### Phase 4a — The add-card step — **done**
+
+Searching used to drop a card straight into the binder as the newest non-foil
+printing. That is a guess, and it is usually wrong in the way that matters most:
+printing and finish are what decide a card's value. A Sol Ring is between one
+and forty-four dollars depending on which one you own.
+
+Choosing a card from search now opens a panel below the search box with the
+large card image, the price, the same fields as the edit dialog, and a grid of
+every printing showing the card image above the set name and collector number.
+
+- [x] Add a printing picker: image above set name and number in the set
+- [x] Show the price, and make it follow the chosen finish
+- [x] Reuse the edit dialog's fields so the two forms cannot drift apart
+- [x] Page and filter the printings endpoint
+
+Decisions worth remembering:
+
+- **Price is read per finish, never from `usd` alone.** Foils are priced in
+  separate fields, and a foil-only Secret Lair printing has no `usd` at all, so
+  a forty-four dollar card would have displayed as unpriced. `priceForFinish`
+  lives in `packages/shared` because the mobile app must not reinvent it.
+- **Choosing a printing can correct the finish.** Pick a foil-only printing
+  while "non-foil" is selected and the finish moves with it, rather than
+  recording a card that was never printed that way.
+- **The printings endpoint had to be paged before it could back a picker.** It
+  previously returned every printing with no limit. Plains has 915. It now pages
+  at 60 and accepts a set-name or set-code filter, which is the only realistic
+  way to find one printing out of hundreds.
+- **Printings page by offset, not by keyset.** Binder items use a keyset cursor
+  because cards get added mid-scroll. Printings only change when the nightly
+  sync runs, so there is nothing to shift underneath a reader. The offset still
+  travels as an opaque cursor so the response shape matches every other paged
+  endpoint, and `useInfiniteQuery` needed no special case.
+- **No language is hidden, but English sorts first.** Filtering to English would
+  make the few Japanese-only cards unaddable. Ordering solves it instead: for
+  Sol Ring, 137 English printings come first, then 7 others.
+- **The add panel is keyed on `oracleId`.** Picking a different card from search
+  remounts it, so the previous card's quantity and condition cannot leak into
+  the next one. A failed add keeps the panel open with the choices intact.
+
+### Phase 4b — The user picks a username — **done**
+
+Auth0 runs signup, so the app never sees that form. A row was created silently
+on the first API call with a generated name such as `mark_a1b2c3`, which then
+went into every share link the user sent. The fix is a welcome screen shown once
+after the first sign-in. There is one field: a unique username. That username is
+what people see, and it is the `/u/` segment in every share link. There is no
+separate display name.
+
+- [x] `users.username`, unique, no spaces
+- [x] `users.onboarded_at`, null until the user chooses
+- [x] `POST /v1/users/me/onboarding` and `GET /v1/users/me/username-available`
+- [x] A `/welcome` screen with live "is this username free" feedback
+- [x] A profile dialog in the app bar. Changing the username warns that old
+      binder links will break
+- [x] Smoke checks for uniqueness, reserved words, and spaces
+
+Decisions worth remembering:
+
+- **One name, two jobs.** The username is shown in the app bar and used in
+  `/u/:username/:slug`. A second "your name" field would drift out of step with
+  the link, so it was dropped.
+- **Case is folded before the rule runs, not rejected by it.** Typing `Mark`
+  becomes `mark`. A space or a `!` still fails, because there is no single
+  obvious correction. A shared link written as `/u/Mark` now resolves instead of
+  returning 400.
+- **Reserved usernames are a separate schema from the username shape.** Reading
+  uses `usernameSchema`, claiming uses `claimedUsernameSchema`. Folding the
+  reserved list into the shape would make `/u/admin` a refusal rather than a
+  miss.
+- **The availability check is advice; the unique index decides.** Two people can
+  both be told a name is free in the same instant, so the write path translates
+  SQLSTATE 23505 on `users_username_key` into the same conflict.
+- **Picking and renaming are separate endpoints.** `POST /me/onboarding` refuses
+  to run twice and `PATCH /me` refuses to run before it. Without that guard a
+  user could rename through the profile route and stay stuck behind the gate.
+- **The gate carries the destination.** Somebody who signs up from a shared
+  binder link is sent to `/welcome` with the original path in router state, and
+  lands back on the binder afterwards rather than on an empty binder list.
+- **Changing the username is a plain field with a warning.** The profile dialog
+  does not hide it behind a second button. If the value differs from the current
+  one, it tells the user that every binder link they have already sent will
+  stop working.
+
 ### Phase 5 — Sharing
 
 - [ ] Confirm all three visibility modes behave correctly, including the "not found" response for private binders
@@ -348,13 +433,13 @@ Decisions worth remembering:
 
 Honest list. None of these block Phase 2.
 
-- **Only one test, and it is a smoke test.** `pnpm smoke` is up to 29 checks and covers the queries that matter, but it needs a live database and it is not a unit test suite. `toCardRow` and `slugify` are pure functions and deserve real unit tests with no database at all.
-- **No bulk import.** Adding 200 cards means 200 searches. Pasting a decklist is the obvious fix and the single biggest quality-of-life gap right now.
-- **Nothing in the web app has been clicked by me.** Phase 4's UI typechecks and builds, and the service functions behind it are covered by the smoke test, but the dialogs and the stepper have not been exercised in a browser.
+- **Only one test, and it is a smoke test.** `pnpm smoke` is up to 57 checks and covers the queries that matter, but it needs a live database and it is not a unit test suite. `toCardRow` and `slugify` are pure functions and deserve real unit tests with no database at all.
+- **No bulk import.** Adding 200 cards means 200 searches, and now 200 trips through the add-card panel. Pasting a decklist is the obvious fix and the single biggest quality-of-life gap right now. It will need a way to accept "I do not care which printing".
+- **Nothing in the web app has been clicked by me.** The UI typechecks and builds, and the service functions behind it are covered by the smoke test, but the dialogs, the stepper and the printing picker have not been exercised in a browser. Everything worth clicking sits behind an Auth0 login.
+- **Prices are as stale as the last sync.** They are copied from the nightly Scryfall bulk file and shown with no "as of" date. Fine for ballpark trade talk, wrong for anything that looks like a quote.
 - **162 cards have no image.** Out of 118,517. Probably art-less objects such as tokens or placeholder cards, but the front-face fallback in `pickImageUris` has not been confirmed against a real double-faced card.
 - **No linter.** Only Prettier and the TypeScript compiler run today. ESLint is worth adding before the team grows.
-- **"Load more" does nothing.** The API returns a cursor and the button renders, but they are not connected.
-- **The web bundle is one 766 kB file.** Fine for now. Split it with dynamic imports when it bothers someone.
+- **The web bundle is one 876 kB file.** Fine for now. Split it with dynamic imports when it bothers someone.
 - **One NAT gateway is a single point of failure.** It is also about 32 US dollars a month, so a second one waits until there is revenue.
 - **Card migrations are not handled.** Scryfall sometimes merges or deletes card IDs and publishes a migrations feed. Until that is consumed, a `binder_items` row could point at a card that no longer exists upstream. The foreign key is `ON DELETE RESTRICT`, so no user data can vanish silently.
 
@@ -406,10 +491,13 @@ pnpm db:bootstrap
 pnpm db:migrate
 pnpm db:bootstrap
 
-# 5. Fill the card mirror (takes a few minutes)
+# 5. Load the GeoNames city list
+pnpm places:sync
+
+# 6. Fill the card mirror (takes a few minutes)
 pnpm cards:sync
 
-# 6. Run everything
+# 7. Run everything
 pnpm dev
 ```
 
@@ -421,7 +509,6 @@ The web app serves on `http://localhost:5173` and the API on `http://localhost:8
 
 Worth deciding before Phase 4, not now.
 
-- **Handles.** Users currently get a generated handle such as `mark_a1b2c3` on first login. Should they pick one during onboarding instead?
 - **Condition tracking.** Is per-stack condition too much detail for an MVP? It doubles the work of adding a card. The schema supports it; the UI could default and hide it.
 - **Want list size.** Is a single flat want list enough, or do people want several named lists?
 - **Foil preference.** A want list currently cannot say "foil only". Adding it means a nullable finish column on `want_items`.

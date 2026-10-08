@@ -67,13 +67,11 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
 
   let user = existing[0];
   if (!user) {
-    const seedHandle = buildSeedHandle(auth);
     const inserted = await db
       .insert(users)
       .values({
         auth0Sub: auth.sub,
-        handle: seedHandle,
-        displayName: auth.name ?? seedHandle,
+        username: buildPlaceholderUsername(auth),
         email: auth.email ?? null,
         avatarUrl: auth.picture ?? null,
       })
@@ -108,15 +106,18 @@ export const optionalAuth = createMiddleware<AppEnv>(async (c, next) => {
 });
 
 /**
- * First-login handle. Collisions are possible, so we append a short suffix from
- * the Auth0 subject, which is already unique.
+ * A stand-in username, never shown to the user.
+ *
+ * The column is unique and not null, so the row needs some value the moment it
+ * is created. The welcome screen replaces this before the user can reach any
+ * page that would display it. The suffix comes from the Auth0 subject, which is
+ * already unique, so two people signing up at once cannot collide.
  */
-function buildSeedHandle(auth: Auth0Claims): string {
+function buildPlaceholderUsername(auth: Auth0Claims): string {
   const base = slugify(auth.email?.split('@')[0] ?? auth.name ?? 'trader').replace(/-/g, '_');
   const suffix = auth.sub
     .replace(/[^a-z0-9]/gi, '')
     .slice(-6)
     .toLowerCase();
-  const handle = `${base || 'trader'}_${suffix}`;
-  return handle.slice(0, 30);
+  return `${base || 'trader'}_${suffix}`.slice(0, 30);
 }

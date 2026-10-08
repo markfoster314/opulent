@@ -93,7 +93,7 @@ export async function listPublicBindersByHandle(db: Database, handle: string) {
     })
     .from(binders)
     .innerJoin(users, eq(users.id, binders.userId))
-    .where(and(eq(users.handle, handle), eq(binders.visibility, 'public')))
+    .where(and(eq(users.username, handle), eq(binders.visibility, 'public')))
     .orderBy(asc(binders.name));
 }
 
@@ -146,7 +146,7 @@ export async function getBinderByHandleAndSlug(
     .select()
     .from(binders)
     .innerJoin(users, eq(users.id, binders.userId))
-    .where(and(eq(users.handle, handle), eq(binders.slug, slug)))
+    .where(and(eq(users.username, handle), eq(binders.slug, slug)))
     .limit(1);
 
   const row = rows[0];

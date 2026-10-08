@@ -79,8 +79,17 @@ export function BindersPage() {
             to={`/binders/${binder.id}`}
             sx={{ p: 2.5, textDecoration: 'none', display: 'block' }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h3">{binder.name}</Typography>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              useFlexGap
+              flexWrap="wrap"
+              spacing={1}
+            >
+              <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                {binder.name}
+              </Typography>
               <Chip
                 label={binder.visibility}
                 size="small"

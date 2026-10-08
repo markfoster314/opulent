@@ -4,12 +4,16 @@ import type {
   Binder,
   BinderItem,
   Card,
+  CompleteOnboardingInput,
   CreateBinderInput,
+  UsernameAvailability,
   Me,
+  PlaceRef,
   Page,
   TradeMatch,
   UpdateBinderInput,
   UpdateBinderItemInput,
+  UpdateProfileInput,
   WantItem,
 } from '@opulent/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,12 +22,16 @@ import { useApi } from './ApiProvider';
 /** Query key factory. Keeping the keys in one place makes cache busting reliable. */
 export const queryKeys = {
   me: ['me'] as const,
+  usernameAvailability: (username: string) => ['username-available', username] as const,
   binders: ['binders'] as const,
   binder: (id: string) => ['binder', id] as const,
   binderItems: (id: string) => ['binder', id, 'items'] as const,
   binderMatches: (id: string) => ['binder', id, 'matches'] as const,
   wants: ['wants'] as const,
   cardSearch: (term: string) => ['cards', 'search', term] as const,
+  placeSearch: (term: string) => ['places', 'search', term] as const,
+  cardPrintings: (oracleId: string, setFilter: string) =>
+    ['cards', 'printings', oracleId, setFilter] as const,
   sharedBinder: (handle: string, slug: string) => ['binder', 'by', handle, slug] as const,
 };
 
@@ -50,6 +58,53 @@ export function useMe(enabled: boolean) {
     queryKey: queryKeys.me,
     queryFn: () => api<Me>('/v1/users/me'),
     enabled,
+  });
+}
+
+/**
+ * Asks whether a username is free while the user types.
+ *
+ * The answer can go stale between the check and the save, so the welcome form
+ * treats it as a hint. The server decides.
+ */
+export function useUsernameAvailability(username: string, enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.usernameAvailability(username),
+    queryFn: () =>
+      api<UsernameAvailability>(
+        `/v1/users/me/username-available?username=${encodeURIComponent(username)}`,
+      ),
+    enabled: enabled && username.length > 0,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** The one-time welcome screen save. */
+export function useCompleteOnboarding() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CompleteOnboardingInput) =>
+      api<Me>('/v1/users/me/onboarding', { method: 'POST', body: input }),
+    onSuccess: (me) => queryClient.setQueryData(queryKeys.me, me),
+  });
+}
+
+/**
+ * Later edits from profile settings. Changing the username moves every share
+ * link the user has handed out, so every cached binder is dropped too.
+ */
+export function useUpdateProfile() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      api<Me>('/v1/users/me', { method: 'PATCH', body: input }),
+    onSuccess: (me) => {
+      queryClient.setQueryData(queryKeys.me, me);
+      queryClient.invalidateQueries({ queryKey: queryKeys.binders });
+    },
   });
 }
 
@@ -113,6 +168,17 @@ export function useBinderMatches(binderId: string | undefined, enabled: boolean)
   });
 }
 
+/** Cities from our GeoNames copy. Two letters is the shortest term worth a round trip. */
+export function usePlaceSearch(term: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.placeSearch(term),
+    queryFn: () => api<{ items: PlaceRef[] }>(`/v1/places?q=${encodeURIComponent(term)}`),
+    enabled: term.trim().length >= 2,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCardSearch(term: string) {
   const api = useApi();
   return useQuery({
@@ -121,6 +187,34 @@ export function useCardSearch(term: string) {
       api<{ items: Card[] }>(`/v1/cards/search?q=${encodeURIComponent(term)}&uniqueByOracle=true`),
     // Two characters is the shortest term worth a round trip.
     enabled: term.trim().length >= 2,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Enough tiles to fill the picker a few rows deep without a slow first paint. */
+const PRINTINGS_PAGE_SIZE = 24;
+
+/**
+ * Every set a card was printed in, for the printing picker.
+ *
+ * `setFilter` matters for cards like Plains, which has over 900 printings. It is
+ * sent to the server rather than filtered here, because only a fraction of the
+ * printings have been fetched at any moment.
+ */
+export function useCardPrintings(oracleId: string | undefined, setFilter = '') {
+  const api = useApi();
+  const term = setFilter.trim();
+  return useInfiniteQuery({
+    queryKey: queryKeys.cardPrintings(oracleId ?? 'none', term),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PRINTINGS_PAGE_SIZE) });
+      if (term) params.set('q', term);
+      if (pageParam) params.set('cursor', pageParam);
+      return api<Page<Card>>(`/v1/cards/oracle/${oracleId}/printings?${params.toString()}`);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: Boolean(oracleId),
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -10,6 +10,7 @@ import { onError, onNotFound } from './middleware/error';
 import { binderRoutes } from './modules/binders/routes';
 import { cardRoutes } from './modules/cards/routes';
 import { healthRoutes } from './modules/health/routes';
+import { placeRoutes } from './modules/places/routes';
 import { userRoutes } from './modules/users/routes';
 import { wantRoutes } from './modules/wants/routes';
 
@@ -47,6 +48,7 @@ export function createApp() {
 
   app.route('/health', healthRoutes);
   app.route('/v1/users', userRoutes);
+  app.route('/v1/places', placeRoutes);
   app.route('/v1/cards', cardRoutes);
   app.route('/v1/binders', binderRoutes);
   app.route('/v1/wants', wantRoutes);

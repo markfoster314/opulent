@@ -4,10 +4,12 @@ import { loadEnv } from './load-env';
 loadEnv();
 
 /**
- * Runs the pieces of schema that drizzle-kit cannot express: extensions and the
- * trigram index used for fuzzy card-name search.
+ * Runs the pieces of schema that drizzle-kit cannot express: extensions, the
+ * PostGIS geography column on cities, and the trigram index used for fuzzy
+ * card-name search.
  *
- * Safe to run repeatedly. Run it once before the first `db:migrate`.
+ * Safe to run repeatedly. Run it once before the first `db:migrate`, and again
+ * after migrate so the indexes that depend on tables can be built.
  */
 async function main() {
   const connectionString = process.env.DATABASE_URL;
@@ -24,7 +26,16 @@ async function main() {
     await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
     // pg_trgm makes "lighning bolt" still find "Lightning Bolt".
     await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`;
-    console.log('extensions ready: pgcrypto, pg_trgm');
+    // ST_DWithin measures radius in meters on a geography column.
+    try {
+      await sql`CREATE EXTENSION IF NOT EXISTS postgis`;
+    } catch (error) {
+      throw new Error(
+        'PostGIS could not be created. Start the database with docker compose up -d postgres so it uses the PostGIS image, then run this again.',
+        { cause: error },
+      );
+    }
+    console.log('extensions ready: pgcrypto, pg_trgm, postgis');
 
     const cardsTableExists = await sql<{ exists: boolean }[]>`
       SELECT EXISTS (
@@ -45,6 +56,42 @@ async function main() {
       console.log('indexes ready: cards_name_trgm_idx, cards_name_lower_idx');
     } else {
       console.log('cards table not found yet. Run db:migrate, then run bootstrap again.');
+    }
+
+    const placesTableExists = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'places'
+      ) AS exists
+    `;
+
+    if (placesTableExists[0]?.exists) {
+      // Stored so every insert and update keeps the point in step with lat/lon.
+      // Queries ask ST_DWithin on this column and never select it.
+      await sql`
+        ALTER TABLE places
+        ADD COLUMN IF NOT EXISTS location geography(Point, 4326)
+        GENERATED ALWAYS AS (
+          ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+        ) STORED
+      `;
+      await sql`
+        CREATE INDEX IF NOT EXISTS places_location_gix
+        ON places USING gist (location)
+      `;
+      await sql`
+        CREATE INDEX IF NOT EXISTS places_name_lower_idx
+        ON places (lower(name))
+      `;
+      await sql`
+        CREATE INDEX IF NOT EXISTS places_ascii_name_lower_idx
+        ON places (lower(ascii_name))
+      `;
+      console.log(
+        'indexes ready: places_location_gix, places_name_lower_idx, places_ascii_name_lower_idx',
+      );
+    } else {
+      console.log('places table not found yet. Run db:migrate, then run bootstrap again.');
     }
   } finally {
     await sql.end();

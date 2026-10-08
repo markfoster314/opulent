@@ -26,13 +26,18 @@ import { useRotateShareToken, useUpdateBinder } from '../api/queries';
 
 interface BinderSettingsDialogProps {
   binder: Binder;
-  /** The owner's handle, needed to build the shareable URL. */
-  handle: string | undefined;
+  /** The owner's username, needed to build the shareable URL. */
+  username: string | undefined;
   open: boolean;
   onClose: () => void;
 }
 
-export function BinderSettingsDialog({ binder, handle, open, onClose }: BinderSettingsDialogProps) {
+export function BinderSettingsDialog({
+  binder,
+  username,
+  open,
+  onClose,
+}: BinderSettingsDialogProps) {
   const updateBinder = useUpdateBinder(binder.id);
   const rotateToken = useRotateShareToken(binder.id);
 
@@ -57,7 +62,7 @@ export function BinderSettingsDialog({ binder, handle, open, onClose }: BinderSe
   const slugError = slug !== binder.slug && !slugSchema.safeParse(slug).success;
   const nameError = name.trim().length === 0;
 
-  const shareUrl = buildShareUrl(handle, slug, visibility, binder.shareToken);
+  const shareUrl = buildShareUrl(username, slug, visibility, binder.shareToken);
 
   function handleSave() {
     if (nameError || slugError) return;
@@ -151,6 +156,7 @@ export function BinderSettingsDialog({ binder, handle, open, onClose }: BinderSe
                       value={shareUrl}
                       size="small"
                       fullWidth
+                      sx={{ minWidth: 0 }}
                       slotProps={{ input: { readOnly: true } }}
                     />
                     <Tooltip title={copied ? 'Copied' : 'Copy link'}>
@@ -164,7 +170,11 @@ export function BinderSettingsDialog({ binder, handle, open, onClose }: BinderSe
                 )}
 
                 {visibility === 'unlisted' && (
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  >
                     <Button
                       size="small"
                       startIcon={<RefreshIcon />}
@@ -206,14 +216,14 @@ export function BinderSettingsDialog({ binder, handle, open, onClose }: BinderSe
  * the secret token, which only the owner ever receives from the API.
  */
 function buildShareUrl(
-  handle: string | undefined,
+  username: string | undefined,
   slug: string,
   visibility: BinderVisibility,
   shareToken: string | undefined,
 ): string | null {
-  if (!handle || visibility === 'private') return null;
+  if (!username || visibility === 'private') return null;
 
-  const url = new URL(`/u/${handle}/${slug}`, window.location.origin);
+  const url = new URL(`/u/${username}/${slug}`, window.location.origin);
   if (visibility === 'unlisted') {
     if (!shareToken) return null;
     url.searchParams.set('t', shareToken);

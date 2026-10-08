@@ -21,6 +21,7 @@
     "db:push": "pnpm --filter @opulent/db run push",
     "db:studio": "pnpm --filter @opulent/db run studio",
     "cards:sync": "pnpm --filter @opulent/card-sync run start",
+    "places:sync": "pnpm --filter @opulent/db run places:sync",
     "smoke": "pnpm --filter @opulent/api run smoke"
   },
   "devDependencies": {

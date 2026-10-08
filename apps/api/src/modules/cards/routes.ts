@@ -1,5 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import { cardSearchQuerySchema } from '@opulent/shared';
+import { cardPrintingsQuerySchema, cardSearchQuerySchema } from '@opulent/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../lib/context';
@@ -25,7 +25,16 @@ cardRoutes.get('/:id', zValidator('param', uuidParam), async (c) => {
   return c.json(card);
 });
 
-cardRoutes.get('/oracle/:id/printings', zValidator('param', uuidParam), async (c) => {
-  const items = await getPrintingsByOracleId(c.get('db'), c.req.valid('param').id);
-  return c.json({ items });
-});
+cardRoutes.get(
+  '/oracle/:id/printings',
+  zValidator('param', uuidParam),
+  zValidator('query', cardPrintingsQuerySchema),
+  async (c) => {
+    const page = await getPrintingsByOracleId(
+      c.get('db'),
+      c.req.valid('param').id,
+      c.req.valid('query'),
+    );
+    return c.json(page);
+  },
+);

@@ -16,13 +16,15 @@
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
-    "bootstrap": "tsx src/bootstrap.ts"
+    "bootstrap": "tsx src/bootstrap.ts",
+    "places:sync": "tsx src/import-places.ts"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.717.0",
     "@opulent/shared": "workspace:*",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
+    "fflate": "^0.8.3",
     "postgres": "^3.4.5"
   },
   "devDependencies": {

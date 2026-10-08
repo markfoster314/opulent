@@ -1,7 +1,8 @@
 import type { Database } from '@opulent/db';
 import { cards } from '@opulent/db';
-import type { Card, CardSearchQuery } from '@opulent/shared';
-import { eq, sql } from 'drizzle-orm';
+import type { Card, CardPrintingsQuery, CardSearchQuery, Page } from '@opulent/shared';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { ApiError } from '../../lib/http';
 
 const cardColumns = {
   scryfallId: cards.scryfallId,
@@ -63,12 +64,57 @@ export async function getCardById(db: Database, scryfallId: string): Promise<Car
   return rows[0] as Card | undefined;
 }
 
-/** Every printing of one card concept, newest set first. */
-export async function getPrintingsByOracleId(db: Database, oracleId: string): Promise<Card[]> {
+/**
+ * Every printing of one card concept, for the printing picker.
+ *
+ * English printings sort first because they are what most traders hold, but no
+ * language is filtered out, because a handful of cards only ever shipped in
+ * Japanese and hiding them would make them unaddable.
+ *
+ * Paging is by offset, unlike binder items, which use a keyset cursor. Printings
+ * are static reference data that only changes when the nightly sync runs, so
+ * rows cannot shift underneath a reader mid-scroll. The offset still travels as
+ * an opaque cursor so the response matches every other paged endpoint.
+ */
+export async function getPrintingsByOracleId(
+  db: Database,
+  oracleId: string,
+  query: CardPrintingsQuery,
+): Promise<Page<Card>> {
+  const offset = decodeOffset(query.cursor);
+  const term = query.q?.trim();
+
+  const filters = [eq(cards.oracleId, oracleId)];
+  if (term) {
+    filters.push(
+      sql`(${cards.setName} ILIKE ${`%${term}%`} OR ${cards.setCode} ILIKE ${`%${term}%`})`,
+    );
+  }
+
   const rows = await db
     .select(cardColumns)
     .from(cards)
-    .where(eq(cards.oracleId, oracleId))
-    .orderBy(sql`${cards.releasedAt} DESC NULLS LAST`);
-  return rows as Card[];
+    .where(and(...filters))
+    .orderBy(
+      sql`(${cards.lang} = 'en') DESC`,
+      sql`${cards.releasedAt} DESC NULLS LAST`,
+      asc(cards.collectorNumber),
+      // Breaks ties so that offset paging cannot show or skip a row.
+      asc(cards.scryfallId),
+    )
+    .limit(query.limit + 1)
+    .offset(offset);
+
+  const hasMore = rows.length > query.limit;
+  return {
+    items: (hasMore ? rows.slice(0, query.limit) : rows) as Card[],
+    nextCursor: hasMore ? String(offset + query.limit) : null,
+  };
+}
+
+function decodeOffset(cursor?: string): number {
+  if (!cursor) return 0;
+  const offset = Number(cursor);
+  if (!Number.isInteger(offset) || offset < 0) throw ApiError.badRequest('Malformed cursor');
+  return offset;
 }

@@ -7,6 +7,16 @@
 - Lead directly with a bolded high-value takeaway or a single-sentence resolution.
 - Break down walls of text into sequenced, scannable elements using concrete visual analogies.
 
+# Frontend layout
+
+When you change a screen, start from the phone and then add space for a wider window.
+
+- The first styles are for a narrow screen. Use `sm` and `md` only to relax those styles, not to repair a desktop layout that breaks on a phone.
+- A row of buttons, fields, or bar items must wrap or stack. Nothing should sit past the edge of the screen.
+- Titles, binder names, and usernames must be allowed to wrap or shorten. Do not give them a fixed width that assumes a wide window.
+- Touch targets stay easy to tap. Do not shrink a button just so a row fits.
+- Check the changed screen at a phone width and at a desktop width before you finish.
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know

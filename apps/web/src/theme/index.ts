@@ -18,7 +18,23 @@ export const palette = {
   /** Darkened gold. Muted enough to read as metal rather than yellow. */
   gold: '#B8860B',
   goldLight: '#D4A62A',
+  /** Lightest gold. The top of a hovered button. */
+  goldHighlight: '#F0D48A',
   goldDark: '#8A6508',
+
+  /** The same gold, thinned, for borders, washes, and a selected tile. */
+  goldBorder: 'rgba(184, 134, 11, 0.45)',
+  goldWash: 'rgba(184, 134, 11, 0.10)',
+  goldTint: 'rgba(184, 134, 11, 0.08)',
+  goldSelected: 'rgba(184, 134, 11, 0.12)',
+
+  /** Bar over the page, same black as the background with some see-through. */
+  appBar: 'rgba(11, 11, 12, 0.82)',
+
+  secondary: '#6E7B8B',
+  success: '#4F8A5B',
+  warning: '#C9962F',
+  error: '#B4544A',
 
   textPrimary: '#F2EFE6',
   textSecondary: '#A39B86',
@@ -31,11 +47,11 @@ const themeOptions: ThemeOptions = {
       main: palette.gold,
       light: palette.goldLight,
       dark: palette.goldDark,
-      contrastText: '#0B0B0C',
+      contrastText: palette.background,
     },
     secondary: {
-      main: '#6E7B8B',
-      contrastText: '#0B0B0C',
+      main: palette.secondary,
+      contrastText: palette.background,
     },
     background: {
       default: palette.background,
@@ -46,9 +62,9 @@ const themeOptions: ThemeOptions = {
       secondary: palette.textSecondary,
     },
     divider: palette.divider,
-    success: { main: '#4F8A5B' },
-    warning: { main: '#C9962F' },
-    error: { main: '#B4544A' },
+    success: { main: palette.success },
+    warning: { main: palette.warning },
+    error: { main: palette.error },
   },
 
   shape: {
@@ -57,9 +73,23 @@ const themeOptions: ThemeOptions = {
 
   typography: {
     fontFamily: ['"Inter"', '"Segoe UI"', 'Roboto', 'system-ui', 'sans-serif'].join(','),
-    h1: { fontSize: '2.25rem', fontWeight: 600, letterSpacing: '-0.02em' },
-    h2: { fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.01em' },
-    h3: { fontSize: '1.375rem', fontWeight: 600 },
+    h1: {
+      fontSize: '1.75rem',
+      fontWeight: 600,
+      letterSpacing: '-0.02em',
+      '@media (min-width:600px)': { fontSize: '2.25rem' },
+    },
+    h2: {
+      fontSize: '1.375rem',
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+      '@media (min-width:600px)': { fontSize: '1.75rem' },
+    },
+    h3: {
+      fontSize: '1.2rem',
+      fontWeight: 600,
+      '@media (min-width:600px)': { fontSize: '1.375rem' },
+    },
     button: { textTransform: 'none', fontWeight: 600 },
   },
 
@@ -69,7 +99,7 @@ const themeOptions: ThemeOptions = {
         body: {
           backgroundColor: palette.background,
           // Faint gold wash from the top so the page is not a flat black slab.
-          backgroundImage: `radial-gradient(1200px 600px at 50% -200px, rgba(184, 134, 11, 0.10), transparent 70%)`,
+          backgroundImage: `radial-gradient(1200px 600px at 50% -200px, ${palette.goldWash}, transparent 70%)`,
           backgroundAttachment: 'fixed',
         },
       },
@@ -78,7 +108,7 @@ const themeOptions: ThemeOptions = {
       defaultProps: { elevation: 0, color: 'transparent' },
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(11, 11, 12, 0.82)',
+          backgroundColor: palette.appBar,
           backdropFilter: 'blur(10px)',
           borderBottom: `1px solid ${palette.divider}`,
         },
@@ -97,18 +127,30 @@ const themeOptions: ThemeOptions = {
       defaultProps: { disableElevation: true },
       styleOverrides: {
         containedPrimary: {
-          background: `linear-gradient(180deg, ${palette.goldLight} 0%, ${palette.gold} 100%)`,
-          '&:hover': { background: palette.goldLight },
+          // The button fades `background-color` on hover. A gradient lives on
+          // `background-image`, which cannot fade, so a flat hover color lets
+          // the black page show through for a frame. Hover stays a gradient,
+          // and `&&` beats the button's own color fade so it does not run.
+          '&&': {
+            transition:
+              'color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: palette.gold,
+            backgroundImage: `linear-gradient(180deg, ${palette.goldLight} 0%, ${palette.gold} 100%)`,
+          },
+          '&&:hover': {
+            backgroundColor: palette.goldLight,
+            backgroundImage: `linear-gradient(180deg, ${palette.goldHighlight} 0%, ${palette.goldLight} 100%)`,
+          },
         },
         outlinedPrimary: {
-          borderColor: 'rgba(184, 134, 11, 0.45)',
-          '&:hover': { borderColor: palette.goldLight, backgroundColor: 'rgba(184,134,11,0.08)' },
+          borderColor: palette.goldBorder,
+          '&:hover': { borderColor: palette.goldLight, backgroundColor: palette.goldTint },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        outlinedPrimary: { borderColor: 'rgba(184, 134, 11, 0.45)' },
+        outlinedPrimary: { borderColor: palette.goldBorder },
       },
     },
     MuiTooltip: {

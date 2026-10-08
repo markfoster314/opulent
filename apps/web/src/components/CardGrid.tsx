@@ -11,7 +11,7 @@ export function CardGrid({ children }: { children: ReactNode }) {
       sx={{
         display: 'grid',
         gap: 2,
-        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 148px), 1fr))',
       }}
     >
       {children}

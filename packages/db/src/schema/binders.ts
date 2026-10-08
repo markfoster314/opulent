@@ -23,7 +23,7 @@ export const binders = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
 
-    /** Combined with the owner handle to form /u/:handle/:slug. */
+    /** Combined with the owner username to form /u/:username/:slug. */
     slug: text('slug').notNull(),
     name: text('name').notNull(),
     description: text('description'),

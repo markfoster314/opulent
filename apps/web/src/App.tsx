@@ -6,12 +6,15 @@ import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SharedBinderPage } from './pages/SharedBinderPage';
 import { WantsPage } from './pages/WantsPage';
+import { WelcomePage } from './pages/WelcomePage';
 
 export function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />
+        {/* One-time username picker. AppLayout sends new accounts here. */}
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/binders" element={<BindersPage />} />
         <Route path="/binders/:binderId" element={<BinderDetailPage />} />
         <Route path="/wants" element={<WantsPage />} />

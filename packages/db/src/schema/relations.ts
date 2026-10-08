@@ -1,11 +1,17 @@
 import { relations } from 'drizzle-orm';
 import { binderItems, binders } from './binders';
 import { cards } from './cards';
+import { places } from './places';
 import { tradeItems, trades } from './trades';
 import { users } from './users';
 import { wantItems } from './wants';
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const placesRelations = relations(places, ({ many }) => ({
+  users: many(users),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  place: one(places, { fields: [users.placeId], references: [places.geonameId] }),
   binders: many(binders),
   wantItems: many(wantItems),
 }));

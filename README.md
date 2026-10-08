@@ -19,7 +19,7 @@ See [ROADMAP.md](./ROADMAP.md) for the technical design, the reasons behind each
 
 - Node.js 24 (see `.nvmrc`; run `nvm use` to match)
 - pnpm 10
-- Docker, for the local PostgreSQL database
+- Docker, for the local PostgreSQL database (the image includes PostGIS)
 
 ## Setup
 
@@ -29,9 +29,13 @@ docker compose up -d postgres
 cp .env.example .env     # then fill in the Auth0 values
 ```
 
+The database image is PostgreSQL 16 with PostGIS. Radius search uses that extension. If you
+already created the database with the older `postgres:16-alpine` image, the same `docker compose
+up -d postgres` command replaces the container and keeps the data you already have.
+
 Then prepare the database. The bootstrap step runs twice on purpose: the first pass creates the
-PostgreSQL extensions that the tables need, and the second adds the fuzzy card-name search index,
-which can only be built once the `cards` table exists.
+PostgreSQL extensions the tables need, including PostGIS, and the second adds the search indexes,
+which can only be built once the tables exist.
 
 ```bash
 pnpm db:bootstrap
@@ -39,8 +43,16 @@ pnpm db:migrate
 pnpm db:bootstrap
 ```
 
+Load cities. This downloads the free GeoNames list of places with 5,000 or more people and saves
+it in the local database. It is safe to run again; a second run refreshes the same cities. If any
+account still has an older typed city name, this step points it at the matching place.
+
+```bash
+pnpm places:sync
+```
+
 Check that the database works. This creates a little fake data, runs the queries the product
-depends on, and cleans up after itself.
+depends on (including a radius search), and cleans up after itself.
 
 ```bash
 pnpm smoke
@@ -75,6 +87,7 @@ pnpm dev
 | `pnpm db:generate`  | Writes a new migration from schema changes           |
 | `pnpm db:migrate`   | Applies pending migrations                           |
 | `pnpm db:studio`    | Opens a database browser                             |
+| `pnpm places:sync`  | Loads the GeoNames city list into the database       |
 | `pnpm cards:sync`   | Refreshes the card mirror from Scryfall              |
 
 ## Deploying
@@ -91,3 +104,6 @@ pnpm deploy -- --context stage=dev
 Card data and images courtesy of [Scryfall](https://scryfall.com). Opulent Tutor is unofficial Fan
 Content permitted under the Wizards of the Coast Fan Content Policy, and is not produced or endorsed
 by Wizards of the Coast or Scryfall.
+
+City names and coordinates come from [GeoNames](https://www.geonames.org/), used under the
+[Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/) license.

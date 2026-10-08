@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import type { Card } from '@opulent/shared';
 import { binderVisibilityLabels } from '@opulent/shared';
 import { useCallback, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
@@ -22,6 +23,7 @@ import {
   useRemoveBinderItem,
   useUpdateBinderItem,
 } from '../api/queries';
+import { AddCardPanel } from '../components/AddCardPanel';
 import { BinderSettingsDialog } from '../components/BinderSettingsDialog';
 import { BinderItemTile } from '../components/BinderItemTile';
 import { CardGrid } from '../components/CardGrid';
@@ -31,6 +33,8 @@ export function BinderDetailPage() {
   const { binderId } = useParams<{ binderId: string }>();
   const { isAuthenticated } = useAuth0();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** The card chosen from search, waiting on printing and condition before it is added. */
+  const [draftCard, setDraftCard] = useState<Card | undefined>(undefined);
 
   const me = useMe(isAuthenticated);
   const binderQuery = useBinder(binderId);
@@ -68,8 +72,10 @@ export function BinderDetailPage() {
         alignItems={{ sm: 'flex-start' }}
       >
         <Stack spacing={1}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Typography variant="h1">{binder.name}</Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap">
+            <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+              {binder.name}
+            </Typography>
             <Chip
               label={binderVisibilityLabels[binder.visibility]}
               size="small"
@@ -89,12 +95,17 @@ export function BinderDetailPage() {
           </Typography>
         </Stack>
 
-        <Stack direction="row" spacing={1}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
+        >
           {binder.visibility !== 'private' && me.data && (
             <Button
               component={RouterLink}
-              to={`/u/${me.data.handle}/${binder.slug}`}
+              to={`/u/${me.data.username}/${binder.slug}`}
               variant="outlined"
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               View as visitor
             </Button>
@@ -103,38 +114,42 @@ export function BinderDetailPage() {
             variant="outlined"
             startIcon={<SettingsOutlinedIcon />}
             onClick={() => setSettingsOpen(true)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Settings
           </Button>
         </Stack>
       </Stack>
 
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h3" sx={{ mb: 2 }}>
-          Add a card
-        </Typography>
-        <CardSearchField
-          onSelect={(card) =>
-            addItem.mutate({
-              scryfallId: card.scryfallId,
-              quantity: 1,
-              finish: 'nonfoil',
-              condition: 'NM',
-              language: 'en',
-              forTrade: true,
-            })
-          }
-          disabled={addItem.isPending}
-        />
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          Adding a card you already have raises its count instead of making a second entry.
-        </Typography>
-        {addItem.error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {addItem.error.message}
-          </Alert>
+      <Stack spacing={2}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h3" sx={{ mb: 2 }}>
+            Add a card
+          </Typography>
+          <CardSearchField onSelect={setDraftCard} />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Pick a card, then choose its printing and condition before it goes in. Adding a card you
+            already have raises its count instead of making a second entry.
+          </Typography>
+        </Paper>
+
+        {draftCard && (
+          <AddCardPanel
+            // Remounts on a different card so the previous choices do not carry over.
+            key={draftCard.oracleId}
+            card={draftCard}
+            onAdd={(input) =>
+              addItem.mutate(input, {
+                // Keep the panel open on failure so the owner's choices survive.
+                onSuccess: () => setDraftCard(undefined),
+              })
+            }
+            onCancel={() => setDraftCard(undefined)}
+            pending={addItem.isPending}
+            error={addItem.error?.message}
+          />
         )}
-      </Paper>
+      </Stack>
 
       {itemsQuery.isLoading && <CircularProgress />}
       {itemsQuery.error && <Alert severity="error">{itemsQuery.error.message}</Alert>}
@@ -170,7 +185,7 @@ export function BinderDetailPage() {
 
       <BinderSettingsDialog
         binder={binder}
-        handle={me.data?.handle}
+        username={me.data?.username}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />

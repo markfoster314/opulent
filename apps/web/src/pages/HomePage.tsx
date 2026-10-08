@@ -22,7 +22,7 @@ export function HomePage() {
   const { isAuthenticated, loginWithRedirect } = useAuth0();
 
   return (
-    <Stack spacing={6}>
+    <Stack spacing={{ xs: 4, sm: 6 }}>
       <Stack spacing={2.5} sx={{ maxWidth: 720 }}>
         <Typography variant="h1">
           Your trade binder,{' '}
