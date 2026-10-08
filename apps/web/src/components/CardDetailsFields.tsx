@@ -27,6 +27,7 @@ import {
   conditionMarketPercent,
   formatUsd,
   parseCustomAmount,
+  parsePhotoLink,
   priceForFinish,
 } from '@opulent/shared';
 
@@ -46,6 +47,7 @@ export interface CardDetails {
   misprint: boolean;
   miscut: boolean;
   notes: string;
+  photoUrl: string;
   forTrade: boolean;
   priceKind: ItemPrice['kind'];
   pricePercent: string;
@@ -109,6 +111,11 @@ export function isPriceInvalid(details: CardDetails): boolean {
   return priceFromDetails(details) === null;
 }
 
+/** True when the photo field has text that is not an http or https link. */
+export function isPhotoLinkInvalid(photoUrl: string): boolean {
+  return photoUrl.trim() !== '' && parsePhotoLink(photoUrl) === null;
+}
+
 /** The finish to start on: plain if the printing has one, otherwise whatever it does have. */
 export function defaultFinish(finishes: CardFinish[]): CardFinish {
   if (finishes.includes('nonfoil')) return 'nonfoil';
@@ -152,15 +159,11 @@ export function CardDetailsFields({
           disabled={onlyFinish}
           onChange={(event) => onChange({ finish: event.target.value as CardFinish })}
         >
-          {finishes.map((option) => {
-            const price = formatUsd(priceForFinish(prices, option));
-            return (
-              <MenuItem key={option} value={option}>
-                {cardFinishLabels[option]}
-                {price ? ` — ${price}` : ''}
-              </MenuItem>
-            );
-          })}
+          {finishes.map((option) => (
+            <MenuItem key={option} value={option}>
+              {cardFinishLabels[option]}
+            </MenuItem>
+          ))}
         </Select>
         {onlyFinish && <FormHelperText>This printing only came in one finish.</FormHelperText>}
       </FormControl>
@@ -300,12 +303,25 @@ export function CardDetailsFields({
           value={value.priceAmount}
           onChange={(event) => onChange({ priceAmount: event.target.value })}
           error={value.priceAmount.trim() !== '' && parseCustomAmount(value.priceAmount) === null}
-          helperText="Dollars for this stack, from 0.01 to 99999.99."
           placeholder="4.50"
           slotProps={{ htmlInput: { inputMode: 'decimal' } }}
           fullWidth
         />
       )}
+
+      <TextField
+        label="Photo link"
+        value={value.photoUrl}
+        onChange={(event) => onChange({ photoUrl: event.target.value })}
+        error={isPhotoLinkInvalid(value.photoUrl)}
+        helperText={
+          isPhotoLinkInvalid(value.photoUrl)
+            ? 'Paste a link that starts with http:// or https://.'
+            : 'A link to photos of this card on an image hosting site like imgur.'
+        }
+        placeholder="https://"
+        fullWidth
+      />
 
       <TextField
         label="Notes"

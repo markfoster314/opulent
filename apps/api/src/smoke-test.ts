@@ -638,6 +638,16 @@ async function main() {
       price: { kind: 'market' },
     });
     check('a copy without those marks is its own stack', unmarked.id !== marked.id);
+    const withPhotos = await updateBinderItem(db, binder.id, unmarked.id, {
+      photoUrl: 'https://imgur.com/a/example',
+    });
+    check(
+      'photo link is stored',
+      withPhotos.photoUrl === 'https://imgur.com/a/example',
+      withPhotos.photoUrl ?? '',
+    );
+    const clearedPhotos = await updateBinderItem(db, binder.id, unmarked.id, { photoUrl: null });
+    check('photo link can be cleared', clearedPhotos.photoUrl === null, String(clearedPhotos.photoUrl));
 
     const printedLanguages = await listLanguagesForPrinting(db, PRINTING_A);
     check(
@@ -888,6 +898,12 @@ async function main() {
       'a saved foreign copy prices from the English printing',
       foreignCopy.card?.prices?.usd === '1.50',
       JSON.stringify(foreignCopy.card?.prices),
+    );
+    const switched = await updateBinderItem(db, binder.id, foreignCopy.id, { language: 'en' });
+    check(
+      'changing language points the picture at that printing',
+      switched.language === 'en' && switched.scryfallId === PRINTING_A,
+      switched.scryfallId,
     );
     await db.delete(binderItems).where(eq(binderItems.id, foreignCopy.id));
     check(

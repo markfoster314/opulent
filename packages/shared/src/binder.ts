@@ -60,6 +60,27 @@ export const itemPriceSchema = z.discriminatedUnion('kind', [
 ]);
 export type ItemPrice = z.infer<typeof itemPriceSchema>;
 
+const PHOTO_LINK_MAX = 2000;
+
+/**
+ * A page of photos on an image host. Blank is no link. Anything else must be
+ * an http or https address, so a pasted sentence cannot be stored as a link.
+ */
+export function parsePhotoLink(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > PHOTO_LINK_MAX) return null;
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+export const photoLinkSchema = z
+  .string()
+  .trim()
+  .max(PHOTO_LINK_MAX)
+  .refine((value) => parsePhotoLink(value) !== null, {
+    message: 'Paste a link that starts with http:// or https://.',
+  });
+
 /**
  * The dollar amount the owner is asking, before quantity.
  *
@@ -103,6 +124,8 @@ export const binderItemSchema = z.object({
   condition: cardConditionSchema,
   language: cardLanguageSchema,
   notes: z.string().nullable(),
+  /** A page of photos of this physical copy. Empty when the owner has not added one. */
+  photoUrl: z.string().nullable(),
   forTrade: z.boolean(),
   signed: z.boolean(),
   altered: z.boolean(),
@@ -130,6 +153,7 @@ export const addBinderItemSchema = z.object({
   misprint: z.boolean().default(false),
   miscut: z.boolean().default(false),
   notes: z.string().max(280).optional(),
+  photoUrl: photoLinkSchema.nullable().optional(),
   forTrade: z.boolean().default(true),
   price: itemPriceSchema.default({ kind: 'market' }),
 });

@@ -8,13 +8,15 @@ import {
   Stack,
 } from '@mui/material';
 import type { BinderItem, UpdateBinderItemInput } from '@opulent/shared';
-import { cardLanguageOrEnglish } from '@opulent/shared';
+import { cardLanguageOrEnglish, parsePhotoLink } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { useCardLanguages } from '../api/queries';
+import { palette } from '../theme';
 import type { CardDetails } from './CardDetailsFields';
 import {
   CardDetailsFields,
   isPriceInvalid,
+  isPhotoLinkInvalid,
   isQuantityInvalid,
   priceFromDetails,
 } from './CardDetailsFields';
@@ -35,6 +37,7 @@ function detailsFromItem(item: BinderItem): CardDetails {
     finish: item.finish,
     condition: item.condition,
     notes: item.notes ?? '',
+    photoUrl: item.photoUrl ?? '',
     forTrade: item.forTrade,
     language: item.language,
     signed: item.signed,
@@ -78,15 +81,17 @@ export function BinderItemDialog({
 
   const quantityError = isQuantityInvalid(details.quantity);
   const priceError = isPriceInvalid(details);
+  const photoError = isPhotoLinkInvalid(details.photoUrl);
   const chosenPrice = priceFromDetails(details);
 
   function handleSave() {
-    if (quantityError || !chosenPrice) return;
+    if (quantityError || photoError || !chosenPrice) return;
     onSave({
       quantity: Number(details.quantity),
       finish: details.finish,
       condition: details.condition,
       notes: details.notes,
+      photoUrl: parsePhotoLink(details.photoUrl),
       forTrade: details.forTrade,
       language: details.language,
       signed: details.signed,
@@ -101,7 +106,20 @@ export function BinderItemDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>{item.card?.name ?? 'Edit card'}</DialogTitle>
 
-      <DialogContent>
+      <DialogContent
+        sx={{
+          colorScheme: 'dark',
+          scrollbarColor: `${palette.goldDark} ${palette.surface}`,
+          '&::-webkit-scrollbar': { width: 10 },
+          '&::-webkit-scrollbar-track': { backgroundColor: palette.surface },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: palette.surfaceRaised,
+            border: `2px solid ${palette.surface}`,
+            borderRadius: 8,
+          },
+          '&::-webkit-scrollbar-thumb:hover': { backgroundColor: palette.goldDark },
+        }}
+      >
         <Stack spacing={3} sx={{ pt: 1 }}>
           <CardDetailsFields
             value={details}
@@ -126,7 +144,7 @@ export function BinderItemDialog({
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={quantityError || priceError || saving}
+            disabled={quantityError || priceError || photoError || saving}
           >
             Save
           </Button>

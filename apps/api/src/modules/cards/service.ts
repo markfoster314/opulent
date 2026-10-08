@@ -23,6 +23,13 @@ const paperOnly = sql`jsonb_exists(${cards.raw}->'games', 'paper')`;
  */
 const notArtSeries = sql`${cards.layout} IS DISTINCT FROM 'art_series'`;
 
+/** Shop links from the stored Scryfall object. Null fields mean that shop has no page. */
+const purchaseUrisSql = sql`jsonb_build_object(
+  'tcgplayer', ${cards.raw}->'purchase_uris'->>'tcgplayer',
+  'cardmarket', ${cards.raw}->'purchase_uris'->>'cardmarket',
+  'cardhoarder', ${cards.raw}->'purchase_uris'->>'cardhoarder'
+)`;
+
 const cardColumns = {
   scryfallId: cards.scryfallId,
   oracleId: cards.oracleId,
@@ -39,6 +46,7 @@ const cardColumns = {
   imageUris: cards.imageUris,
   prices: cards.prices,
   scryfallUri: cards.scryfallUri,
+  purchaseUris: purchaseUrisSql,
   releasedAt: cards.releasedAt,
 };
 
@@ -90,6 +98,7 @@ export async function searchCards(db: Database, query: CardSearchQuery): Promise
       "imageUris",
       prices,
       "scryfallUri",
+      "purchaseUris",
       "releasedAt"
     FROM (
       SELECT DISTINCT ON (${cards.oracleId})
@@ -108,6 +117,7 @@ export async function searchCards(db: Database, query: CardSearchQuery): Promise
         ${cards.imageUris} AS "imageUris",
         ${cards.prices} AS prices,
         ${cards.scryfallUri} AS "scryfallUri",
+        ${purchaseUrisSql} AS "purchaseUris",
         ${cards.releasedAt} AS "releasedAt",
         similarity(${cards.name}, ${term}) AS score
       FROM ${cards}
@@ -185,6 +195,7 @@ export async function getPrintingsByOracleId(
       "imageUris",
       prices,
       "scryfallUri",
+      "purchaseUris",
       "releasedAt"
     FROM (
       SELECT DISTINCT ON (${cards.setCode}, ${cards.collectorNumber})
@@ -203,6 +214,7 @@ export async function getPrintingsByOracleId(
         ${cards.imageUris} AS "imageUris",
         ${cards.prices} AS prices,
         ${cards.scryfallUri} AS "scryfallUri",
+        ${purchaseUrisSql} AS "purchaseUris",
         ${cards.releasedAt} AS "releasedAt"
       FROM ${cards}
       WHERE ${cards.oracleId} = ${oracleId}

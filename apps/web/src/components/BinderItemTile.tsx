@@ -54,13 +54,19 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
   const caption = binderTileCaption(item);
 
   return (
-    <Stack spacing={0.5}>
+    <Stack spacing={0.5} sx={{ height: '100%' }}>
       <CardTile
         card={item.card}
         quantity={draftQuantity}
         price={binderTilePrice(item)}
         notes={item.notes?.trim() ? item.notes : null}
+        signed={item.signed}
+        altered={item.altered}
+        misprint={item.misprint}
+        miscut={item.miscut}
+        photoUrl={item.photoUrl}
         caption={caption}
+        foil={item.finish === 'foil'}
         onClick={() => setDialogOpen(true)}
       />
 

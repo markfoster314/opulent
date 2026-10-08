@@ -20,7 +20,7 @@ import {
 } from '@opulent/shared';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { assertPaperPrinting, assertPrintedLanguage } from '../cards/service';
+import { assertPaperPrinting, assertPrintedLanguage, listLanguagePrintings } from '../cards/service';
 import { ApiError, slugify } from '../../lib/http';
 
 /** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
@@ -226,6 +226,7 @@ const binderItemSelection = {
   misprint: binderItems.misprint,
   miscut: binderItems.miscut,
   notes: binderItems.notes,
+  photoUrl: binderItems.photoUrl,
   forTrade: binderItems.forTrade,
   priceKind: binderItems.priceKind,
   pricePercent: binderItems.pricePercent,
@@ -310,6 +311,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
     misprint: row.misprint,
     miscut: row.miscut,
     notes: row.notes,
+    photoUrl: row.photoUrl,
     forTrade: row.forTrade,
     price: toItemPrice(row),
     availableFinishes: (row.cardFinishes ?? []).filter(isCardFinish),
@@ -407,6 +409,7 @@ export async function addBinderItem(
       misprint: input.misprint ?? false,
       miscut: input.miscut ?? false,
       notes: input.notes ?? null,
+      photoUrl: input.photoUrl ?? null,
       forTrade: input.forTrade,
       ...priceColumns(input.price),
     })
@@ -460,13 +463,24 @@ export async function updateBinderItem(
     const scryfallId = existing[0]?.scryfallId;
     if (!scryfallId) throw ApiError.notFound('Card not found in this binder');
     await assertPrintedLanguage(db, scryfallId, input.language);
+    // The picture and the stored card are the printing, not the language label.
+    // English and Japanese of one set are two Scryfall ids.
+    const printings = await listLanguagePrintings(db, scryfallId);
+    const nextPrinting = printings.find(
+      (card) => cardLanguageOrEnglish(card.lang) === input.language,
+    );
+    if (!nextPrinting) {
+      throw ApiError.badRequest('This card was not printed in that language.');
+    }
     patch.language = input.language;
+    patch.scryfallId = nextPrinting.scryfallId;
   }
   if (input.signed !== undefined) patch.signed = input.signed;
   if (input.altered !== undefined) patch.altered = input.altered;
   if (input.misprint !== undefined) patch.misprint = input.misprint;
   if (input.miscut !== undefined) patch.miscut = input.miscut;
   if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.photoUrl !== undefined) patch.photoUrl = input.photoUrl;
   if (input.forTrade !== undefined) patch.forTrade = input.forTrade;
   if (input.price) Object.assign(patch, priceColumns(input.price));
 

@@ -7,6 +7,7 @@ import {
   cardLanguageOrEnglish,
   formatUsd,
   parseCustomAmount,
+  parsePhotoLink,
   priceForFinish,
 } from '@opulent/shared';
 import { useEffect, useRef, useState } from 'react';
@@ -17,10 +18,12 @@ import {
   CardDetailsFields,
   defaultFinish,
   isPriceInvalid,
+  isPhotoLinkInvalid,
   isQuantityInvalid,
   priceFromDetails,
 } from './CardDetailsFields';
 import { PrintingPicker } from './PrintingPicker';
+import { FoilSheen } from './FoilSheen';
 
 /** The stored market price as dollars and cents, or blank when there is none. */
 function marketDollar(prices: Card['prices'], finish: CardDetails['finish']): string {
@@ -66,6 +69,7 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
     misprint: false,
     miscut: false,
     notes: '',
+    photoUrl: '',
     forTrade: true,
     priceKind: 'market',
     pricePercent: '100',
@@ -113,6 +117,7 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
 
   const quantityError = isQuantityInvalid(details.quantity);
   const priceError = isPriceInvalid(details);
+  const photoError = isPhotoLinkInvalid(details.photoUrl);
   const quantity = Number(details.quantity);
   const chosenPrice = priceFromDetails(details);
 
@@ -136,7 +141,8 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
   if (lineTotal) priceCaption = `${priceCaption} · ${quantity} copies about ${lineTotal}`;
 
   function handleAdd() {
-    if (quantityError || !chosenPrice) return;
+    if (quantityError || priceError || photoError || !chosenPrice) return;
+    const photoUrl = parsePhotoLink(details.photoUrl);
     onAdd({
       scryfallId: printing.scryfallId,
       quantity,
@@ -150,6 +156,7 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
       forTrade: details.forTrade,
       price: chosenPrice,
       ...(details.notes.trim() ? { notes: details.notes.trim() } : {}),
+      ...(photoUrl ? { photoUrl } : {}),
     });
   }
 
@@ -216,6 +223,7 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
           }
           quantityError={quantityError}
           priceError={priceError}
+          photoError={photoError}
           formattedUnitPrice={formattedUnitPrice}
           priceCaption={priceCaption}
           priceKind={details.priceKind}
@@ -237,6 +245,7 @@ function DetailsStep({
   onDetails,
   quantityError,
   priceError,
+  photoError,
   formattedUnitPrice,
   priceCaption,
   priceKind,
@@ -252,6 +261,7 @@ function DetailsStep({
   onDetails: (patch: Partial<CardDetails>) => void;
   quantityError: boolean;
   priceError: boolean;
+  photoError: boolean;
   formattedUnitPrice: string | null;
   priceCaption: string;
   priceKind: CardDetails['priceKind'];
@@ -283,15 +293,21 @@ function DetailsStep({
         alignItems: 'start',
       }}
     >
-      <Stack spacing={1.5}>
+      <Stack
+        direction={{ xs: 'row', md: 'column' }}
+        spacing={{ xs: 3, md: 1.5 }}
+        sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}
+      >
         <Box
           sx={{
-            width: { xs: 180, md: '100%' },
+            width: { xs: 140, sm: 180, md: '100%' },
             maxWidth: '100%',
-            alignSelf: { xs: 'center', md: 'flex-start' },
+            flexShrink: 0,
+            alignSelf: 'flex-start',
             aspectRatio: '488 / 680',
             borderRadius: 2,
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
           {image ? (
@@ -308,34 +324,79 @@ function DetailsStep({
               </Typography>
             </Stack>
           )}
+          {details.finish === 'foil' && image ? <FoilSheen /> : null}
         </Box>
 
-        <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
-          {formattedUnitPrice ? (
-            <>
-              <Typography variant="h3">{formattedUnitPrice}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {priceCaption}
+        <Stack
+          spacing={1}
+          sx={{
+            minWidth: 0,
+            flex: { xs: 1, md: 'none' },
+            justifyContent: { xs: 'space-between', md: 'flex-start' },
+          }}
+        >
+          <Box>
+            {formattedUnitPrice ? (
+              <>
+                <Typography variant="h3">{formattedUnitPrice}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {priceCaption}
+                </Typography>
+              </>
+            ) : priceKind === 'custom' ? null : (
+              <Typography variant="body2" color="text.secondary">
+                No market price is stored for this finish.
               </Typography>
-            </>
-          ) : priceKind === 'custom' ? null : (
-            <Typography variant="body2" color="text.secondary">
-              No market price is stored for this finish.
-            </Typography>
-          )}
-        </Box>
+            )}
+          </Box>
 
-        {printing.scryfallUri && (
-          <Link
-            href={printing.scryfallUri}
-            target="_blank"
-            rel="noreferrer"
-            variant="caption"
-            color="text.secondary"
-          >
-            View on Scryfall
-          </Link>
-        )}
+          <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+            {printing.scryfallUri && (
+              <Link
+                href={printing.scryfallUri}
+                target="_blank"
+                rel="noreferrer"
+                variant="caption"
+                color="text.secondary"
+              >
+                View on Scryfall
+              </Link>
+            )}
+            {printing.purchaseUris?.tcgplayer ? (
+              <Link
+                href={printing.purchaseUris.tcgplayer}
+                target="_blank"
+                rel="noreferrer"
+                variant="caption"
+                color="text.secondary"
+              >
+                View on TCGPlayer
+              </Link>
+            ) : null}
+            {printing.purchaseUris?.cardmarket ? (
+              <Link
+                href={printing.purchaseUris.cardmarket}
+                target="_blank"
+                rel="noreferrer"
+                variant="caption"
+                color="text.secondary"
+              >
+                View on Cardmarket
+              </Link>
+            ) : null}
+            {printing.purchaseUris?.cardhoarder ? (
+              <Link
+                href={printing.purchaseUris.cardhoarder}
+                target="_blank"
+                rel="noreferrer"
+                variant="caption"
+                color="text.secondary"
+              >
+                View on Cardhoarder
+              </Link>
+            ) : null}
+          </Stack>
+        </Stack>
       </Stack>
 
       <Stack spacing={3}>
@@ -375,7 +436,7 @@ function DetailsStep({
           <Button
             variant="contained"
             onClick={onAdd}
-            disabled={quantityError || priceError || pending}
+            disabled={quantityError || priceError || photoError || pending}
           >
             {pending ? 'Adding…' : 'Add to binder'}
           </Button>

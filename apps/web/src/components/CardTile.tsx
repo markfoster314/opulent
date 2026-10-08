@@ -1,8 +1,14 @@
+import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
+import ContentCutOutlinedIcon from '@mui/icons-material/ContentCutOutlined';
+import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
-import { Box, Chip, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import type { BinderItem, Card } from '@opulent/shared';
-import { askingPriceForFinish, cardLanguageLabels, formatUsd } from '@opulent/shared';
+import { askingPriceForFinish, cardFinishLabels, formatUsd } from '@opulent/shared';
+import type { ReactNode } from 'react';
 import { palette } from '../theme';
+import { FoilSheen } from './FoilSheen';
 
 interface CardTileProps {
   card: Card;
@@ -11,7 +17,15 @@ interface CardTileProps {
   price?: string | null;
   /** Shown as a mark on the image. The note itself appears on hover. */
   notes?: string | null;
+  /** A page of photos of this copy. Opens in a new tab. */
+  photoUrl?: string | null;
+  signed?: boolean;
+  altered?: boolean;
+  misprint?: boolean;
+  miscut?: boolean;
   caption?: string;
+  /** Draws a gloss over the scan when this copy is foil. */
+  foil?: boolean;
   onClick?: () => void;
 }
 
@@ -27,21 +41,73 @@ export function binderTilePrice(
   return null;
 }
 
-/** Set, finish, condition, language, and any marks, in one line under the image. */
+/** Set code, printing, quality, and language code, in one line under the name. */
 export function binderTileCaption(item: BinderItem): string {
   if (!item.card) return '';
   return [
     item.card.setCode.toUpperCase(),
-    item.finish === 'nonfoil' ? null : item.finish,
+    cardFinishLabels[item.finish],
     item.condition,
-    item.language === 'en' ? null : cardLanguageLabels[item.language],
-    item.signed ? 'Signed' : null,
-    item.altered ? 'Altered' : null,
-    item.misprint ? 'Misprint' : null,
-    item.miscut ? 'Miscut' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+    item.language.toUpperCase(),
+  ].join(' · ');
+}
+
+interface CardMark {
+  key: string;
+  label: string;
+  color: string;
+  icon: ReactNode;
+}
+
+const markSize = 34;
+const markIconSize = 18;
+
+/** Notes first, then the four copy marks, and only the ones this stack has. */
+function cardMarks(
+  props: Pick<CardTileProps, 'notes' | 'signed' | 'altered' | 'misprint' | 'miscut'>,
+): CardMark[] {
+  const marks: CardMark[] = [];
+  if (props.notes) {
+    marks.push({
+      key: 'notes',
+      label: `Notes: ${props.notes}`,
+      color: palette.gold,
+      icon: <StickyNote2OutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
+  if (props.signed) {
+    marks.push({
+      key: 'signed',
+      label: 'Signed',
+      color: palette.markSigned,
+      icon: <DrawOutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
+  if (props.altered) {
+    marks.push({
+      key: 'altered',
+      label: 'Altered',
+      color: palette.markAltered,
+      icon: <BrushOutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
+  if (props.misprint) {
+    marks.push({
+      key: 'misprint',
+      label: 'Misprint',
+      color: palette.markMisprint,
+      icon: <ReportProblemOutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
+  if (props.miscut) {
+    marks.push({
+      key: 'miscut',
+      label: 'Miscut',
+      color: palette.markMiscut,
+      icon: <ContentCutOutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
+  return marks;
 }
 
 /**
@@ -50,8 +116,22 @@ export function binderTileCaption(item: BinderItem): string {
  * The Scryfall terms forbid cropping, stretching, recolouring or watermarking
  * card images, so this tile only ever scales the whole image proportionally.
  */
-export function CardTile({ card, quantity, price, notes, caption, onClick }: CardTileProps) {
+export function CardTile({
+  card,
+  quantity,
+  price,
+  notes,
+  signed,
+  altered,
+  misprint,
+  miscut,
+  caption,
+  foil,
+  photoUrl,
+  onClick,
+}: CardTileProps) {
   const image = card.imageUris?.normal ?? card.imageUris?.small;
+  const marks = cardMarks({ notes, signed, altered, misprint, miscut });
 
   return (
     <Paper
@@ -59,6 +139,10 @@ export function CardTile({ card, quantity, price, notes, caption, onClick }: Car
       sx={{
         position: 'relative',
         p: 1,
+        width: '100%',
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'border-color 120ms ease, transform 120ms ease',
         '&:hover': onClick
@@ -66,44 +150,55 @@ export function CardTile({ card, quantity, price, notes, caption, onClick }: Car
           : undefined,
       }}
     >
-      {notes ? (
-        <Tooltip
-          title={notes}
-          slotProps={{ tooltip: { sx: { whiteSpace: 'pre-wrap', maxWidth: 280 } } }}
+      {marks.length > 0 ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
         >
-          <Box
-            component="button"
-            type="button"
-            aria-label={notes}
-            onClick={(event) => event.stopPropagation()}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              zIndex: 1,
-              width: 42,
-              height: 42,
-              p: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 0,
-              borderTopRightRadius: 0,
-              borderBottomRightRadius: 0,
-              borderBottomLeftRadius: 0,
-              // One pixel inside the card border, so this curve sits on the card's curve.
-              borderTopLeftRadius: (theme) => {
-                const radius = Number(theme.shape.borderRadius);
-                return `${Math.max(0, radius - 1)}px`;
-              },
-              cursor: 'pointer',
-              color: palette.background,
-              backgroundColor: palette.gold,
-            }}
-          >
-            <StickyNote2OutlinedIcon sx={{ fontSize: 24 }} />
-          </Box>
-        </Tooltip>
+          {marks.map((mark, index) => (
+            <Tooltip
+              key={mark.key}
+              title={mark.label}
+              placement="left"
+              slotProps={{ tooltip: { sx: { whiteSpace: 'pre-wrap', maxWidth: 280 } } }}
+            >
+              <Box
+                component="button"
+                type="button"
+                aria-label={mark.label}
+                onClick={(event) => event.stopPropagation()}
+                sx={{
+                  width: markSize,
+                  height: markSize,
+                  p: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 0,
+                  borderRadius: 0,
+                  borderTopLeftRadius:
+                    index === 0
+                      ? (theme) => {
+                          const radius = Number(theme.shape.borderRadius);
+                          return `${Math.max(0, radius - 1)}px`;
+                        }
+                      : 0,
+                  cursor: 'pointer',
+                  color: palette.background,
+                  backgroundColor: mark.color,
+                }}
+              >
+                {mark.icon}
+              </Box>
+            </Tooltip>
+          ))}
+        </Box>
       ) : null}
 
       <Box
@@ -129,6 +224,8 @@ export function CardTile({ card, quantity, price, notes, caption, onClick }: Car
             </Typography>
           </Stack>
         )}
+
+        {foil && image ? <FoilSheen /> : null}
 
         {quantity !== undefined && quantity > 1 && (
           <Chip
@@ -162,6 +259,21 @@ export function CardTile({ card, quantity, price, notes, caption, onClick }: Car
         <Typography variant="caption" color="text.secondary" noWrap>
           {caption ?? `${card.setCode.toUpperCase()} · ${card.collectorNumber}`}
         </Typography>
+        {photoUrl ? (
+          <Link
+            href={photoUrl}
+            target="_blank"
+            rel="noreferrer"
+            variant="caption"
+            onClick={(event) => event.stopPropagation()}
+          >
+            Photos
+          </Link>
+        ) : (
+          <Typography variant="caption" aria-hidden sx={{ visibility: 'hidden' }}>
+            Photos
+          </Typography>
+        )}
       </Stack>
     </Paper>
   );

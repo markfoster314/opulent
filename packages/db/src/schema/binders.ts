@@ -74,6 +74,8 @@ export const binderItems = pgTable(
     misprint: boolean('misprint').notNull().default(false),
     miscut: boolean('miscut').notNull().default(false),
     notes: text('notes'),
+    /** A link to photos of this physical copy. Not part of the stack key. */
+    photoUrl: text('photo_url'),
 
     /** Lets an owner park a card in a binder without offering it yet. */
     forTrade: boolean('for_trade').notNull().default(true),

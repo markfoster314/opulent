@@ -49,6 +49,18 @@ export const cardSchema = z.object({
   imageUris: cardImageUrisSchema.nullable(),
   prices: cardPricesSchema.nullable(),
   scryfallUri: z.string().nullable(),
+  /**
+   * Shop links Scryfall attaches to this printing. A field is missing when that
+   * shop has no page for the card.
+   */
+  purchaseUris: z
+    .object({
+      tcgplayer: z.string().nullable().optional(),
+      cardmarket: z.string().nullable().optional(),
+      cardhoarder: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   releasedAt: z.string().nullable(),
 });
 export type Card = z.infer<typeof cardSchema>;

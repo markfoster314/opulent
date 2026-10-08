@@ -38,6 +38,20 @@ export const palette = {
 
   textPrimary: '#F2EFE6',
   textSecondary: '#A39B86',
+
+  /** Marks on a binder card. Gold stays the notes mark. These four stay distinct from it and from each other. */
+  markSigned: '#3E6F8C',
+  markAltered: '#6B5B8C',
+  markMisprint: '#2F7A6E',
+  markMiscut: '#8C4E3A',
+
+  /**
+   * Gloss laid over a foil card. These are the shine, not a recolor of the scan.
+   * Warm matches goldHighlight. Cool is the other side of the reflection.
+   */
+  foilShine: 'rgba(255, 255, 255, 0.7)',
+  foilWarm: 'rgba(240, 212, 138, 0.75)',
+  foilCool: 'rgba(186, 214, 232, 0.7)',
 } as const;
 
 const themeOptions: ThemeOptions = {

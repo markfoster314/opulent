@@ -12,6 +12,7 @@ export function CardGrid({ children }: { children: ReactNode }) {
         display: 'grid',
         gap: 2,
         gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 148px), 1fr))',
+        alignItems: 'stretch',
       }}
     >
       {children}

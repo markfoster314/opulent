@@ -50,6 +50,13 @@
       "when": 1791427864332,
       "tag": "0006_card_marks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791434610824,
+      "tag": "0007_photo_link",
+      "breakpoints": true
     }
   ]
 }

@@ -95,7 +95,13 @@ export function SharedBinderPage() {
               quantity={item.quantity}
               price={binderTilePrice(item)}
               notes={item.notes?.trim() ? item.notes : null}
+              signed={item.signed}
+              altered={item.altered}
+              misprint={item.misprint}
+              miscut={item.miscut}
+              photoUrl={item.photoUrl}
               caption={binderTileCaption(item)}
+              foil={item.finish === 'foil'}
             />
           ) : null,
         )}
