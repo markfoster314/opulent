@@ -1,16 +1,23 @@
-import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
-import type { Card, CardFinish } from '@opulent/shared';
+import {
+  Alert,
+  Autocomplete,
+  Box,
+  Button,
+  CircularProgress,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import type { Card, CardSet } from '@opulent/shared';
 import { formatUsd, priceForFinish } from '@opulent/shared';
 import { useState } from 'react';
-import { flattenPages, useCardPrintings } from '../api/queries';
+import { flattenPages, useCardPrintings, useCardSets } from '../api/queries';
 import { useDebounced } from '../hooks/useDebounced';
 import { palette } from '../theme';
 
 interface PrintingPickerProps {
   oracleId: string;
   selectedId: string;
-  /** Prices shown per tile follow the finish chosen in the form. */
-  finish: CardFinish;
   onSelect: (printing: Card) => void;
 }
 
@@ -20,10 +27,11 @@ interface PrintingPickerProps {
  * It matters for trading: two Sol Rings can be a dollar or forty dollars apart
  * depending on the set, so "a Sol Ring" is not a tradeable description.
  */
-export function PrintingPicker({ oracleId, selectedId, finish, onSelect }: PrintingPickerProps) {
+export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPickerProps) {
   const [setFilter, setSetFilter] = useState('');
   const debouncedFilter = useDebounced(setFilter);
   const query = useCardPrintings(oracleId, debouncedFilter);
+  const setsQuery = useCardSets(oracleId);
 
   const printings = flattenPages(query.data?.pages);
 
@@ -35,14 +43,12 @@ export function PrintingPicker({ oracleId, selectedId, finish, onSelect }: Print
         justifyContent="space-between"
         alignItems={{ sm: 'center' }}
       >
-        <Typography variant="h3">Choose a printing</Typography>
-        <TextField
-          size="small"
-          label="Filter by set"
-          placeholder="Modern Horizons, or MH3"
+        <Typography variant="h3">Choose a set</Typography>
+        <SetFilter
+          sets={setsQuery.data?.items ?? []}
+          loading={setsQuery.isFetching}
           value={setFilter}
-          onChange={(event) => setSetFilter(event.target.value)}
-          sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 240 } }}
+          onChange={setSetFilter}
         />
       </Stack>
 
@@ -58,6 +64,7 @@ export function PrintingPicker({ oracleId, selectedId, finish, onSelect }: Print
           display: 'grid',
           gap: 1.5,
           gridTemplateColumns: 'repeat(auto-fill, minmax(124px, 1fr))',
+          alignItems: 'stretch',
         }}
       >
         {printings.map((printing) => (
@@ -65,7 +72,6 @@ export function PrintingPicker({ oracleId, selectedId, finish, onSelect }: Print
             key={printing.scryfallId}
             printing={printing}
             selected={printing.scryfallId === selectedId}
-            finish={finish}
             onSelect={() => onSelect(printing)}
           />
         ))}
@@ -90,7 +96,6 @@ export function PrintingPicker({ oracleId, selectedId, finish, onSelect }: Print
 interface PrintingTileProps {
   printing: Card;
   selected: boolean;
-  finish: CardFinish;
   onSelect: () => void;
 }
 
@@ -101,12 +106,23 @@ interface PrintingTileProps {
  * The Scryfall terms forbid cropping, stretching, recolouring or watermarking
  * card images, so the image is only ever scaled proportionally.
  */
-function PrintingTile({ printing, selected, finish, onSelect }: PrintingTileProps) {
+function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
   const image = printing.imageUris?.normal ?? printing.imageUris?.small;
-  // Falls back to the plain price so a tile is not blank just because the chosen
-  // finish does not exist for this printing.
-  const price =
-    formatUsd(priceForFinish(printing.prices, finish)) ?? formatUsd(printing.prices?.usd);
+  const nonfoil = printing.finishes.includes('nonfoil')
+    ? formatUsd(priceForFinish(printing.prices, 'nonfoil'))
+    : null;
+  const foil = printing.finishes.includes('foil')
+    ? formatUsd(priceForFinish(printing.prices, 'foil'))
+    : null;
+  const etched = printing.finishes.includes('etched')
+    ? formatUsd(priceForFinish(printing.prices, 'etched'))
+    : null;
+
+  const prices = [
+    nonfoil ? `Nonfoil ${nonfoil}` : null,
+    foil ? `Foil ${foil}` : null,
+    etched ? `Etched ${etched}` : null,
+  ].filter((line) => line !== null);
 
   return (
     <Box
@@ -115,6 +131,13 @@ function PrintingTile({ printing, selected, finish, onSelect }: PrintingTileProp
       onClick={onSelect}
       aria-pressed={selected}
       sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        justifyContent: 'flex-start',
+        width: '100%',
+        height: '100%',
+        boxSizing: 'border-box',
         p: 1,
         textAlign: 'left',
         cursor: 'pointer',
@@ -127,7 +150,14 @@ function PrintingTile({ printing, selected, finish, onSelect }: PrintingTileProp
         '&:hover': { borderColor: palette.goldLight, transform: 'translateY(-2px)' },
       }}
     >
-      <Box sx={{ aspectRatio: '488 / 680', borderRadius: 1.5, overflow: 'hidden' }}>
+      <Box
+        sx={{
+          flexShrink: 0,
+          aspectRatio: '488 / 680',
+          borderRadius: 1.5,
+          overflow: 'hidden',
+        }}
+      >
         {image ? (
           <Box
             component="img"
@@ -146,28 +176,92 @@ function PrintingTile({ printing, selected, finish, onSelect }: PrintingTileProp
       </Box>
 
       <Stack sx={{ pt: 1 }}>
-        <Typography
-          variant="caption"
-          // Clamped to two lines so a long set name cannot make one tile taller
-          // than its neighbours.
-          sx={{
-            fontWeight: 600,
-            lineHeight: 1.3,
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 2,
-            overflow: 'hidden',
-          }}
-          title={printing.setName ?? printing.setCode.toUpperCase()}
-        >
+        <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
           {printing.setName ?? printing.setCode.toUpperCase()}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap>
+        <Typography variant="caption" color="text.secondary">
           #{printing.collectorNumber}
           {printing.lang !== 'en' ? ` · ${printing.lang.toUpperCase()}` : ''}
-          {price ? ` · ${price}` : ''}
         </Typography>
+        {prices.map((line) => (
+          <Typography key={line} variant="caption" color="text.secondary">
+            {line}
+          </Typography>
+        ))}
       </Stack>
     </Box>
+  );
+}
+
+function setLabel(set: CardSet): string {
+  return set.setName ?? set.setCode.toUpperCase();
+}
+
+/**
+ * A text box whose list is this card's sets, narrowed by what is typed.
+ *
+ * Matching covers the set name and the short code, so "MH3" finds Modern
+ * Horizons 3. Choosing a row fills the box with that set's name, which is
+ * what the tiles below then filter on.
+ */
+function SetFilter({
+  sets,
+  loading,
+  value,
+  onChange,
+}: {
+  sets: CardSet[];
+  loading: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Autocomplete<CardSet, false, false, true>
+      freeSolo
+      openOnFocus
+      size="small"
+      options={sets}
+      inputValue={value}
+      loading={loading}
+      getOptionLabel={(option) => (typeof option === 'string' ? option : setLabel(option))}
+      isOptionEqualToValue={(a, b) => a.setCode === b.setCode && a.setName === b.setName}
+      filterOptions={(options, state) => {
+        const term = state.inputValue.trim().toLowerCase();
+        return options.filter((set) => {
+          const name = (set.setName ?? '').toLowerCase();
+          const code = set.setCode.toLowerCase();
+          return term.length === 0 || name.includes(term) || code.includes(term);
+        });
+      }}
+      onInputChange={(_, next) => onChange(next)}
+      noOptionsText={value.trim().length === 0 ? 'No sets for this card' : 'No sets match'}
+      renderOption={(props, set) => (
+        <Box component="li" {...props} key={`${set.setCode}-${set.setName ?? ''}`}>
+          <Typography variant="body2">
+            {setLabel(set)}
+            {set.setName ? ` (${set.setCode.toUpperCase()})` : ''}
+          </Typography>
+        </Box>
+      )}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label="Filter by set"
+          placeholder="Modern Horizons, or MH3"
+          slotProps={{
+            input: {
+              ...params.InputProps,
+              endAdornment: (
+                <>
+                  {loading ? <CircularProgress size={16} /> : null}
+                  {params.InputProps.endAdornment}
+                </>
+              ),
+            },
+          }}
+        />
+      )}
+      sx={{ width: { xs: '100%', sm: 280 } }}
+    />
   );
 }

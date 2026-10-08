@@ -72,6 +72,13 @@ export const cardPrintingsQuerySchema = z.object({
 });
 export type CardPrintingsQuery = z.infer<typeof cardPrintingsQuerySchema>;
 
+/** One set a card was printed in. The picker uses this for the set dropdown. */
+export const cardSetSchema = z.object({
+  setCode: z.string(),
+  setName: z.string().nullable(),
+});
+export type CardSet = z.infer<typeof cardSetSchema>;
+
 /**
  * The price that applies to one finish of one printing.
  *
@@ -87,6 +94,33 @@ export function priceForFinish(
   if (finish === 'foil') return prices.usd_foil ?? null;
   if (finish === 'etched') return prices.usd_etched ?? null;
   return prices.usd ?? null;
+}
+
+const marketPriceFields = ['usd', 'usd_foil', 'usd_etched', 'eur', 'eur_foil', 'tix'] as const;
+
+/**
+ * The market price for a finish.
+ *
+ * Scryfall prices the English printing. A foreign row of the same set and
+ * collector number usually has that field empty, so the English price fills
+ * the gap. A price that is present on the foreign printing stays, one finish
+ * at a time.
+ */
+export function marketPrices(
+  prices: CardPrices | null | undefined,
+  englishPrices: CardPrices | null | undefined,
+): CardPrices | null {
+  const merged: CardPrices = {};
+  let any = false;
+  for (const field of marketPriceFields) {
+    const own = prices?.[field];
+    const fallback = englishPrices?.[field];
+    const value = (own || null) ?? (fallback || null);
+    if (!value) continue;
+    merged[field] = value;
+    any = true;
+  }
+  return any ? merged : null;
 }
 
 /**

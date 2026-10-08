@@ -1,6 +1,6 @@
 import { binderItems, binders, cards, createDatabase, places, users, wantItems } from '@opulent/db';
 import { loadEnv } from '@opulent/db/env';
-import { formatUsd, priceForFinish } from '@opulent/shared';
+import { askingPrice, formatUsd, marketPrices, priceForFinish } from '@opulent/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   addBinderItem,
@@ -13,7 +13,13 @@ import {
   updateBinder,
   updateBinderItem,
 } from './modules/binders/service';
-import { getPrintingsByOracleId, searchCards } from './modules/cards/service';
+import {
+  getPrintingsByOracleId,
+  listLanguagePrintings,
+  listLanguagesForPrinting,
+  listSetsByOracleId,
+  searchCards,
+} from './modules/cards/service';
 import { searchPlaces } from './modules/places/service';
 import {
   checkUsernameAvailability,
@@ -38,8 +44,13 @@ loadEnv();
 // Fixed fake identifiers, so a failed run leaves nothing hard to find.
 const ORACLE_ID = '00000000-0000-4000-8000-00000000f00d';
 const PRINTING_A = '00000000-0000-4000-8000-0000000000a1';
+const PRINTING_A_JA = '00000000-0000-4000-8000-0000000000a6';
 const PRINTING_B = '00000000-0000-4000-8000-0000000000a2';
 const PRINTING_C = '00000000-0000-4000-8000-0000000000a3';
+const PRINTING_ARENA = '00000000-0000-4000-8000-0000000000a4';
+const PRINTING_ART = '00000000-0000-4000-8000-0000000000a5';
+const ARENA_ORACLE_ID = '00000000-0000-4000-8000-00000000f00e';
+const ART_ORACLE_ID = '00000000-0000-4000-8000-00000000f00f';
 
 // Fake GeoNames ids, far above any real one, so cleanup cannot touch a real city.
 const AUSTIN_ID = 2_000_000_001;
@@ -139,7 +150,18 @@ async function main() {
         // to the user in the edit form.
         finishes: ['nonfoil', 'foil', 'not_a_real_finish'],
         prices: { usd: '1.50', usd_foil: '12.00' },
-        raw: {},
+        raw: { games: ['paper'] },
+      },
+      {
+        scryfallId: PRINTING_A_JA,
+        oracleId: ORACLE_ID,
+        name: 'Smoke Test Bolt',
+        setCode: 'zzz',
+        setName: 'Smoke Set Alpha',
+        collectorNumber: '1',
+        lang: 'ja',
+        releasedAt: '2024-01-01',
+        raw: { games: ['paper'] },
       },
       {
         scryfallId: PRINTING_B,
@@ -150,7 +172,7 @@ async function main() {
         collectorNumber: '2',
         lang: 'en',
         releasedAt: '2023-01-01',
-        raw: {},
+        raw: { games: ['paper'] },
       },
       // Newest of the three, but not English. The printing picker must still
       // sort it last, or every card would open on a printing the owner is
@@ -164,7 +186,30 @@ async function main() {
         collectorNumber: '3',
         lang: 'ja',
         releasedAt: '2025-01-01',
-        raw: {},
+        raw: { games: ['paper'] },
+      },
+      {
+        scryfallId: PRINTING_ARENA,
+        oracleId: ARENA_ORACLE_ID,
+        name: 'Smoke Arena Mythic',
+        setCode: 'zzn',
+        setName: 'Smoke Set Arena',
+        collectorNumber: '4',
+        lang: 'en',
+        releasedAt: '2026-01-01',
+        raw: { games: ['arena'] },
+      },
+      {
+        scryfallId: PRINTING_ART,
+        oracleId: ART_ORACLE_ID,
+        name: 'Smoke Test Bolt // Smoke Test Bolt',
+        setCode: 'zza',
+        setName: 'Smoke Art Series',
+        collectorNumber: '5',
+        lang: 'en',
+        layout: 'art_series',
+        releasedAt: '2024-06-01',
+        raw: { games: ['paper'] },
       },
     ]);
 
@@ -343,6 +388,7 @@ async function main() {
       condition: 'NM',
       language: 'en',
       forTrade: true,
+      price: { kind: 'market' },
     });
     await addBinderItem(db, binder.id, {
       scryfallId: PRINTING_B,
@@ -351,6 +397,7 @@ async function main() {
       condition: 'NM',
       language: 'en',
       forTrade: true,
+      price: { kind: 'market' },
     });
 
     // Adding the same stack again must raise the quantity, not create a row.
@@ -361,6 +408,7 @@ async function main() {
       condition: 'NM',
       language: 'en',
       forTrade: true,
+      price: { kind: 'market' },
     });
     const stacksOfA = await db
       .select()
@@ -368,6 +416,7 @@ async function main() {
       .where(and(eq(binderItems.binderId, binder.id), eq(binderItems.scryfallId, PRINTING_A)));
     check('duplicate add collapsed into one stack', stacksOfA.length === 1, `${stacksOfA.length}`);
     check('duplicate add summed the quantity', bumped.quantity === 5, `${bumped.quantity}`);
+    check('a new card starts at the market price', bumped.price.kind === 'market');
 
     // A different condition is a different stack, because it trades differently.
     await addBinderItem(db, binder.id, {
@@ -377,6 +426,7 @@ async function main() {
       condition: 'MP',
       language: 'en',
       forTrade: true,
+      price: { kind: 'market' },
     });
     const allStacksOfA = await db
       .select()
@@ -407,6 +457,99 @@ async function main() {
     check(
       'not-for-trade cards excluded',
       (await findTradeMatches(db, binder.id, viewer.id)).length === 0,
+    );
+
+    const percentStack = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'percent', percent: 90 },
+    });
+    check(
+      'percent of market is stored',
+      percentStack.price.kind === 'percent' && percentStack.price.percent === 90,
+    );
+    const percentAgain = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 4,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'percent', percent: 90 },
+    });
+    check(
+      'the same percent collapses into one stack',
+      percentAgain.quantity === 5,
+      `${percentAgain.quantity}`,
+    );
+    const customStack = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'custom', amount: '4.5' },
+    });
+    check(
+      'a custom price is stored in dollars and cents',
+      customStack.price.kind === 'custom' && customStack.price.amount === '4.50',
+    );
+    const pricedStacks = await db
+      .select()
+      .from(binderItems)
+      .where(and(eq(binderItems.binderId, binder.id), eq(binderItems.scryfallId, PRINTING_A)));
+    check(
+      'a different price is its own stack',
+      pricedStacks.length === 4,
+      `${pricedStacks.length}`,
+    );
+    const changedPrice = await updateBinderItem(db, binder.id, customStack.id, {
+      price: { kind: 'percent', percent: 80 },
+    });
+    check(
+      'a stack price can be changed',
+      changedPrice.price.kind === 'percent' && changedPrice.price.percent === 80,
+    );
+    check(
+      'moving onto an existing price stack is rejected',
+      !(await resolves(() =>
+        updateBinderItem(db, binder.id, customStack.id, {
+          price: { kind: 'percent', percent: 90 },
+        }),
+      )),
+    );
+    const fullPercent = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'percent', percent: 100 },
+    });
+    check(
+      '100 percent stays separate from the market stack',
+      fullPercent.price.kind === 'percent' &&
+        fullPercent.price.percent === 100 &&
+        fullPercent.id !== bumped.id,
+    );
+    const zeroPercent = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'percent', percent: 0 },
+    });
+    check(
+      '0 percent is stored',
+      zeroPercent.price.kind === 'percent' && zeroPercent.price.percent === 0,
     );
 
     // --- Phase 4: binder settings ---
@@ -446,7 +589,99 @@ async function main() {
       JSON.stringify(edited.availableFinishes),
     );
 
+    const marked = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'market' },
+      signed: true,
+      altered: false,
+      misprint: true,
+      miscut: false,
+    });
+    check(
+      'language and marks are stored',
+      marked.language === 'en' &&
+        marked.signed &&
+        !marked.altered &&
+        marked.misprint &&
+        !marked.miscut,
+    );
+    const markedAgain = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 2,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'market' },
+      signed: true,
+      altered: false,
+      misprint: true,
+      miscut: false,
+    });
+    check(
+      'the same marks collapse into one stack',
+      markedAgain.quantity === 3,
+      `${markedAgain.quantity}`,
+    );
+    const unmarked = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      price: { kind: 'market' },
+    });
+    check('a copy without those marks is its own stack', unmarked.id !== marked.id);
+
+    const printedLanguages = await listLanguagesForPrinting(db, PRINTING_A);
+    check(
+      'language list is only what this printing was made in',
+      printedLanguages.join(',') === 'en,ja',
+      printedLanguages.join(','),
+    );
+    const japaneseLanguages = await listLanguagesForPrinting(db, PRINTING_C);
+    check(
+      'a Japanese-only printing lists Japanese',
+      japaneseLanguages.join(',') === 'ja',
+      japaneseLanguages.join(','),
+    );
+    check(
+      'an unprinted language is refused',
+      !(await resolves(() =>
+        addBinderItem(db, binder.id, {
+          scryfallId: PRINTING_A,
+          quantity: 1,
+          finish: 'nonfoil',
+          condition: 'NM',
+          language: 'de',
+          forTrade: true,
+          price: { kind: 'market' },
+        }),
+      )),
+    );
+
     // --- Phase 4: keyset pagination ---
+
+    // The price checks above leave extra stacks. Put the binder back to the
+    // three stacks this page walk was written for.
+    await db
+      .delete(binderItems)
+      .where(
+        inArray(binderItems.id, [
+          percentStack.id,
+          customStack.id,
+          fullPercent.id,
+          zeroPercent.id,
+          marked.id,
+          unmarked.id,
+        ]),
+      );
 
     const firstPage = await listBinderItems(db, binder.id, { limit: 2 });
     check(
@@ -513,6 +748,11 @@ async function main() {
       printings.items.map((card) => `${card.setCode}/${card.lang}`).join(' '),
     );
     check(
+      'another language of the same printing is one tile',
+      printings.items.filter((card) => card.setCode === 'zzz').length === 1 &&
+        printings.items.some((card) => card.scryfallId === PRINTING_A),
+    );
+    check(
       'printings carry the prices the picker displays',
       printings.items[0]?.prices?.usd_foil === '12.00',
       JSON.stringify(printings.items[0]?.prices),
@@ -531,6 +771,62 @@ async function main() {
       printingPage2.items.map((card) => card.setCode).join(','),
     );
     check('printing pagination ended cleanly', printingPage2.nextCursor === null);
+
+    const arenaSearch = await searchCards(db, {
+      q: 'Smoke Arena Mythic',
+      limit: 5,
+      uniqueByOracle: true,
+    });
+    check(
+      'an arena-only card is left out of search',
+      arenaSearch.every((card) => card.scryfallId !== PRINTING_ARENA),
+    );
+    check(
+      'an arena-only card cannot be added to a binder',
+      !(await resolves(() =>
+        addBinderItem(db, binder.id, {
+          scryfallId: PRINTING_ARENA,
+          quantity: 1,
+          finish: 'nonfoil',
+          condition: 'NM',
+          language: 'en',
+          forTrade: true,
+          price: { kind: 'market' },
+        }),
+      )),
+    );
+    const artSearch = await searchCards(db, {
+      q: 'Smoke Test Bolt',
+      limit: 20,
+      uniqueByOracle: true,
+    });
+    check(
+      'an art card is left out of search',
+      artSearch.every((card) => card.scryfallId !== PRINTING_ART) &&
+        artSearch.some((card) => card.oracleId === ORACLE_ID),
+    );
+    check(
+      'an art card cannot be added to a binder',
+      !(await resolves(() =>
+        addBinderItem(db, binder.id, {
+          scryfallId: PRINTING_ART,
+          quantity: 1,
+          finish: 'nonfoil',
+          condition: 'NM',
+          language: 'en',
+          forTrade: true,
+          price: { kind: 'market' },
+        }),
+      )),
+    );
+
+    const sets = await listSetsByOracleId(db, ORACLE_ID);
+    check(
+      'set list has one row per set',
+      sets.length === 3 &&
+        sets.some((set) => set.setName === 'Smoke Set Beta' && set.setCode === 'zzy'),
+      sets.map((set) => set.setCode).join(','),
+    );
 
     const byName = await getPrintingsByOracleId(db, ORACLE_ID, { limit: 60, q: 'Set Beta' });
     check(
@@ -566,19 +862,73 @@ async function main() {
     );
     check('missing finish price is null', priceForFinish(alpha?.prices, 'etched') === null);
     check('absent prices are null, not a crash', priceForFinish(null, 'nonfoil') === null);
+    const kept = marketPrices({ usd: null, usd_foil: '3.00' }, { usd: '1.50', usd_foil: '12.00' });
+    check(
+      'a foreign price that exists is kept',
+      kept?.usd === '1.50' && kept?.usd_foil === '3.00',
+      JSON.stringify(kept),
+    );
+    const languagePrintings = await listLanguagePrintings(db, PRINTING_A);
+    const japanesePrinting = languagePrintings.find((card) => card.lang === 'ja');
+    check(
+      'a foreign printing uses the English market price',
+      japanesePrinting?.prices?.usd === '1.50' && japanesePrinting?.prices?.usd_foil === '12.00',
+      JSON.stringify(japanesePrinting?.prices),
+    );
+    const foreignCopy = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A_JA,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'ja',
+      forTrade: true,
+      price: { kind: 'market' },
+    });
+    check(
+      'a saved foreign copy prices from the English printing',
+      foreignCopy.card?.prices?.usd === '1.50',
+      JSON.stringify(foreignCopy.card?.prices),
+    );
+    await db.delete(binderItems).where(eq(binderItems.id, foreignCopy.id));
     check(
       'money formats as US dollars',
       formatUsd('1234.5') === '$1,234.50',
       `${formatUsd('1234.5')}`,
     );
     check('no price formats as null', formatUsd(null) === null);
+    check(
+      'percent price is that share of market',
+      askingPrice('1.50', { kind: 'percent', percent: 90 }) === '1.35',
+    );
+    check(
+      '100 percent is the full market price',
+      askingPrice('1.50', { kind: 'percent', percent: 100 }) === '1.50',
+    );
+    check(
+      '0 percent is zero dollars',
+      askingPrice('1.50', { kind: 'percent', percent: 0 }) === '0.00',
+    );
+    check(
+      'market asking price is the stored price',
+      askingPrice('1.50', { kind: 'market' }) === '1.50',
+    );
+    check(
+      'custom asking price keeps cents',
+      askingPrice('1.50', { kind: 'custom', amount: '4.5' }) === '4.50',
+    );
+    check(
+      'a percent with no market price has no dollar amount',
+      askingPrice(null, { kind: 'percent', percent: 90 }) === null,
+    );
 
     console.log('\nall checks passed');
   } finally {
     await db.delete(wantItems).where(eq(wantItems.oracleId, ORACLE_ID));
     await db.delete(users).where(sql`${users.auth0Sub} LIKE ${'smoke|%'}`);
     await db.delete(places).where(inArray(places.geonameId, [AUSTIN_ID, NYC_ID]));
-    await db.delete(cards).where(eq(cards.oracleId, ORACLE_ID));
+    await db
+      .delete(cards)
+      .where(inArray(cards.oracleId, [ORACLE_ID, ARENA_ORACLE_ID, ART_ORACLE_ID]));
   }
 }
 

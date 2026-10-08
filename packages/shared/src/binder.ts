@@ -1,6 +1,12 @@
 import { z } from 'zod';
-import { binderVisibilitySchema, cardConditionSchema, cardFinishSchema } from './enums';
-import { cardSchema } from './card';
+import {
+  binderVisibilitySchema,
+  cardConditionSchema,
+  cardFinishSchema,
+  cardLanguageSchema,
+  type CardFinish,
+} from './enums';
+import { cardSchema, priceForFinish, type CardPrices } from './card';
 
 /** Lowercase letters, numbers and single hyphens. Used in share URLs. */
 export const slugSchema = z
@@ -24,6 +30,59 @@ export const binderSchema = z.object({
 });
 export type Binder = z.infer<typeof binderSchema>;
 
+/** A dollar string from $0.01 to $99,999.99, normalized to cents. */
+export function parseCustomAmount(value: string): string | null {
+  const trimmed = value.trim();
+  if (!/^\d{1,5}(?:\.\d{1,2})?$/.test(trimmed)) return null;
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount) || amount < 0.01 || amount > 99999.99) return null;
+  return amount.toFixed(2);
+}
+
+/**
+ * How this stack is priced.
+ *
+ * `percent` is a share of the stored market price, from 0 to 100. `custom` is a
+ * dollar amount for this stack alone.
+ */
+export const itemPriceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('market') }),
+  z.object({
+    kind: z.literal('percent'),
+    percent: z.number().int().min(0).max(100),
+  }),
+  z.object({
+    kind: z.literal('custom'),
+    amount: z.string().refine((value) => parseCustomAmount(value) !== null, {
+      message: 'Use a price from $0.01 to $99,999.99.',
+    }),
+  }),
+]);
+export type ItemPrice = z.infer<typeof itemPriceSchema>;
+
+/**
+ * The dollar amount the owner is asking, before quantity.
+ *
+ * A percent with no stored market price has no dollar amount yet.
+ */
+export function askingPrice(market: string | null | undefined, price: ItemPrice): string | null {
+  if (price.kind === 'custom') return parseCustomAmount(price.amount);
+  if (price.kind === 'market') return market ?? null;
+  if (!market) return null;
+  const cents = Math.round(Number(market) * 100);
+  if (!Number.isFinite(cents)) return null;
+  return (Math.round((cents * price.percent) / 100) / 100).toFixed(2);
+}
+
+/** Asking price for one finish, using the market price stored for that finish. */
+export function askingPriceForFinish(
+  prices: CardPrices | null | undefined,
+  finish: CardFinish,
+  price: ItemPrice,
+): string | null {
+  return askingPrice(priceForFinish(prices, finish), price);
+}
+
 export const createBinderSchema = z.object({
   name: z.string().min(1).max(80),
   slug: slugSchema.optional(),
@@ -42,9 +101,15 @@ export const binderItemSchema = z.object({
   quantity: z.number().int().positive(),
   finish: cardFinishSchema,
   condition: cardConditionSchema,
-  language: z.string(),
+  language: cardLanguageSchema,
   notes: z.string().nullable(),
   forTrade: z.boolean(),
+  signed: z.boolean(),
+  altered: z.boolean(),
+  misprint: z.boolean(),
+  miscut: z.boolean(),
+  /** How the owner priced this stack. Older rows are full market. */
+  price: itemPriceSchema,
   card: cardSchema.optional(),
   /**
    * Which finishes this printing was actually produced in. The edit form uses
@@ -59,9 +124,14 @@ export const addBinderItemSchema = z.object({
   quantity: z.number().int().positive().max(999).default(1),
   finish: cardFinishSchema.default('nonfoil'),
   condition: cardConditionSchema.default('NM'),
-  language: z.string().min(2).max(5).default('en'),
+  language: cardLanguageSchema.default('en'),
+  signed: z.boolean().default(false),
+  altered: z.boolean().default(false),
+  misprint: z.boolean().default(false),
+  miscut: z.boolean().default(false),
   notes: z.string().max(280).optional(),
   forTrade: z.boolean().default(true),
+  price: itemPriceSchema.default({ kind: 'market' }),
 });
 export type AddBinderItemInput = z.infer<typeof addBinderItemSchema>;
 

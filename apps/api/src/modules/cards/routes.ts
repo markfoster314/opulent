@@ -4,7 +4,13 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../lib/context';
 import { ApiError } from '../../lib/http';
-import { getCardById, getPrintingsByOracleId, searchCards } from './service';
+import {
+  getCardById,
+  getPrintingsByOracleId,
+  listLanguagePrintings,
+  listSetsByOracleId,
+  searchCards,
+} from './service';
 
 export const cardRoutes = new Hono<AppEnv>();
 
@@ -19,10 +25,21 @@ cardRoutes.get('/search', zValidator('query', cardSearchQuerySchema), async (c) 
   return c.json({ items });
 });
 
+cardRoutes.get('/:id/languages', zValidator('param', uuidParam), async (c) => {
+  const items = await listLanguagePrintings(c.get('db'), c.req.valid('param').id);
+  if (items.length === 0) throw ApiError.notFound('Card not found');
+  return c.json({ items });
+});
+
 cardRoutes.get('/:id', zValidator('param', uuidParam), async (c) => {
   const card = await getCardById(c.get('db'), c.req.valid('param').id);
   if (!card) throw ApiError.notFound('Card not found');
   return c.json(card);
+});
+
+cardRoutes.get('/oracle/:id/sets', zValidator('param', uuidParam), async (c) => {
+  const items = await listSetsByOracleId(c.get('db'), c.req.valid('param').id);
+  return c.json({ items });
 });
 
 cardRoutes.get(

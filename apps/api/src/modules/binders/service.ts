@@ -5,14 +5,22 @@ import type {
   BinderItem,
   CardFinish,
   CreateBinderInput,
+  ItemPrice,
   Page,
   PaginationQuery,
   TradeMatch,
   UpdateBinderInput,
   UpdateBinderItemInput,
 } from '@opulent/shared';
-import { cardFinishSchema } from '@opulent/shared';
+import {
+  cardFinishSchema,
+  cardLanguageOrEnglish,
+  marketPrices,
+  parseCustomAmount,
+} from '@opulent/shared';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { assertPaperPrinting, assertPrintedLanguage } from '../cards/service';
 import { ApiError, slugify } from '../../lib/http';
 
 /** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
@@ -213,8 +221,15 @@ const binderItemSelection = {
   finish: binderItems.finish,
   condition: binderItems.condition,
   language: binderItems.language,
+  signed: binderItems.signed,
+  altered: binderItems.altered,
+  misprint: binderItems.misprint,
+  miscut: binderItems.miscut,
   notes: binderItems.notes,
   forTrade: binderItems.forTrade,
+  priceKind: binderItems.priceKind,
+  pricePercent: binderItems.pricePercent,
+  priceAmount: binderItems.priceAmount,
   cardName: cards.name,
   cardSetCode: cards.setCode,
   cardSetName: cards.setName,
@@ -228,11 +243,57 @@ const binderItemSelection = {
 
 type BinderItemJoinRow = Awaited<ReturnType<typeof selectBinderItems>>[number];
 
+const englishCards = alias(cards, 'english_card');
+
 function selectBinderItems(db: Database) {
   return db
-    .select(binderItemSelection)
+    .select({
+      ...binderItemSelection,
+      englishPrices: englishCards.prices,
+    })
     .from(binderItems)
-    .innerJoin(cards, eq(cards.scryfallId, binderItems.scryfallId));
+    .innerJoin(cards, eq(cards.scryfallId, binderItems.scryfallId))
+    .leftJoin(
+      englishCards,
+      and(
+        eq(englishCards.setCode, cards.setCode),
+        eq(englishCards.collectorNumber, cards.collectorNumber),
+        eq(englishCards.lang, 'en'),
+        sql`jsonb_exists(${englishCards.raw}->'games', 'paper')`,
+        sql`${englishCards.layout} IS DISTINCT FROM 'art_series'`,
+      ),
+    );
+}
+
+function toItemPrice(
+  row: Pick<BinderItemJoinRow, 'priceKind' | 'pricePercent' | 'priceAmount'>,
+): ItemPrice {
+  if (row.priceKind === 'percent') return { kind: 'percent', percent: row.pricePercent };
+  if (row.priceKind === 'custom') return { kind: 'custom', amount: row.priceAmount };
+  return { kind: 'market' };
+}
+
+/**
+ * Fills the unused price columns so the unique stack key can match them.
+ * Market is 100 and an empty amount. Custom is 0 and the dollar string.
+ */
+function priceColumns(price: ItemPrice | undefined): {
+  priceKind: ItemPrice['kind'];
+  pricePercent: number;
+  priceAmount: string;
+} {
+  const chosen = price ?? { kind: 'market' as const };
+  if (chosen.kind === 'percent') {
+    return { priceKind: 'percent', pricePercent: chosen.percent, priceAmount: '' };
+  }
+  if (chosen.kind === 'custom') {
+    return {
+      priceKind: 'custom',
+      pricePercent: 0,
+      priceAmount: parseCustomAmount(chosen.amount) ?? chosen.amount,
+    };
+  }
+  return { priceKind: 'market', pricePercent: 100, priceAmount: '' };
 }
 
 function toBinderItem(row: BinderItemJoinRow): BinderItem {
@@ -243,9 +304,14 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
     quantity: row.quantity,
     finish: row.finish,
     condition: row.condition,
-    language: row.language,
+    language: cardLanguageOrEnglish(row.language),
+    signed: row.signed,
+    altered: row.altered,
+    misprint: row.misprint,
+    miscut: row.miscut,
     notes: row.notes,
     forTrade: row.forTrade,
+    price: toItemPrice(row),
     availableFinishes: (row.cardFinishes ?? []).filter(isCardFinish),
     card: {
       scryfallId: row.scryfallId,
@@ -261,7 +327,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
       manaCost: null,
       finishes: (row.cardFinishes ?? []).filter(isCardFinish),
       imageUris: row.cardImageUris ?? null,
-      prices: row.cardPrices ?? null,
+      prices: marketPrices(row.cardPrices, row.englishPrices),
       scryfallUri: null,
       releasedAt: null,
     },
@@ -314,21 +380,18 @@ function decodeCursor(cursor?: string): { name: string; id: string } | undefined
 
 /**
  * Adds a card, or bumps the quantity if that exact stack is already present.
- * "Exact stack" means same printing, finish, condition and language.
+ * "Exact stack" means same printing, finish, condition, language, marks, and price.
+ *
+ * Marks default to unchecked so a caller that only names the printing still works.
  */
 export async function addBinderItem(
   db: Database,
   binderId: string,
-  input: AddBinderItemInput,
+  input: Omit<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut'> &
+    Partial<Pick<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut'>>,
 ): Promise<BinderItem> {
-  const cardExists = await db
-    .select({ scryfallId: cards.scryfallId })
-    .from(cards)
-    .where(eq(cards.scryfallId, input.scryfallId))
-    .limit(1);
-  if (cardExists.length === 0) {
-    throw ApiError.badRequest('Unknown card. The local Scryfall mirror may be out of date.');
-  }
+  await assertPaperPrinting(db, input.scryfallId);
+  await assertPrintedLanguage(db, input.scryfallId, input.language);
 
   const inserted = await db
     .insert(binderItems)
@@ -339,8 +402,13 @@ export async function addBinderItem(
       finish: input.finish,
       condition: input.condition,
       language: input.language,
+      signed: input.signed ?? false,
+      altered: input.altered ?? false,
+      misprint: input.misprint ?? false,
+      miscut: input.miscut ?? false,
       notes: input.notes ?? null,
       forTrade: input.forTrade,
+      ...priceColumns(input.price),
     })
     .onConflictDoUpdate({
       target: [
@@ -349,6 +417,13 @@ export async function addBinderItem(
         binderItems.finish,
         binderItems.condition,
         binderItems.language,
+        binderItems.signed,
+        binderItems.altered,
+        binderItems.misprint,
+        binderItems.miscut,
+        binderItems.priceKind,
+        binderItems.pricePercent,
+        binderItems.priceAmount,
       ],
       set: {
         quantity: sql`${binderItems.quantity} + ${input.quantity}`,
@@ -372,18 +447,60 @@ export async function updateBinderItem(
   itemId: string,
   input: UpdateBinderItemInput,
 ): Promise<BinderItem> {
-  const updated = await db
-    .update(binderItems)
-    .set({ ...input, updatedAt: new Date() })
-    .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)))
-    .returning({ id: binderItems.id });
+  const patch: Partial<typeof binderItems.$inferInsert> = { updatedAt: new Date() };
+  if (input.quantity !== undefined) patch.quantity = input.quantity;
+  if (input.finish !== undefined) patch.finish = input.finish;
+  if (input.condition !== undefined) patch.condition = input.condition;
+  if (input.language !== undefined) {
+    const existing = await db
+      .select({ scryfallId: binderItems.scryfallId })
+      .from(binderItems)
+      .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)))
+      .limit(1);
+    const scryfallId = existing[0]?.scryfallId;
+    if (!scryfallId) throw ApiError.notFound('Card not found in this binder');
+    await assertPrintedLanguage(db, scryfallId, input.language);
+    patch.language = input.language;
+  }
+  if (input.signed !== undefined) patch.signed = input.signed;
+  if (input.altered !== undefined) patch.altered = input.altered;
+  if (input.misprint !== undefined) patch.misprint = input.misprint;
+  if (input.miscut !== undefined) patch.miscut = input.miscut;
+  if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.forTrade !== undefined) patch.forTrade = input.forTrade;
+  if (input.price) Object.assign(patch, priceColumns(input.price));
 
-  if (!updated[0]) throw ApiError.notFound('Card not found in this binder');
+  try {
+    const updated = await db
+      .update(binderItems)
+      .set(patch)
+      .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)))
+      .returning({ id: binderItems.id });
+
+    if (!updated[0]) throw ApiError.notFound('Card not found in this binder');
+  } catch (error) {
+    if (isStackCollision(error)) {
+      throw ApiError.conflict(
+        'You already have a stack of this card with those details. Add to that stack instead.',
+      );
+    }
+    throw error;
+  }
 
   const rows = await selectBinderItems(db).where(eq(binderItems.id, itemId)).limit(1);
   const row = rows[0];
   if (!row) throw ApiError.notFound('Card not found in this binder');
   return toBinderItem(row);
+}
+
+/** Postgres reports a broken unique index as SQLSTATE 23505. */
+function isStackCollision(error: unknown): boolean {
+  const candidates = [error, (error as { cause?: unknown } | null)?.cause];
+  return candidates.some((candidate) => {
+    if (typeof candidate !== 'object' || candidate === null) return false;
+    const row = candidate as { code?: unknown; constraint_name?: unknown };
+    return row.code === '23505' && row.constraint_name === 'binder_items_stack_key';
+  });
 }
 
 export async function removeBinderItem(

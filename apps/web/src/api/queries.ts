@@ -4,6 +4,7 @@ import type {
   Binder,
   BinderItem,
   Card,
+  CardSet,
   CompleteOnboardingInput,
   CreateBinderInput,
   UsernameAvailability,
@@ -32,6 +33,8 @@ export const queryKeys = {
   placeSearch: (term: string) => ['places', 'search', term] as const,
   cardPrintings: (oracleId: string, setFilter: string) =>
     ['cards', 'printings', oracleId, setFilter] as const,
+  cardSets: (oracleId: string) => ['cards', 'sets', oracleId] as const,
+  cardLanguages: (scryfallId: string) => ['cards', 'languages', scryfallId] as const,
   sharedBinder: (handle: string, slug: string) => ['binder', 'by', handle, slug] as const,
 };
 
@@ -194,6 +197,17 @@ export function useCardSearch(term: string) {
 /** Enough tiles to fill the picker a few rows deep without a slow first paint. */
 const PRINTINGS_PAGE_SIZE = 24;
 
+/** Every set this card was printed in, for the set dropdown. */
+export function useCardSets(oracleId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.cardSets(oracleId ?? 'none'),
+    queryFn: () => api<{ items: CardSet[] }>(`/v1/cards/oracle/${oracleId}/sets`),
+    enabled: Boolean(oracleId),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 /**
  * Every set a card was printed in, for the printing picker.
  *
@@ -215,6 +229,17 @@ export function useCardPrintings(oracleId: string | undefined, setFilter = '') {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(oracleId),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Languages this printing was produced in, for the language dropdown. */
+export function useCardLanguages(scryfallId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.cardLanguages(scryfallId ?? 'none'),
+    queryFn: () => api<{ items: Card[] }>(`/v1/cards/${scryfallId}/languages`),
+    enabled: Boolean(scryfallId),
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -4,6 +4,34 @@ import { z } from 'zod';
 export const cardFinishSchema = z.enum(['nonfoil', 'foil', 'etched']);
 export type CardFinish = z.infer<typeof cardFinishSchema>;
 
+/** Printed language. The codes match the ones Scryfall stores on a card. */
+export const cardLanguageSchema = z.enum([
+  'en',
+  'es',
+  'fr',
+  'de',
+  'it',
+  'pt',
+  'ja',
+  'ko',
+  'ru',
+  'zhs',
+  'zht',
+  'he',
+  'la',
+  'grc',
+  'ar',
+  'sa',
+  'ph',
+]);
+export type CardLanguage = z.infer<typeof cardLanguageSchema>;
+
+/** A known language code, or English when the printing uses one we do not list. */
+export function cardLanguageOrEnglish(lang: string): CardLanguage {
+  const parsed = cardLanguageSchema.safeParse(lang);
+  return parsed.success ? parsed.data : 'en';
+}
+
 /**
  * Grading shorthand used by every major Magic marketplace:
  * NM near mint, LP lightly played, MP moderately played, HP heavily played, DMG damaged.
@@ -51,10 +79,43 @@ export const cardConditionLabels: Record<CardCondition, string> = {
   DMG: 'Damaged',
 };
 
+/**
+ * Usual share of the market price left after wear.
+ *
+ * Near mint stays at the full market price, so it has no entry here.
+ * Light play is about 10% off, moderate 20% off, heavy 30% off, damaged 50% off.
+ */
+export const conditionMarketPercent: Partial<Record<CardCondition, number>> = {
+  LP: 90,
+  MP: 80,
+  HP: 70,
+  DMG: 50,
+};
+
 export const cardFinishLabels: Record<CardFinish, string> = {
   nonfoil: 'Non-foil',
   foil: 'Foil',
   etched: 'Etched foil',
+};
+
+export const cardLanguageLabels: Record<CardLanguage, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  it: 'Italian',
+  pt: 'Portuguese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  ru: 'Russian',
+  zhs: 'Simplified Chinese',
+  zht: 'Traditional Chinese',
+  he: 'Hebrew',
+  la: 'Latin',
+  grc: 'Ancient Greek',
+  ar: 'Arabic',
+  sa: 'Sanskrit',
+  ph: 'Phyrexian',
 };
 
 export const binderVisibilityLabels: Record<BinderVisibility, string> = {

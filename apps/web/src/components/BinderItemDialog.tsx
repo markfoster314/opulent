@@ -8,9 +8,16 @@ import {
   Stack,
 } from '@mui/material';
 import type { BinderItem, UpdateBinderItemInput } from '@opulent/shared';
+import { cardLanguageOrEnglish } from '@opulent/shared';
 import { useEffect, useState } from 'react';
+import { useCardLanguages } from '../api/queries';
 import type { CardDetails } from './CardDetailsFields';
-import { CardDetailsFields, isQuantityInvalid } from './CardDetailsFields';
+import {
+  CardDetailsFields,
+  isPriceInvalid,
+  isQuantityInvalid,
+  priceFromDetails,
+} from './CardDetailsFields';
 
 interface BinderItemDialogProps {
   item: BinderItem;
@@ -29,6 +36,14 @@ function detailsFromItem(item: BinderItem): CardDetails {
     condition: item.condition,
     notes: item.notes ?? '',
     forTrade: item.forTrade,
+    language: item.language,
+    signed: item.signed,
+    altered: item.altered,
+    misprint: item.misprint,
+    miscut: item.miscut,
+    priceKind: item.price.kind,
+    pricePercent: item.price.kind === 'percent' ? String(item.price.percent) : '',
+    priceAmount: item.price.kind === 'custom' ? item.price.amount : '',
   };
 }
 
@@ -42,22 +57,43 @@ export function BinderItemDialog({
   error,
 }: BinderItemDialogProps) {
   const [details, setDetails] = useState<CardDetails>(() => detailsFromItem(item));
+  const languagesQuery = useCardLanguages(open ? item.scryfallId : undefined);
+  const printedLanguages = languagesQuery.data?.items.map((card) =>
+    cardLanguageOrEnglish(card.lang),
+  );
 
   // Re-seed on open so a cancelled edit does not linger into the next one.
   useEffect(() => {
     if (open) setDetails(detailsFromItem(item));
   }, [open, item]);
 
+  useEffect(() => {
+    if (!open || !printedLanguages || printedLanguages.length === 0) return;
+    setDetails((current) => {
+      if (printedLanguages.includes(current.language)) return current;
+      const fallback = printedLanguages[0];
+      return fallback ? { ...current, language: fallback } : current;
+    });
+  }, [open, printedLanguages, item]);
+
   const quantityError = isQuantityInvalid(details.quantity);
+  const priceError = isPriceInvalid(details);
+  const chosenPrice = priceFromDetails(details);
 
   function handleSave() {
-    if (quantityError) return;
+    if (quantityError || !chosenPrice) return;
     onSave({
       quantity: Number(details.quantity),
       finish: details.finish,
       condition: details.condition,
       notes: details.notes,
       forTrade: details.forTrade,
+      language: details.language,
+      signed: details.signed,
+      altered: details.altered,
+      misprint: details.misprint,
+      miscut: details.miscut,
+      price: chosenPrice,
     });
   }
 
@@ -71,8 +107,10 @@ export function BinderItemDialog({
             value={details}
             onChange={(patch) => setDetails((current) => ({ ...current, ...patch }))}
             finishOptions={item.availableFinishes ?? []}
+            languageOptions={printedLanguages ?? [details.language]}
+            languagesReady={languagesQuery.isSuccess}
             prices={item.card?.prices}
-            stackNote="Changing finish or condition moves these copies into their own stack."
+            stackNote="Changing finish, condition, language, price, or a mark moves these copies into their own stack."
           />
 
           {error && <Alert severity="error">{error}</Alert>}
@@ -85,7 +123,11 @@ export function BinderItemDialog({
         </Button>
         <Stack direction="row" spacing={1}>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={quantityError || saving}>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={quantityError || priceError || saving}
+          >
             Save
           </Button>
         </Stack>

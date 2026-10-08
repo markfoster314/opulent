@@ -36,6 +36,20 @@
       "when": 1791418114406,
       "tag": "0004_brainy_spacker_dave",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791424916745,
+      "tag": "0005_item_price",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791427864332,
+      "tag": "0006_card_marks",
+      "breakpoints": true
     }
   ]
 }

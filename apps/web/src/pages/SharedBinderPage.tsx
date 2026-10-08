@@ -13,7 +13,7 @@ import {
 import { useParams, useSearchParams } from 'react-router-dom';
 import { flattenPages, useBinderItems, useBinderMatches, useSharedBinder } from '../api/queries';
 import { CardGrid } from '../components/CardGrid';
-import { CardTile } from '../components/CardTile';
+import { binderTileCaption, binderTilePrice, CardTile } from '../components/CardTile';
 import { palette } from '../theme';
 
 export function SharedBinderPage() {
@@ -93,7 +93,9 @@ export function SharedBinderPage() {
               key={item.id}
               card={item.card}
               quantity={item.quantity}
-              caption={`${item.card.setCode.toUpperCase()} · ${item.finish} · ${item.condition}`}
+              price={binderTilePrice(item)}
+              notes={item.notes?.trim() ? item.notes : null}
+              caption={binderTileCaption(item)}
             />
           ) : null,
         )}

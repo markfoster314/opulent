@@ -166,7 +166,7 @@ export class OpulentTutorStack extends cdk.Stack {
       }),
       environment: {
         ...databaseEnvironment,
-        SCRYFALL_BULK_TYPE: 'default_cards',
+        SCRYFALL_BULK_TYPE: 'all_cards',
         // Scryfall requires an accurate User-Agent on every request.
         SCRYFALL_USER_AGENT: 'OpulentTutor/0.1 (+https://opulenttutor.com)',
       },

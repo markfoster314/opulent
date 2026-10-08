@@ -1,22 +1,32 @@
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import { Alert, Box, Button, IconButton, Link, Paper, Stack, Typography } from '@mui/material';
+import type { AddBinderItemInput, Card, CardLanguage } from '@opulent/shared';
 import {
-  Alert,
-  Box,
-  Button,
-  Divider,
-  IconButton,
-  Link,
-  Paper,
-  Stack,
-  Typography,
-} from '@mui/material';
-import type { AddBinderItemInput, Card } from '@opulent/shared';
-import { formatUsd, priceForFinish } from '@opulent/shared';
-import { useState } from 'react';
+  askingPrice,
+  cardLanguageOrEnglish,
+  formatUsd,
+  parseCustomAmount,
+  priceForFinish,
+} from '@opulent/shared';
+import { useEffect, useRef, useState } from 'react';
 import { palette } from '../theme';
+import { useCardLanguages } from '../api/queries';
 import type { CardDetails } from './CardDetailsFields';
-import { CardDetailsFields, defaultFinish, isQuantityInvalid } from './CardDetailsFields';
+import {
+  CardDetailsFields,
+  defaultFinish,
+  isPriceInvalid,
+  isQuantityInvalid,
+  priceFromDetails,
+} from './CardDetailsFields';
 import { PrintingPicker } from './PrintingPicker';
+
+/** The stored market price as dollars and cents, or blank when there is none. */
+function marketDollar(prices: Card['prices'], finish: CardDetails['finish']): string {
+  const market = priceForFinish(prices, finish);
+  return market ? (parseCustomAmount(market) ?? '') : '';
+}
 
 interface AddCardPanelProps {
   /**
@@ -31,23 +41,35 @@ interface AddCardPanelProps {
 }
 
 /**
- * The step between finding a card and it landing in the binder.
+ * The steps between finding a card and it landing in the binder.
  *
- * It exists because the two things that decide what a card is worth, the
- * printing and the finish, cannot be guessed from a name. Adding straight from
- * search would silently file every card as the newest non-foil printing.
+ * The set comes first, because two copies of one name can be worth very
+ * different amounts. The quantity and condition come after that. Going back
+ * returns to the set list and keeps what was already typed.
  *
  * Mount this with `key={card.oracleId}` so picking a different card from search
  * gives a fresh panel rather than carrying the previous card's choices over.
  */
 export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardPanelProps) {
+  const [step, setStep] = useState<'set' | 'details'>('set');
+  const [hasChosenSet, setHasChosenSet] = useState(false);
   const [printing, setPrinting] = useState<Card>(card);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const skipFirstScroll = useRef(true);
   const [details, setDetails] = useState<CardDetails>({
     quantity: '1',
     finish: defaultFinish(card.finishes),
     condition: 'NM',
+    language: cardLanguageOrEnglish(card.lang),
+    signed: false,
+    altered: false,
+    misprint: false,
+    miscut: false,
     notes: '',
     forTrade: true,
+    priceKind: 'market',
+    pricePercent: '100',
+    priceAmount: marketDollar(card.prices, defaultFinish(card.finishes)),
   });
 
   /**
@@ -56,148 +78,309 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
    * it here rather than in an effect avoids a render that claims the owner holds
    * a finish that was never printed.
    */
-  function handleSelectPrinting(next: Card) {
+  function handleSelectPrinting(next: Card, language?: CardLanguage) {
     setPrinting(next);
-    if (!next.finishes.includes(details.finish)) {
-      setDetails((current) => ({ ...current, finish: defaultFinish(next.finishes) }));
-    }
+    setDetails((current) => {
+      const finish = next.finishes.includes(current.finish)
+        ? current.finish
+        : defaultFinish(next.finishes);
+      const previousMarket = marketDollar(printing.prices, current.finish);
+      const nextMarket = marketDollar(next.prices, finish);
+      const priceAmount =
+        current.priceAmount === '' || current.priceAmount === previousMarket
+          ? nextMarket
+          : current.priceAmount;
+      const nextLanguage =
+        language ??
+        (current.language === cardLanguageOrEnglish(printing.lang)
+          ? cardLanguageOrEnglish(next.lang)
+          : current.language);
+      return { ...current, finish, priceAmount, language: nextLanguage };
+    });
+    setHasChosenSet(true);
+    setStep('details');
   }
 
-  const quantityError = isQuantityInvalid(details.quantity);
-  const quantity = Number(details.quantity);
+  // The set list can be long. After a choice, bring the new step into view
+  // so the form is not left below the fold.
+  useEffect(() => {
+    if (skipFirstScroll.current) {
+      skipFirstScroll.current = false;
+      return;
+    }
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
 
-  const unitPrice = priceForFinish(printing.prices, details.finish);
+  const quantityError = isQuantityInvalid(details.quantity);
+  const priceError = isPriceInvalid(details);
+  const quantity = Number(details.quantity);
+  const chosenPrice = priceFromDetails(details);
+
+  const marketUnit = priceForFinish(printing.prices, details.finish);
+  const unitPrice = chosenPrice ? askingPrice(marketUnit, chosenPrice) : null;
   const formattedUnitPrice = formatUsd(unitPrice);
+  const formattedMarket = formatUsd(marketUnit);
   const lineTotal =
     unitPrice && !quantityError && quantity > 1
       ? formatUsd(String(Number(unitPrice) * quantity))
       : null;
 
+  let priceCaption = 'market estimate, each';
+  if (chosenPrice?.kind === 'percent') {
+    priceCaption = formattedMarket
+      ? `${chosenPrice.percent}% of the ${formattedMarket} market price`
+      : `${chosenPrice.percent}% of market`;
+  } else if (chosenPrice?.kind === 'custom') {
+    priceCaption = 'your price, each';
+  }
+  if (lineTotal) priceCaption = `${priceCaption} · ${quantity} copies about ${lineTotal}`;
+
   function handleAdd() {
-    if (quantityError) return;
+    if (quantityError || !chosenPrice) return;
     onAdd({
       scryfallId: printing.scryfallId,
       quantity,
       finish: details.finish,
       condition: details.condition,
-      language: printing.lang,
+      language: details.language,
+      signed: details.signed,
+      altered: details.altered,
+      misprint: details.misprint,
+      miscut: details.miscut,
       forTrade: details.forTrade,
+      price: chosenPrice,
       ...(details.notes.trim() ? { notes: details.notes.trim() } : {}),
     });
   }
 
-  const image = printing.imageUris?.normal ?? printing.imageUris?.large;
-
   return (
-    <Paper sx={{ p: 3, borderColor: palette.goldLight }}>
+    <Paper ref={panelRef} sx={{ p: 3, borderColor: palette.goldLight }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
-        <Stack sx={{ minWidth: 0 }}>
+        <Stack spacing={1} sx={{ minWidth: 0 }}>
           <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
             {card.name}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {printing.setName ?? printing.setCode.toUpperCase()} · #{printing.collectorNumber}
-            {printing.rarity ? ` · ${printing.rarity}` : ''}
-          </Typography>
+          {step === 'details' ? (
+            <>
+              <Typography variant="body2" color="text.secondary">
+                {printing.setName ?? printing.setCode.toUpperCase()} · #{printing.collectorNumber}
+                {printing.rarity ? ` · ${printing.rarity}` : ''}
+              </Typography>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setStep('set')}
+                disabled={pending}
+                sx={{
+                  alignSelf: 'flex-start',
+                  width: { xs: '100%', sm: 'auto' },
+                  justifyContent: { xs: 'flex-start', sm: 'center' },
+                }}
+              >
+                Change set
+              </Button>
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Choose the set you have.
+            </Typography>
+          )}
         </Stack>
         <IconButton onClick={onCancel} aria-label="Cancel adding this card" size="small">
           <CloseIcon />
         </IconButton>
       </Stack>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 3,
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(180px, 240px) 1fr' },
-          alignItems: 'start',
-        }}
-      >
-        <Stack spacing={1.5}>
-          <Box sx={{ aspectRatio: '488 / 680', borderRadius: 2, overflow: 'hidden' }}>
-            {image ? (
-              <Box
-                component="img"
-                src={image}
-                alt={card.name}
-                sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-              />
-            ) : (
-              <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
-                <Typography variant="caption" color="text.secondary">
-                  No image
-                </Typography>
-              </Stack>
-            )}
-          </Box>
-
-          <Box>
-            {formattedUnitPrice ? (
-              <>
-                <Typography variant="h3">{formattedUnitPrice}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {lineTotal
-                    ? `each · ${quantity} copies about ${lineTotal}`
-                    : 'market estimate, each'}
-                </Typography>
-              </>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No price recorded for this finish.
-              </Typography>
-            )}
-          </Box>
-
-          {printing.scryfallUri && (
-            <Link
-              href={printing.scryfallUri}
-              target="_blank"
-              rel="noreferrer"
-              variant="caption"
-              color="text.secondary"
-            >
-              View on Scryfall
-            </Link>
-          )}
-        </Stack>
-
-        <Stack spacing={3}>
-          <CardDetailsFields
-            value={details}
-            onChange={(patch) => setDetails((current) => ({ ...current, ...patch }))}
-            finishOptions={printing.finishes}
-            prices={printing.prices}
-            stackNote="Each finish and condition is kept as its own stack, so you can list a foil and a beaten-up copy separately."
-          />
-
-          {error && <Alert severity="error">{error}</Alert>}
-
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{
-              justifyContent: { sm: 'flex-end' },
-              '& .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
-            }}
-          >
-            <Button onClick={onCancel} disabled={pending}>
-              Cancel
-            </Button>
-            <Button variant="contained" onClick={handleAdd} disabled={quantityError || pending}>
-              {pending ? 'Adding…' : 'Add to binder'}
-            </Button>
-          </Stack>
-        </Stack>
-      </Box>
-
-      <Divider sx={{ my: 3 }} />
-
-      <PrintingPicker
-        oracleId={card.oracleId}
-        selectedId={printing.scryfallId}
-        finish={details.finish}
-        onSelect={handleSelectPrinting}
-      />
+      {step === 'set' ? (
+        <PrintingPicker
+          oracleId={card.oracleId}
+          selectedId={hasChosenSet ? printing.scryfallId : ''}
+          onSelect={handleSelectPrinting}
+        />
+      ) : (
+        <DetailsStep
+          cardName={card.name}
+          printing={printing}
+          details={details}
+          onDetails={(patch) =>
+            setDetails((current) => {
+              const next = { ...current, ...patch };
+              if (patch.finish && patch.finish !== current.finish) {
+                const previousMarket = marketDollar(printing.prices, current.finish);
+                const nextMarket = marketDollar(printing.prices, patch.finish);
+                if (current.priceAmount === '' || current.priceAmount === previousMarket) {
+                  next.priceAmount = nextMarket;
+                }
+              }
+              return next;
+            })
+          }
+          quantityError={quantityError}
+          priceError={priceError}
+          formattedUnitPrice={formattedUnitPrice}
+          priceCaption={priceCaption}
+          priceKind={details.priceKind}
+          pending={pending}
+          error={error}
+          onCancel={onCancel}
+          onAdd={handleAdd}
+          onSelectPrinting={handleSelectPrinting}
+        />
+      )}
     </Paper>
+  );
+}
+
+function DetailsStep({
+  cardName,
+  printing,
+  details,
+  onDetails,
+  quantityError,
+  priceError,
+  formattedUnitPrice,
+  priceCaption,
+  priceKind,
+  pending,
+  error,
+  onCancel,
+  onAdd,
+  onSelectPrinting,
+}: {
+  cardName: string;
+  printing: Card;
+  details: CardDetails;
+  onDetails: (patch: Partial<CardDetails>) => void;
+  quantityError: boolean;
+  priceError: boolean;
+  formattedUnitPrice: string | null;
+  priceCaption: string;
+  priceKind: CardDetails['priceKind'];
+  pending: boolean;
+  error: string | undefined;
+  onCancel: () => void;
+  onAdd: () => void;
+  onSelectPrinting: (card: Card, language: CardLanguage) => void;
+}) {
+  const image = printing.imageUris?.normal ?? printing.imageUris?.large;
+  const languagesQuery = useCardLanguages(printing.scryfallId);
+  const languagePrintings = languagesQuery.data?.items;
+  const printedLanguages = languagePrintings?.map((card) => cardLanguageOrEnglish(card.lang));
+
+  useEffect(() => {
+    if (!languagePrintings || languagePrintings.length === 0) return;
+    if (printedLanguages?.includes(details.language)) return;
+    const fallback = languagePrintings[0];
+    if (!fallback) return;
+    onSelectPrinting(fallback, cardLanguageOrEnglish(fallback.lang));
+  }, [languagePrintings, printedLanguages, details.language, onSelectPrinting]);
+
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 3,
+        gridTemplateColumns: { xs: '1fr', md: 'minmax(180px, 240px) 1fr' },
+        alignItems: 'start',
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Box
+          sx={{
+            width: { xs: 180, md: '100%' },
+            maxWidth: '100%',
+            alignSelf: { xs: 'center', md: 'flex-start' },
+            aspectRatio: '488 / 680',
+            borderRadius: 2,
+            overflow: 'hidden',
+          }}
+        >
+          {image ? (
+            <Box
+              component="img"
+              src={image}
+              alt={cardName}
+              sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            />
+          ) : (
+            <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
+              <Typography variant="caption" color="text.secondary">
+                No image
+              </Typography>
+            </Stack>
+          )}
+        </Box>
+
+        <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
+          {formattedUnitPrice ? (
+            <>
+              <Typography variant="h3">{formattedUnitPrice}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {priceCaption}
+              </Typography>
+            </>
+          ) : priceKind === 'custom' ? null : (
+            <Typography variant="body2" color="text.secondary">
+              No market price is stored for this finish.
+            </Typography>
+          )}
+        </Box>
+
+        {printing.scryfallUri && (
+          <Link
+            href={printing.scryfallUri}
+            target="_blank"
+            rel="noreferrer"
+            variant="caption"
+            color="text.secondary"
+          >
+            View on Scryfall
+          </Link>
+        )}
+      </Stack>
+
+      <Stack spacing={3}>
+        <CardDetailsFields
+          value={details}
+          onChange={(patch) => {
+            if (patch.language && patch.language !== details.language) {
+              const match = languagePrintings?.find(
+                (card) => cardLanguageOrEnglish(card.lang) === patch.language,
+              );
+              if (match) {
+                onSelectPrinting(match, patch.language);
+                return;
+              }
+            }
+            onDetails(patch);
+          }}
+          finishOptions={printing.finishes}
+          languageOptions={printedLanguages ?? [details.language]}
+          languagesReady={languagesQuery.isSuccess}
+          prices={printing.prices}
+        />
+
+        {error && <Alert severity="error">{error}</Alert>}
+
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{
+            justifyContent: { sm: 'flex-end' },
+            '& .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
+          }}
+        >
+          <Button onClick={onCancel} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onAdd}
+            disabled={quantityError || priceError || pending}
+          >
+            {pending ? 'Adding…' : 'Add to binder'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
   );
 }

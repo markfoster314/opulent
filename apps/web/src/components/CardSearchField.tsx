@@ -8,12 +8,15 @@ interface CardSearchFieldProps {
   label?: string;
   onSelect: (card: Card) => void;
   disabled?: boolean;
+  /** The binder search lists the name only. The want list still shows the set. */
+  showSet?: boolean;
 }
 
 export function CardSearchField({
   label = 'Find a card',
   onSelect,
   disabled,
+  showSet = true,
 }: CardSearchFieldProps) {
   const [input, setInput] = useState('');
   const term = useDebounced(input);
@@ -40,9 +43,11 @@ export function CardSearchField({
         <Box component="li" {...props} key={card.scryfallId}>
           <Box>
             <Typography variant="body2">{card.name}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {card.setName ?? card.setCode.toUpperCase()}
-            </Typography>
+            {showSet && (
+              <Typography variant="caption" color="text.secondary">
+                {card.setName ?? card.setCode.toUpperCase()}
+              </Typography>
+            )}
           </Box>
         </Box>
       )}

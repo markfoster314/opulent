@@ -6,7 +6,7 @@ import { IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import type { BinderItem, UpdateBinderItemInput } from '@opulent/shared';
 import { useEffect, useRef, useState } from 'react';
 import { BinderItemDialog } from './BinderItemDialog';
-import { CardTile } from './CardTile';
+import { binderTileCaption, binderTilePrice, CardTile } from './CardTile';
 
 interface BinderItemTileProps {
   item: BinderItem;
@@ -51,19 +51,15 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
 
   if (!item.card) return null;
 
-  const caption = [
-    item.card.setCode.toUpperCase(),
-    item.finish === 'nonfoil' ? null : item.finish,
-    item.condition,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const caption = binderTileCaption(item);
 
   return (
     <Stack spacing={0.5}>
       <CardTile
         card={item.card}
         quantity={draftQuantity}
+        price={binderTilePrice(item)}
+        notes={item.notes?.trim() ? item.notes : null}
         caption={caption}
         onClick={() => setDialogOpen(true)}
       />
@@ -97,7 +93,7 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
           </Tooltip>
         )}
 
-        <Tooltip title="Edit finish, condition and notes">
+        <Tooltip title="Edit this card">
           <IconButton
             size="small"
             aria-label={`Edit ${item.card.name}`}

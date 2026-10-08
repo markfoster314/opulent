@@ -1,4 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import {
   Alert,
@@ -126,10 +127,10 @@ export function BinderDetailPage() {
           <Typography variant="h3" sx={{ mb: 2 }}>
             Add a card
           </Typography>
-          <CardSearchField onSelect={setDraftCard} />
+          <CardSearchField onSelect={setDraftCard} showSet={false} />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Pick a card, then choose its printing and condition before it goes in. Adding a card you
-            already have raises its count instead of making a second entry.
+            Pick a card, choose its set, then fill in the details. Adding a card you already have
+            raises its count instead of making a second entry.
           </Typography>
         </Paper>
 
