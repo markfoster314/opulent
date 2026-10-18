@@ -53,7 +53,23 @@ async function main() {
         CREATE INDEX IF NOT EXISTS cards_name_lower_idx
         ON cards (lower(name))
       `;
-      console.log('indexes ready: cards_name_trgm_idx, cards_name_lower_idx');
+      // Want tiles read the oldest picture for a card. This order lets that
+      // read stop at the first matching row instead of sorting every printing.
+      // CONCURRENTLY keeps the build from blocking card search while it runs.
+      await sql`
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS cards_oracle_oldest_image_idx
+        ON cards (
+          oracle_id,
+          released_at,
+          (lang = 'en') DESC,
+          scryfall_id
+        )
+        WHERE image_uris IS NOT NULL
+          AND layout IS DISTINCT FROM 'art_series'
+      `;
+      console.log(
+        'indexes ready: cards_name_trgm_idx, cards_name_lower_idx, cards_oracle_oldest_image_idx',
+      );
     } else {
       console.log('cards table not found yet. Run db:migrate, then run bootstrap again.');
     }

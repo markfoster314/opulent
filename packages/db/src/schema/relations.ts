@@ -4,7 +4,7 @@ import { cards } from './cards';
 import { places } from './places';
 import { tradeItems, trades } from './trades';
 import { users } from './users';
-import { wantItems } from './wants';
+import { wantItems, wantLists } from './wants';
 
 export const placesRelations = relations(places, ({ many }) => ({
   users: many(users),
@@ -14,6 +14,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   place: one(places, { fields: [users.placeId], references: [places.geonameId] }),
   binders: many(binders),
   wantItems: many(wantItems),
+  wantLists: many(wantLists),
 }));
 
 export const bindersRelations = relations(binders, ({ one, many }) => ({
@@ -26,8 +27,14 @@ export const binderItemsRelations = relations(binderItems, ({ one }) => ({
   card: one(cards, { fields: [binderItems.scryfallId], references: [cards.scryfallId] }),
 }));
 
+export const wantListsRelations = relations(wantLists, ({ one, many }) => ({
+  owner: one(users, { fields: [wantLists.userId], references: [users.id] }),
+  items: many(wantItems),
+}));
+
 export const wantItemsRelations = relations(wantItems, ({ one }) => ({
   user: one(users, { fields: [wantItems.userId], references: [users.id] }),
+  list: one(wantLists, { fields: [wantItems.wantListId], references: [wantLists.id] }),
 }));
 
 export const tradesRelations = relations(trades, ({ one, many }) => ({

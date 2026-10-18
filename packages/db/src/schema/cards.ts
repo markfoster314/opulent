@@ -42,6 +42,8 @@ export const cards = pgTable(
   (table) => [
     index('cards_oracle_id_idx').on(table.oracleId),
     index('cards_set_code_idx').on(table.setCode),
+    // The oldest-picture index used by want lists is created in src/bootstrap.ts.
+    // It is an expression index, which drizzle-kit cannot store.
     uniqueIndex('cards_printing_key').on(table.setCode, table.collectorNumber, table.lang),
     // The fuzzy-name trigram index is created in src/bootstrap.ts, because
     // drizzle-kit cannot express a gin_trgm_ops operator class.

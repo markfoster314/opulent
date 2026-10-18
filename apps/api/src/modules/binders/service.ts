@@ -20,7 +20,11 @@ import {
 } from '@opulent/shared';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { assertPaperPrinting, assertPrintedLanguage, listLanguagePrintings } from '../cards/service';
+import {
+  assertPaperPrinting,
+  assertPrintedLanguage,
+  listLanguagePrintings,
+} from '../cards/service';
 import { ApiError, slugify } from '../../lib/http';
 
 /** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
@@ -225,6 +229,7 @@ const binderItemSelection = {
   altered: binderItems.altered,
   misprint: binderItems.misprint,
   miscut: binderItems.miscut,
+  artistProof: binderItems.artistProof,
   notes: binderItems.notes,
   photoUrl: binderItems.photoUrl,
   forTrade: binderItems.forTrade,
@@ -310,6 +315,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
     altered: row.altered,
     misprint: row.misprint,
     miscut: row.miscut,
+    artistProof: row.artistProof,
     notes: row.notes,
     photoUrl: row.photoUrl,
     forTrade: row.forTrade,
@@ -389,8 +395,8 @@ function decodeCursor(cursor?: string): { name: string; id: string } | undefined
 export async function addBinderItem(
   db: Database,
   binderId: string,
-  input: Omit<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut'> &
-    Partial<Pick<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut'>>,
+  input: Omit<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'> &
+    Partial<Pick<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'>>,
 ): Promise<BinderItem> {
   await assertPaperPrinting(db, input.scryfallId);
   await assertPrintedLanguage(db, input.scryfallId, input.language);
@@ -408,6 +414,7 @@ export async function addBinderItem(
       altered: input.altered ?? false,
       misprint: input.misprint ?? false,
       miscut: input.miscut ?? false,
+      artistProof: input.artistProof ?? false,
       notes: input.notes ?? null,
       photoUrl: input.photoUrl ?? null,
       forTrade: input.forTrade,
@@ -424,6 +431,7 @@ export async function addBinderItem(
         binderItems.altered,
         binderItems.misprint,
         binderItems.miscut,
+        binderItems.artistProof,
         binderItems.priceKind,
         binderItems.pricePercent,
         binderItems.priceAmount,
@@ -479,6 +487,7 @@ export async function updateBinderItem(
   if (input.altered !== undefined) patch.altered = input.altered;
   if (input.misprint !== undefined) patch.misprint = input.misprint;
   if (input.miscut !== undefined) patch.miscut = input.miscut;
+  if (input.artistProof !== undefined) patch.artistProof = input.artistProof;
   if (input.notes !== undefined) patch.notes = input.notes;
   if (input.photoUrl !== undefined) patch.photoUrl = input.photoUrl;
   if (input.forTrade !== undefined) patch.forTrade = input.forTrade;
@@ -528,11 +537,34 @@ export async function removeBinderItem(
 }
 
 interface MatchAggregateRow {
+  wantId: string;
   oracleId: string;
   cardName: string;
   wantQuantity: number;
   wantPriority: number;
   availableQuantity: number;
+  wantedLanguages: string[] | null;
+  unwantedLanguages: string[] | null;
+  wantedFinishes: string[] | null;
+  unwantedFinishes: string[] | null;
+  wantedConditions: string[] | null;
+  unwantedConditions: string[] | null;
+  wantedSets: string[] | null;
+  unwantedSets: string[] | null;
+}
+
+function textList(value: string[] | null): string[] {
+  return value ?? [];
+}
+
+/** Empty keep-lists mean any value. A skip-list always removes that value. */
+function valueAllowed(wanted: string[], unwanted: string[], value: string): boolean {
+  const folded = value.toLowerCase();
+  const keep = wanted.map((item) => item.toLowerCase());
+  const skip = unwanted.map((item) => item.toLowerCase());
+  if (keep.length > 0 && !keep.includes(folded)) return false;
+  if (skip.includes(folded)) return false;
+  return true;
 }
 
 /**
@@ -550,18 +582,64 @@ export async function findTradeMatches(
 ): Promise<TradeMatch[]> {
   const aggregates = (await db.execute(sql`
     SELECT
+      w.id                        AS "wantId",
       w.oracle_id                 AS "oracleId",
       MIN(c.name)                 AS "cardName",
       w.quantity                  AS "wantQuantity",
       w.priority                  AS "wantPriority",
-      SUM(bi.quantity)::int       AS "availableQuantity"
+      SUM(bi.quantity)::int       AS "availableQuantity",
+      w.wanted_languages          AS "wantedLanguages",
+      w.unwanted_languages        AS "unwantedLanguages",
+      w.wanted_finishes           AS "wantedFinishes",
+      w.unwanted_finishes         AS "unwantedFinishes",
+      w.wanted_conditions         AS "wantedConditions",
+      w.unwanted_conditions       AS "unwantedConditions",
+      w.wanted_sets               AS "wantedSets",
+      w.unwanted_sets             AS "unwantedSets"
     FROM want_items w
     JOIN cards c         ON c.oracle_id = w.oracle_id
     JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
     WHERE w.user_id = ${viewerUserId}
       AND bi.binder_id = ${binderId}
       AND bi.for_trade = true
-    GROUP BY w.oracle_id, w.quantity, w.priority
+      AND (
+        cardinality(w.wanted_languages) = 0
+        OR c.lang = ANY(w.wanted_languages)
+      )
+      AND (
+        cardinality(w.unwanted_languages) = 0
+        OR NOT (c.lang = ANY(w.unwanted_languages))
+      )
+      AND (
+        cardinality(w.wanted_finishes) = 0
+        OR bi.finish::text = ANY(w.wanted_finishes)
+      )
+      AND (
+        cardinality(w.unwanted_finishes) = 0
+        OR NOT (bi.finish::text = ANY(w.unwanted_finishes))
+      )
+      AND (
+        cardinality(w.wanted_conditions) = 0
+        OR bi.condition::text = ANY(w.wanted_conditions)
+      )
+      AND (
+        cardinality(w.unwanted_conditions) = 0
+        OR NOT (bi.condition::text = ANY(w.unwanted_conditions))
+      )
+      AND (
+        cardinality(w.wanted_sets) = 0
+        OR lower(c.set_code) = ANY(w.wanted_sets)
+      )
+      AND (
+        cardinality(w.unwanted_sets) = 0
+        OR NOT (lower(c.set_code) = ANY(w.unwanted_sets))
+      )
+    GROUP BY
+      w.id, w.oracle_id, w.quantity, w.priority,
+      w.wanted_languages, w.unwanted_languages,
+      w.wanted_finishes, w.unwanted_finishes,
+      w.wanted_conditions, w.unwanted_conditions,
+      w.wanted_sets, w.unwanted_sets
     ORDER BY w.priority ASC, MIN(c.name) ASC
   `)) as unknown as MatchAggregateRow[];
 
@@ -587,11 +665,28 @@ export async function findTradeMatches(
   }
 
   return aggregates.map((row) => ({
+    wantId: row.wantId,
     oracleId: row.oracleId,
     cardName: row.cardName,
     wantQuantity: row.wantQuantity,
     wantPriority: row.wantPriority,
     availableQuantity: row.availableQuantity,
-    printings: printingsByOracle.get(row.oracleId) ?? [],
+    printings: (printingsByOracle.get(row.oracleId) ?? []).filter((item) => {
+      const setCode = item.card?.setCode ?? '';
+      return (
+        valueAllowed(
+          textList(row.wantedLanguages),
+          textList(row.unwantedLanguages),
+          item.language,
+        ) &&
+        valueAllowed(textList(row.wantedFinishes), textList(row.unwantedFinishes), item.finish) &&
+        valueAllowed(
+          textList(row.wantedConditions),
+          textList(row.unwantedConditions),
+          item.condition,
+        ) &&
+        valueAllowed(textList(row.wantedSets), textList(row.unwantedSets), setCode)
+      );
+    }),
   }));
 }

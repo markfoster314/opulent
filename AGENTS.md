@@ -15,7 +15,7 @@ When you change a screen, start from the phone and then add space for a wider wi
 - A row of buttons, fields, or bar items must wrap or stack. Nothing should sit past the edge of the screen.
 - Titles, binder names, and usernames must be allowed to wrap or shorten. Do not give them a fixed width that assumes a wide window.
 - Touch targets stay easy to tap. Do not shrink a button just so a row fits.
-- Check the changed screen at a phone width and at a desktop width before you finish.
+- Write the layout for a phone and for a wider window. Do not open a browser to check the screen. The owner does that check.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

@@ -2,13 +2,20 @@ import type { Database } from '@opulent/db';
 import { cards } from '@opulent/db';
 import type {
   Card,
+  CardChoices,
+  CardFinish,
   CardLanguage,
   CardPrintingsQuery,
   CardSearchQuery,
   CardSet,
   Page,
 } from '@opulent/shared';
-import { cardLanguageOrEnglish, cardLanguageSchema, marketPrices } from '@opulent/shared';
+import {
+  cardFinishSchema,
+  cardLanguageOrEnglish,
+  cardLanguageSchema,
+  marketPrices,
+} from '@opulent/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 
@@ -328,6 +335,41 @@ export async function assertPrintedLanguage(
  * such as Plains has hundreds of printings but far fewer sets, so one list is
  * enough and the dropdown does not depend on which page of tiles is loaded.
  */
+/** Languages, finishes, and sets this card concept was printed on paper. */
+export async function listOracleChoices(db: Database, oracleId: string): Promise<CardChoices> {
+  const rows = await db
+    .select({
+      lang: cards.lang,
+      finishes: cards.finishes,
+      setCode: cards.setCode,
+      setName: cards.setName,
+    })
+    .from(cards)
+    .where(and(eq(cards.oracleId, oracleId), paperOnly, notArtSeries));
+
+  const languages = new Set<CardLanguage>();
+  const finishes = new Set<CardFinish>();
+  const sets = new Map<string, CardSet>();
+  for (const row of rows) {
+    languages.add(cardLanguageOrEnglish(row.lang));
+    for (const finish of row.finishes ?? []) {
+      const parsed = cardFinishSchema.safeParse(finish);
+      if (parsed.success) finishes.add(parsed.data);
+    }
+    if (!sets.has(row.setCode)) {
+      sets.set(row.setCode, { setCode: row.setCode, setName: row.setName });
+    }
+  }
+
+  return {
+    languages: cardLanguageSchema.options.filter((code) => languages.has(code)),
+    finishes: cardFinishSchema.options.filter((code) => finishes.has(code)),
+    sets: [...sets.values()].sort((a, b) =>
+      (a.setName ?? a.setCode).localeCompare(b.setName ?? b.setCode),
+    ),
+  };
+}
+
 export async function listSetsByOracleId(db: Database, oracleId: string): Promise<CardSet[]> {
   const rows = await db
     .select({

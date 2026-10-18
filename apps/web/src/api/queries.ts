@@ -2,6 +2,9 @@ import type {
   AddBinderItemInput,
   AddWantItemInput,
   Binder,
+  CardChoices,
+  CreateWantListInput,
+  WantList,
   BinderItem,
   Card,
   CardSet,
@@ -15,6 +18,8 @@ import type {
   UpdateBinderInput,
   UpdateBinderItemInput,
   UpdateProfileInput,
+  UpdateWantItemInput,
+  UpdateWantListInput,
   WantItem,
 } from '@opulent/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +34,9 @@ export const queryKeys = {
   binderItems: (id: string) => ['binder', id, 'items'] as const,
   binderMatches: (id: string) => ['binder', id, 'matches'] as const,
   wants: ['wants'] as const,
+  wantList: (id: string) => ['wants', id] as const,
+  wantItems: (id: string) => ['wants', id, 'items'] as const,
+  cardChoices: (oracleId: string) => ['cards', 'choices', oracleId] as const,
   cardSearch: (term: string) => ['cards', 'search', term] as const,
   placeSearch: (term: string) => ['places', 'search', term] as const,
   cardPrintings: (oracleId: string, setFilter: string) =>
@@ -36,6 +44,9 @@ export const queryKeys = {
   cardSets: (oracleId: string) => ['cards', 'sets', oracleId] as const,
   cardLanguages: (scryfallId: string) => ['cards', 'languages', scryfallId] as const,
   sharedBinder: (handle: string, slug: string) => ['binder', 'by', handle, slug] as const,
+  sharedWantList: (handle: string, slug: string) => ['wants', 'by', handle, slug] as const,
+  sharedWantItems: (handle: string, slug: string) =>
+    ['wants', 'by', handle, slug, 'items'] as const,
 };
 
 /** Resolves a public or unlisted share URL into the binder it points at. */
@@ -244,12 +255,116 @@ export function useCardLanguages(scryfallId: string | undefined) {
   });
 }
 
-export function useWants(enabled: boolean) {
+export function useWantLists(enabled: boolean) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.wants,
-    queryFn: () => api<{ items: WantItem[] }>('/v1/wants'),
+    queryFn: () => api<{ items: WantList[] }>('/v1/wants/lists'),
     enabled,
+  });
+}
+
+export function useWantList(listId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.wantList(listId ?? 'none'),
+    queryFn: () => api<WantList>(`/v1/wants/lists/${listId}`),
+    enabled: Boolean(listId),
+  });
+}
+
+export function useWantItems(listId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.wantItems(listId ?? 'none'),
+    queryFn: () => api<{ items: WantItem[] }>(`/v1/wants/lists/${listId}/items`),
+    enabled: Boolean(listId),
+  });
+}
+
+export function useSharedWantList(
+  handle: string | undefined,
+  slug: string | undefined,
+  shareToken?: string,
+) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.sharedWantList(handle ?? '', slug ?? ''),
+    queryFn: () =>
+      api<WantList>(`/v1/wants/by/${handle}/${slug}`, {
+        ...(shareToken ? { shareToken } : {}),
+      }),
+    enabled: Boolean(handle && slug),
+  });
+}
+
+export function useSharedWantItems(
+  handle: string | undefined,
+  slug: string | undefined,
+  shareToken?: string,
+) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.sharedWantItems(handle ?? '', slug ?? ''),
+    queryFn: () =>
+      api<{ items: WantItem[] }>(`/v1/wants/by/${handle}/${slug}/items`, {
+        ...(shareToken ? { shareToken } : {}),
+      }),
+    enabled: Boolean(handle && slug),
+  });
+}
+
+export function useUpdateWantList(listId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateWantListInput) =>
+      api<WantList>(`/v1/wants/lists/${listId}`, { method: 'PATCH', body: input }),
+    onSuccess: (list) => {
+      queryClient.setQueryData(queryKeys.wantList(listId), list);
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+    },
+  });
+}
+
+export function useRotateWantShareToken(listId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ shareToken: string }>(`/v1/wants/lists/${listId}/share-token/rotate`, {
+        method: 'POST',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) }),
+  });
+}
+
+export function useCreateWantList() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateWantListInput) =>
+      api<WantList>('/v1/wants/lists', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wants }),
+  });
+}
+
+export function useDeleteWantList() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (listId: string) => api<void>(`/v1/wants/lists/${listId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wants }),
+  });
+}
+
+export function useOracleChoices(oracleId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.cardChoices(oracleId ?? 'none'),
+    queryFn: () => api<CardChoices>(`/v1/cards/oracle/${oracleId}/choices`),
+    enabled: Boolean(oracleId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -340,21 +455,47 @@ export function useRotateShareToken(binderId: string) {
   });
 }
 
-export function useAddWant() {
+export function useAddWantItem(listId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AddWantItemInput) =>
-      api<WantItem>('/v1/wants', { method: 'POST', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wants }),
+      api<WantItem>(`/v1/wants/lists/${listId}/items`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+    },
   });
 }
 
-export function useRemoveWant() {
+export function useUpdateWantItem(listId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (wantId: string) => api<void>(`/v1/wants/${wantId}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wants }),
+    mutationFn: ({ wantId, input }: { wantId: string; input: UpdateWantItemInput }) =>
+      api<WantItem>(`/v1/wants/lists/${listId}/items/${wantId}`, {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+    },
+  });
+}
+
+export function useRemoveWantItem(listId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (wantId: string) =>
+      api<void>(`/v1/wants/lists/${listId}/items/${wantId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+    },
   });
 }

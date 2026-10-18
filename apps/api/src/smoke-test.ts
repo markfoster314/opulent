@@ -1,4 +1,13 @@
-import { binderItems, binders, cards, createDatabase, places, users, wantItems } from '@opulent/db';
+import {
+  binderItems,
+  binders,
+  cards,
+  createDatabase,
+  places,
+  users,
+  wantItems,
+  wantLists,
+} from '@opulent/db';
 import { loadEnv } from '@opulent/db/env';
 import { askingPrice, formatUsd, marketPrices, priceForFinish } from '@opulent/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -435,7 +444,16 @@ async function main() {
     check('different condition is a separate stack', allStacksOfA.length === 2);
 
     // The viewer wants the concept, not either specific printing.
-    await db.insert(wantItems).values({ userId: viewer.id, oracleId: ORACLE_ID, priority: 1 });
+    const [smokeList] = await db
+      .insert(wantLists)
+      .values({ userId: viewer.id, name: 'Smoke wants', slug: 'smoke-wants' })
+      .returning({ id: wantLists.id });
+    await db.insert(wantItems).values({
+      userId: viewer.id,
+      wantListId: smokeList!.id,
+      oracleId: ORACLE_ID,
+      priority: 1,
+    });
 
     const matches = await findTradeMatches(db, binder.id, viewer.id);
     check('match query found the want', matches.length === 1, `${matches.length} rows`);
@@ -638,6 +656,37 @@ async function main() {
       price: { kind: 'market' },
     });
     check('a copy without those marks is its own stack', unmarked.id !== marked.id);
+    const proof = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 1,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      artistProof: true,
+      price: { kind: 'custom', amount: '12' },
+    });
+    check(
+      'an artist proof is stored with its custom price',
+      proof.artistProof && proof.price.kind === 'custom' && proof.price.amount === '12.00',
+      proof.price.kind === 'custom' ? proof.price.amount : proof.price.kind,
+    );
+    check('an artist proof is its own stack', proof.id !== unmarked.id);
+    const proofAgain = await addBinderItem(db, binder.id, {
+      scryfallId: PRINTING_A,
+      quantity: 2,
+      finish: 'nonfoil',
+      condition: 'NM',
+      language: 'en',
+      forTrade: true,
+      artistProof: true,
+      price: { kind: 'custom', amount: '12.00' },
+    });
+    check(
+      'the same artist proof collapses into one stack',
+      proofAgain.quantity === 3,
+      `${proofAgain.quantity}`,
+    );
     const withPhotos = await updateBinderItem(db, binder.id, unmarked.id, {
       photoUrl: 'https://imgur.com/a/example',
     });
@@ -647,7 +696,11 @@ async function main() {
       withPhotos.photoUrl ?? '',
     );
     const clearedPhotos = await updateBinderItem(db, binder.id, unmarked.id, { photoUrl: null });
-    check('photo link can be cleared', clearedPhotos.photoUrl === null, String(clearedPhotos.photoUrl));
+    check(
+      'photo link can be cleared',
+      clearedPhotos.photoUrl === null,
+      String(clearedPhotos.photoUrl),
+    );
 
     const printedLanguages = await listLanguagesForPrinting(db, PRINTING_A);
     check(
@@ -690,6 +743,7 @@ async function main() {
           zeroPercent.id,
           marked.id,
           unmarked.id,
+          proof.id,
         ]),
       );
 

@@ -8,6 +8,7 @@ import {
   getCardById,
   getPrintingsByOracleId,
   listLanguagePrintings,
+  listOracleChoices,
   listSetsByOracleId,
   searchCards,
 } from './service';
@@ -35,6 +36,11 @@ cardRoutes.get('/:id', zValidator('param', uuidParam), async (c) => {
   const card = await getCardById(c.get('db'), c.req.valid('param').id);
   if (!card) throw ApiError.notFound('Card not found');
   return c.json(card);
+});
+
+cardRoutes.get('/oracle/:id/choices', zValidator('param', uuidParam), async (c) => {
+  const choices = await listOracleChoices(c.get('db'), c.req.valid('param').id);
+  return c.json(choices);
 });
 
 cardRoutes.get('/oracle/:id/sets', zValidator('param', uuidParam), async (c) => {

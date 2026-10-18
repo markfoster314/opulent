@@ -295,11 +295,11 @@ function BarActions({
           <Button
             component={RouterLink}
             to="/wants"
-            color={pathname === '/wants' ? 'primary' : 'inherit'}
+            color={pathname === '/wants' || pathname.startsWith('/wants/') ? 'primary' : 'inherit'}
             fullWidth={stacked}
             sx={itemSx}
           >
-            Want list
+            My wants
           </Button>
         </>
       )}

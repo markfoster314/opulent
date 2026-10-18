@@ -46,6 +46,7 @@ export interface CardDetails {
   altered: boolean;
   misprint: boolean;
   miscut: boolean;
+  artistProof: boolean;
   notes: string;
   photoUrl: string;
   forTrade: boolean;
@@ -136,6 +137,7 @@ export function CardDetailsFields({
   const languages = languageOptions.length > 0 ? languageOptions : [value.language];
   const onlyLanguage = languagesReady && languages.length === 1;
   const quantityError = isQuantityInvalid(value.quantity);
+  const marketLabel = formatUsd(priceForFinish(prices, value.finish));
 
   return (
     <Stack spacing={3}>
@@ -254,6 +256,27 @@ export function CardDetailsFields({
           }
           label="Miscut"
         />
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={value.artistProof}
+              onChange={(event) => {
+                const artistProof = event.target.checked;
+                const patch: Partial<CardDetails> = { artistProof };
+                if (artistProof && value.priceKind === 'market') {
+                  patch.priceKind = 'custom';
+                  if (value.priceAmount.trim() === '') {
+                    const market = priceForFinish(prices, value.finish);
+                    const amount = market ? parseCustomAmount(market) : null;
+                    if (amount) patch.priceAmount = amount;
+                  }
+                }
+                onChange(patch);
+              }}
+            />
+          }
+          label="Artist proof"
+        />
       </FormGroup>
 
       <FormControl fullWidth>
@@ -271,13 +294,18 @@ export function CardDetailsFields({
             onChange(patch);
           }}
         >
-          <MenuItem value="market">Market price</MenuItem>
+          <MenuItem value="market">
+            {marketLabel ? `Market price - (${marketLabel})` : 'Market price'}
+          </MenuItem>
           <MenuItem value="percent">Percent of market</MenuItem>
           <MenuItem value="custom">Custom amount</MenuItem>
         </Select>
+        {value.artistProof && value.priceKind === 'custom' && (
+          <FormHelperText>Set your own amount for this artist proof.</FormHelperText>
+        )}
         {value.priceKind === 'market' && (
           <FormHelperText>
-            {formatUsd(priceForFinish(prices, value.finish))
+            {marketLabel
               ? 'Uses the market price stored for this finish.'
               : 'No market price is stored for this finish.'}
           </FormHelperText>

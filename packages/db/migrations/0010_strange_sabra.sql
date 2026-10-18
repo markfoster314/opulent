@@ -1,0 +1,2 @@
+ALTER TABLE "want_items" ADD COLUMN "wanted_conditions" text[] DEFAULT ARRAY[]::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "want_items" ADD COLUMN "unwanted_conditions" text[] DEFAULT ARRAY[]::text[] NOT NULL;

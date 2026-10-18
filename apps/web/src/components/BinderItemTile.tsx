@@ -64,6 +64,7 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
         altered={item.altered}
         misprint={item.misprint}
         miscut={item.miscut}
+        artistProof={item.artistProof}
         photoUrl={item.photoUrl}
         caption={caption}
         foil={item.finish === 'foil'}

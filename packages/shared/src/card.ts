@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cardFinishSchema, type CardFinish } from './enums';
+import { cardFinishSchema, cardLanguageSchema, type CardFinish } from './enums';
 
 /**
  * Scryfall serves several image sizes per card. We keep them all so the UI can
@@ -90,6 +90,14 @@ export const cardSetSchema = z.object({
   setName: z.string().nullable(),
 });
 export type CardSet = z.infer<typeof cardSetSchema>;
+
+/** Languages, finishes, and sets a card concept was printed in. The want form uses this. */
+export const cardChoicesSchema = z.object({
+  languages: z.array(cardLanguageSchema),
+  finishes: z.array(cardFinishSchema),
+  sets: z.array(cardSetSchema),
+});
+export type CardChoices = z.infer<typeof cardChoicesSchema>;
 
 /**
  * The price that applies to one finish of one printing.

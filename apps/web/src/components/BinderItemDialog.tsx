@@ -44,6 +44,7 @@ function detailsFromItem(item: BinderItem): CardDetails {
     altered: item.altered,
     misprint: item.misprint,
     miscut: item.miscut,
+    artistProof: item.artistProof,
     priceKind: item.price.kind,
     pricePercent: item.price.kind === 'percent' ? String(item.price.percent) : '',
     priceAmount: item.price.kind === 'custom' ? item.price.amount : '',
@@ -98,6 +99,7 @@ export function BinderItemDialog({
       altered: details.altered,
       misprint: details.misprint,
       miscut: details.miscut,
+      artistProof: details.artistProof,
       price: chosenPrice,
     });
   }

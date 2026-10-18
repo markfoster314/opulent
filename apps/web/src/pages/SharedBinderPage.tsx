@@ -67,7 +67,7 @@ export function SharedBinderPage() {
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             {matches.map((match) => (
               <Chip
-                key={match.oracleId}
+                key={match.wantId}
                 color="primary"
                 variant="outlined"
                 label={`${match.cardName} · ${match.availableQuantity} available`}
@@ -99,6 +99,7 @@ export function SharedBinderPage() {
               altered={item.altered}
               misprint={item.misprint}
               miscut={item.miscut}
+              artistProof={item.artistProof}
               photoUrl={item.photoUrl}
               caption={binderTileCaption(item)}
               foil={item.finish === 'foil'}

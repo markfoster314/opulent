@@ -3,6 +3,7 @@ import ContentCutOutlinedIcon from '@mui/icons-material/ContentCutOutlined';
 import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import { Box, Chip, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import type { BinderItem, Card } from '@opulent/shared';
 import { askingPriceForFinish, cardFinishLabels, formatUsd } from '@opulent/shared';
@@ -11,7 +12,7 @@ import { palette } from '../theme';
 import { FoilSheen } from './FoilSheen';
 
 interface CardTileProps {
-  card: Card;
+  card: Pick<Card, 'name' | 'imageUris' | 'setCode' | 'collectorNumber'>;
   quantity?: number;
   /** Asking price, already formatted, such as "$1.50", "MKT", or "90% MKT". */
   price?: string | null;
@@ -23,9 +24,14 @@ interface CardTileProps {
   altered?: boolean;
   misprint?: boolean;
   miscut?: boolean;
+  artistProof?: boolean;
   caption?: string;
   /** Draws a gloss over the scan when this copy is foil. */
   foil?: boolean;
+  /** Drawn with the copy marks. A want uses these for language, printing, condition, and set. */
+  extraMarks?: CardTileMark[];
+  /** Image and name only. The set line and the photo line stay off. */
+  nameOnly?: boolean;
   onClick?: () => void;
 }
 
@@ -52,7 +58,7 @@ export function binderTileCaption(item: BinderItem): string {
   ].join(' · ');
 }
 
-interface CardMark {
+export interface CardTileMark {
   key: string;
   label: string;
   color: string;
@@ -62,11 +68,14 @@ interface CardMark {
 const markSize = 34;
 const markIconSize = 18;
 
-/** Notes first, then the four copy marks, and only the ones this stack has. */
+/** Notes first, then the copy marks, and only the ones this stack has. */
 function cardMarks(
-  props: Pick<CardTileProps, 'notes' | 'signed' | 'altered' | 'misprint' | 'miscut'>,
-): CardMark[] {
-  const marks: CardMark[] = [];
+  props: Pick<
+    CardTileProps,
+    'notes' | 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'
+  >,
+): CardTileMark[] {
+  const marks: CardTileMark[] = [];
   if (props.notes) {
     marks.push({
       key: 'notes',
@@ -107,6 +116,14 @@ function cardMarks(
       icon: <ContentCutOutlinedIcon sx={{ fontSize: markIconSize }} />,
     });
   }
+  if (props.artistProof) {
+    marks.push({
+      key: 'artist-proof',
+      label: 'Artist proof',
+      color: palette.markArtistProof,
+      icon: <WorkspacePremiumOutlinedIcon sx={{ fontSize: markIconSize }} />,
+    });
+  }
   return marks;
 }
 
@@ -125,13 +142,19 @@ export function CardTile({
   altered,
   misprint,
   miscut,
+  artistProof,
   caption,
   foil,
   photoUrl,
+  extraMarks,
+  nameOnly,
   onClick,
 }: CardTileProps) {
   const image = card.imageUris?.normal ?? card.imageUris?.small;
-  const marks = cardMarks({ notes, signed, altered, misprint, miscut });
+  const marks = [
+    ...cardMarks({ notes, signed, altered, misprint, miscut, artistProof }),
+    ...(extraMarks ?? []),
+  ];
 
   return (
     <Paper
@@ -253,27 +276,35 @@ export function CardTile({
       </Box>
 
       <Stack sx={{ px: 0.5, pt: 1 }}>
-        <Typography variant="body2" noWrap title={card.name}>
+        <Typography
+          variant="body2"
+          noWrap={!nameOnly}
+          title={card.name}
+          sx={nameOnly ? { overflowWrap: 'anywhere' } : undefined}
+        >
           {card.name}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap>
-          {caption ?? `${card.setCode.toUpperCase()} · ${card.collectorNumber}`}
-        </Typography>
-        {photoUrl ? (
-          <Link
-            href={photoUrl}
-            target="_blank"
-            rel="noreferrer"
-            variant="caption"
-            onClick={(event) => event.stopPropagation()}
-          >
-            Photos
-          </Link>
-        ) : (
-          <Typography variant="caption" aria-hidden sx={{ visibility: 'hidden' }}>
-            Photos
+        {!nameOnly && (
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {caption ?? `${card.setCode.toUpperCase()} · ${card.collectorNumber}`}
           </Typography>
         )}
+        {!nameOnly &&
+          (photoUrl ? (
+            <Link
+              href={photoUrl}
+              target="_blank"
+              rel="noreferrer"
+              variant="caption"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Photos
+            </Link>
+          ) : (
+            <Typography variant="caption" aria-hidden sx={{ visibility: 'hidden' }}>
+              Photos
+            </Typography>
+          ))}
       </Stack>
     </Paper>
   );

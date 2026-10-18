@@ -73,6 +73,8 @@ export const binderItems = pgTable(
     altered: boolean('altered').notNull().default(false),
     misprint: boolean('misprint').notNull().default(false),
     miscut: boolean('miscut').notNull().default(false),
+    /** A proof copy given to the artist. It trades as its own stack. */
+    artistProof: boolean('artist_proof').notNull().default(false),
     notes: text('notes'),
     /** A link to photos of this physical copy. Not part of the stack key. */
     photoUrl: text('photo_url'),
@@ -105,6 +107,7 @@ export const binderItems = pgTable(
       table.altered,
       table.misprint,
       table.miscut,
+      table.artistProof,
       table.priceKind,
       table.pricePercent,
       table.priceAmount,

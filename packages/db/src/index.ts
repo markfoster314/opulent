@@ -10,6 +10,7 @@ export {
   trades,
   users,
   wantItems,
+  wantLists,
 } from './schema';
 export type {
   BinderItemRow,
@@ -21,9 +22,11 @@ export type {
   NewPlaceRow,
   NewUserRow,
   NewWantItemRow,
+  NewWantListRow,
   PlaceRow,
   TradeItemRow,
   TradeRow,
   UserRow,
   WantItemRow,
+  WantListRow,
 } from './schema';

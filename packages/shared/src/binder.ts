@@ -131,6 +131,7 @@ export const binderItemSchema = z.object({
   altered: z.boolean(),
   misprint: z.boolean(),
   miscut: z.boolean(),
+  artistProof: z.boolean(),
   /** How the owner priced this stack. Older rows are full market. */
   price: itemPriceSchema,
   card: cardSchema.optional(),
@@ -152,6 +153,7 @@ export const addBinderItemSchema = z.object({
   altered: z.boolean().default(false),
   misprint: z.boolean().default(false),
   miscut: z.boolean().default(false),
+  artistProof: z.boolean().default(false),
   notes: z.string().max(280).optional(),
   photoUrl: photoLinkSchema.nullable().optional(),
   forTrade: z.boolean().default(true),
@@ -167,6 +169,7 @@ export type UpdateBinderItemInput = z.infer<typeof updateBinderItemSchema>;
  * owner is holding for trade.
  */
 export const tradeMatchSchema = z.object({
+  wantId: z.string().uuid(),
   oracleId: z.string().uuid(),
   cardName: z.string(),
   wantQuantity: z.number().int().positive(),

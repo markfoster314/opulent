@@ -1,0 +1,12 @@
+---
+description: The owner checks screens in the browser. The agent does not.
+alwaysApply: true
+---
+
+# Skip browser checks
+
+Do not open a browser, start a preview server, or click through the app to validate a screen.
+
+- Still write layouts for a narrow screen first, then a wider window.
+- Typecheck, tests, and other code checks stay in scope.
+- The owner looks at the screen and reports what to fix.

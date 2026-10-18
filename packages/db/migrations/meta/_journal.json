@@ -57,6 +57,34 @@
       "when": 1791434610824,
       "tag": "0007_photo_link",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792359283307,
+      "tag": "0008_artist_proof",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792360600904,
+      "tag": "0009_want_lists",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792361385801,
+      "tag": "0010_strange_sabra",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792364680176,
+      "tag": "0011_want_list_share",
+      "breakpoints": true
     }
   ]
 }
