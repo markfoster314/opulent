@@ -4,6 +4,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormHelperText,
   InputLabel,
@@ -32,9 +36,9 @@ import {
   useUpdateProfile,
 } from '../api/queries';
 import { ProfileSettingsDialog } from '../components/ProfileSettingsDialog';
-import { palette } from '../theme';
+import { clickableSurfaceSx, palette } from '../theme';
 
-type Section = 'binders' | 'wants' | 'friends';
+type FriendConfirm = { kind: 'add' | 'remove'; username: string };
 
 export function ProfilePage() {
   const { handle } = useParams<{ handle: string }>();
@@ -42,14 +46,15 @@ export function ProfilePage() {
   const me = useMe(isAuthenticated);
   const profile = useProfile(handle);
   const updateProfile = useUpdateProfile();
-  const friends = useFriends(Boolean(profile.data?.isOwner));
+  const canSeeFriendList = Boolean(profile.data && (profile.data.isOwner || profile.data.isFriend));
+  const friends = useFriends(canSeeFriendList ? handle : undefined);
   const addFriend = useAddFriend();
   const removeFriend = useRemoveFriend();
   const [username, setUsername] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [section, setSection] = useState<Section>('binders');
   const [editingBio, setEditingBio] = useState(false);
   const [bioDraft, setBioDraft] = useState('');
+  const [confirm, setConfirm] = useState<FriendConfirm | null>(null);
 
   if (profile.isLoading || authLoading) return <CircularProgress />;
   if (profile.error) return <Alert severity="error">{profile.error.message}</Alert>;
@@ -57,12 +62,28 @@ export function ProfilePage() {
 
   const page = profile.data;
   const canSeeLists = page.binders !== undefined && page.wantLists !== undefined;
-  const active: Section = !canSeeLists && page.isOwner ? 'friends' : section;
 
-  function handleAdd() {
-    const trimmed = username.trim().toLowerCase();
+  function askToAdd(name: string) {
+    const trimmed = name.trim().toLowerCase();
     if (!trimmed) return;
-    addFriend.mutate({ username: trimmed }, { onSuccess: () => setUsername('') });
+    setConfirm({ kind: 'add', username: trimmed });
+  }
+
+  function applyConfirm() {
+    if (!confirm) return;
+    if (confirm.kind === 'add') {
+      addFriend.mutate(
+        { username: confirm.username },
+        {
+          onSuccess: () => {
+            if (confirm.username === username.trim().toLowerCase()) setUsername('');
+            setConfirm(null);
+          },
+        },
+      );
+      return;
+    }
+    removeFriend.mutate(confirm.username, { onSuccess: () => setConfirm(null) });
   }
 
   function handleVisibility(next: ProfileVisibility) {
@@ -82,19 +103,12 @@ export function ProfilePage() {
   return (
     <Stack spacing={3}>
       <Paper sx={{ overflow: 'hidden' }}>
-        <Box
-          sx={{
-            height: { xs: 88, sm: 128 },
-            background: `linear-gradient(120deg, ${palette.goldWash}, ${palette.steelWash})`,
-          }}
-        />
-        <Box sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 2, sm: 3 } }}>
+        <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
           <Box
             aria-hidden
             sx={{
               width: 72,
               height: 72,
-              mt: -4.5,
               flexShrink: 0,
               borderRadius: '50%',
               display: 'grid',
@@ -120,9 +134,11 @@ export function ProfilePage() {
               <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 @{page.username}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {profileVisibilityLabels[page.visibility]}
-              </Typography>
+              {page.visibility === 'private' && (
+                <Typography variant="body2" color="text.secondary">
+                  {profileVisibilityLabels.private}
+                </Typography>
+              )}
             </Box>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
@@ -143,9 +159,10 @@ export function ProfilePage() {
                   variant={page.isFriend ? 'outlined' : 'contained'}
                   color={page.isFriend ? 'secondary' : 'primary'}
                   onClick={() =>
-                    page.isFriend
-                      ? removeFriend.mutate(page.username)
-                      : addFriend.mutate({ username: page.username })
+                    setConfirm({
+                      kind: page.isFriend ? 'remove' : 'add',
+                      username: page.username,
+                    })
                   }
                   disabled={addFriend.isPending || removeFriend.isPending}
                   sx={{ width: { xs: '100%', sm: 'auto' } }}
@@ -220,28 +237,9 @@ export function ProfilePage() {
           </Box>
 
           <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>
-            <Stat
-              value={page.friendCount}
-              label="Friends"
-              selected={page.isOwner && active === 'friends'}
-              onClick={page.isOwner ? () => setSection('friends') : undefined}
-            />
-            {canSeeLists && (
-              <Stat
-                value={page.binders?.length ?? 0}
-                label="Binders"
-                selected={active === 'binders'}
-                onClick={() => setSection('binders')}
-              />
-            )}
-            {canSeeLists && (
-              <Stat
-                value={page.wantLists?.length ?? 0}
-                label="Wants"
-                selected={active === 'wants'}
-                onClick={() => setSection('wants')}
-              />
-            )}
+            <Stat value={page.friendCount} label="Friends" />
+            {canSeeLists && <Stat value={page.binders?.length ?? 0} label="Binders" />}
+            {canSeeLists && <Stat value={page.wantLists?.length ?? 0} label="Wants" />}
           </Stack>
 
           {page.isOwner && (
@@ -281,27 +279,29 @@ export function ProfilePage() {
         <Alert severity="error">{(addFriend.error ?? removeFriend.error)?.message}</Alert>
       )}
 
-      {page.isOwner && active === 'friends' && (
+      {(page.isOwner || page.isFriend) && (
         <Stack spacing={2}>
           <Typography variant="h2">Friends</Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
-              fullWidth
-              placeholder="their_name"
-            />
-            <Button
-              variant="contained"
-              onClick={handleAdd}
-              disabled={!username.trim() || addFriend.isPending}
-              sx={{ width: { xs: '100%', sm: 'auto' }, flexShrink: 0 }}
-            >
-              Add
-            </Button>
-          </Stack>
+          {page.isOwner && (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && askToAdd(username)}
+                fullWidth
+                placeholder="their_name"
+              />
+              <Button
+                variant="contained"
+                onClick={() => askToAdd(username)}
+                disabled={!username.trim() || addFriend.isPending}
+                sx={{ width: { xs: '100%', sm: 'auto' }, flexShrink: 0 }}
+              >
+                Add
+              </Button>
+            </Stack>
+          )}
           {friends.isLoading && <CircularProgress />}
           {friends.error && <Alert severity="error">{friends.error.message}</Alert>}
           {friends.data && friends.data.items.length === 0 && (
@@ -331,19 +331,23 @@ export function ProfilePage() {
                       color: 'inherit',
                       textDecoration: 'none',
                       fontWeight: 600,
+                      borderRadius: 1,
+                      '&:hover, &:focus-visible': { color: 'primary.main' },
                     }}
                   >
                     @{friend.username}
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => removeFriend.mutate(friend.username)}
-                    disabled={removeFriend.isPending}
-                    sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, flexShrink: 0 }}
-                  >
-                    Remove
-                  </Button>
+                  {page.isOwner && (
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => setConfirm({ kind: 'remove', username: friend.username })}
+                      disabled={removeFriend.isPending}
+                      sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, flexShrink: 0 }}
+                    >
+                      Remove
+                    </Button>
+                  )}
                 </Stack>
               </Paper>
             ))}
@@ -351,7 +355,7 @@ export function ProfilePage() {
         </Stack>
       )}
 
-      {canSeeLists && active === 'binders' && (
+      {canSeeLists && (
         <ProfileLinks
           title="Binders"
           empty="No public binders."
@@ -359,7 +363,7 @@ export function ProfilePage() {
           href={(slug) => `/u/${page.username}/${slug}`}
         />
       )}
-      {canSeeLists && active === 'wants' && (
+      {canSeeLists && (
         <ProfileLinks
           title="Wants"
           empty="No public want lists."
@@ -367,6 +371,40 @@ export function ProfilePage() {
           href={(slug) => `/u/${page.username}/wants/${slug}`}
         />
       )}
+
+      <Dialog open={confirm !== null} onClose={() => setConfirm(null)} fullWidth maxWidth="xs">
+        <DialogTitle>{confirm?.kind === 'remove' ? 'Remove friend' : 'Add friend'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            <Typography sx={{ overflowWrap: 'anywhere' }}>
+              {confirm?.kind === 'remove'
+                ? `Remove @${confirm.username} from your friends?`
+                : `Add @${confirm?.username} as a friend?`}
+            </Typography>
+            {(addFriend.error || removeFriend.error) && (
+              <Alert severity="error">{(addFriend.error ?? removeFriend.error)?.message}</Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1, px: 3, pb: 2 }}>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setConfirm(null)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={applyConfirm}
+            disabled={addFriend.isPending || removeFriend.isPending}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            {confirm?.kind === 'remove' ? 'Remove' : 'Add'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {page.isOwner && me.data && (
         <ProfileSettingsDialog
@@ -379,42 +417,13 @@ export function ProfilePage() {
   );
 }
 
-function Stat({
-  value,
-  label,
-  selected,
-  onClick,
-}: {
-  value: number;
-  label: string;
-  selected: boolean;
-  onClick?: () => void;
-}) {
+function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <Box
-      component={onClick ? 'button' : 'div'}
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      sx={{
-        flex: '1 1 6rem',
-        minWidth: 0,
-        py: 1,
-        px: 1,
-        border: 0,
-        borderBottom: selected ? 2 : 0,
-        borderColor: 'primary.main',
-        borderRadius: 1,
-        bgcolor: selected ? palette.goldWash : 'transparent',
-        color: 'inherit',
-        font: 'inherit',
-        cursor: onClick ? 'pointer' : 'default',
-        textAlign: 'center',
-      }}
-    >
+    <Box sx={{ flex: '1 1 6rem', minWidth: 0, py: 1, px: 1, textAlign: 'center' }}>
       <Typography variant="h3" component="span" display="block">
         {value}
       </Typography>
-      <Typography variant="caption" color={selected ? 'primary' : 'text.secondary'}>
+      <Typography variant="caption" color="text.secondary">
         {label}
       </Typography>
     </Box>
@@ -442,7 +451,7 @@ function ProfileLinks({
             key={item.slug}
             component={RouterLink}
             to={href(item.slug)}
-            sx={{ p: 2.5, textDecoration: 'none', display: 'block', minWidth: 0 }}
+            sx={{ p: 2.5, display: 'block', minWidth: 0, ...clickableSurfaceSx }}
           >
             <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
               {item.name}

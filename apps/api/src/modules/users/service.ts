@@ -290,7 +290,7 @@ async function countFriends(db: Database, userId: string): Promise<number> {
   return Number(row?.value ?? 0);
 }
 
-async function viewerAddedFriend(
+export async function viewerAddedFriend(
   db: Database,
   viewerId: string,
   friendId: string,
@@ -301,6 +301,20 @@ async function viewerAddedFriend(
     .where(and(eq(friendships.userId, viewerId), eq(friendships.friendId, friendId)))
     .limit(1);
   return rows.length > 0;
+}
+
+/** The owner's own list, or the list of someone the viewer has added. */
+export async function listFriendsOf(
+  db: Database,
+  viewerId: string,
+  username: string,
+): Promise<Friend[]> {
+  const user = await getUserByUsername(db, username);
+  if (!user) throw ApiError.notFound('User not found');
+  if (viewerId !== user.id && !(await viewerAddedFriend(db, viewerId, user.id))) {
+    throw ApiError.forbidden('Add this person as a friend to see their friends.');
+  }
+  return listFriends(db, user.id);
 }
 
 export async function listFriends(db: Database, userId: string): Promise<Friend[]> {

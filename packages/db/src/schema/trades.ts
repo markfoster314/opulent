@@ -1,12 +1,16 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { tradeSide, tradeStatus } from './enums';
 import { cards } from './cards';
 import { users } from './users';
 
 /**
- * Phase 7 of the roadmap. The tables exist now so migrations stay additive,
- * but no API route reads them yet.
+ * One trade between two people.
+ *
+ * The proposer opened it. The receiver is the other person. `turnUserId` is
+ * whose move it is. A finalize time is set when that person says yes to the
+ * current cards. Both times must be set before the trade is complete. Changing
+ * the cards clears both times.
  */
 export const trades = pgTable(
   'trades',
@@ -20,9 +24,15 @@ export const trades = pgTable(
     receiverId: uuid('receiver_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** Whose move it is. Always one of the two people on the trade. */
+    turnUserId: uuid('turn_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
 
     status: tradeStatus('status').notNull().default('draft'),
     message: text('message'),
+    proposerFinalizedAt: timestamp('proposer_finalized_at', { withTimezone: true }),
+    receiverFinalizedAt: timestamp('receiver_finalized_at', { withTimezone: true }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -30,6 +40,7 @@ export const trades = pgTable(
   (table) => [
     index('trades_proposer_id_idx').on(table.proposerId),
     index('trades_receiver_id_idx').on(table.receiverId),
+    index('trades_turn_user_id_idx').on(table.turnUserId),
   ],
 );
 
@@ -51,7 +62,10 @@ export const tradeItems = pgTable(
       .references(() => cards.scryfallId, { onDelete: 'restrict' }),
     quantity: integer('quantity').notNull().default(1),
   },
-  (table) => [index('trade_items_trade_id_idx').on(table.tradeId)],
+  (table) => [
+    index('trade_items_trade_id_idx').on(table.tradeId),
+    uniqueIndex('trade_items_printing_key').on(table.tradeId, table.side, table.scryfallId),
+  ],
 );
 
 export type TradeRow = typeof trades.$inferSelect;

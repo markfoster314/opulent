@@ -194,4 +194,16 @@ const themeOptions: ThemeOptions = {
   },
 };
 
+/** A paper or row that opens another page. Gold edge and a small lift on hover. */
+export const clickableSurfaceSx = {
+  cursor: 'pointer',
+  textDecoration: 'none',
+  transition: 'border-color 120ms ease, transform 120ms ease, background-color 120ms ease',
+  '&:hover, &:focus-visible': {
+    borderColor: palette.gold,
+    backgroundColor: palette.goldWash,
+    transform: 'translateY(-2px)',
+  },
+} as const;
+
 export const theme = createTheme(themeOptions);

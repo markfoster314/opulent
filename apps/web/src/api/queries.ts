@@ -20,6 +20,11 @@ import type {
   PlaceRef,
   Page,
   TradeMatch,
+  TradeChoice,
+  TradeDetail,
+  TradeSummary,
+  CreateTradeInput,
+  TradeLinesInput,
   UpdateBinderInput,
   UpdateBinderItemInput,
   UpdateProfileInput,
@@ -56,6 +61,9 @@ export const queryKeys = {
   sharedWantList: (handle: string, slug: string) => ['wants', 'by', handle, slug] as const,
   sharedWantItems: (handle: string, slug: string) =>
     ['wants', 'by', handle, slug, 'items'] as const,
+  trades: ['trades'] as const,
+  trade: (id: string) => ['trades', id] as const,
+  tradeChoices: (id: string) => ['trades', id, 'choices'] as const,
 };
 
 /** Resolves a public or unlisted share URL into the binder it points at. */
@@ -141,12 +149,12 @@ export function useProfile(username: string | undefined) {
   });
 }
 
-export function useFriends(enabled: boolean) {
+export function useFriends(username: string | undefined) {
   const api = useApi();
   return useQuery({
-    queryKey: queryKeys.friends,
-    queryFn: () => api<{ items: Friend[] }>('/v1/users/me/friends'),
-    enabled,
+    queryKey: [...queryKeys.friends, username ?? ''],
+    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/friends`),
+    enabled: Boolean(username),
   });
 }
 
@@ -589,5 +597,76 @@ export function useRemoveWantItem(listId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.wants });
       queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
     },
+  });
+}
+
+function refreshTrades(queryClient: ReturnType<typeof useQueryClient>, tradeId?: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.trades });
+  if (tradeId) queryClient.invalidateQueries({ queryKey: queryKeys.trade(tradeId) });
+}
+
+export function useTrades(enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.trades,
+    queryFn: () => api<{ items: TradeSummary[] }>('/v1/trades'),
+    enabled,
+  });
+}
+
+export function useTrade(tradeId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.trade(tradeId ?? ''),
+    queryFn: () => api<TradeDetail>(`/v1/trades/${tradeId}`),
+    enabled: Boolean(tradeId),
+  });
+}
+
+export function useTradeChoices(tradeId: string | undefined, enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.tradeChoices(tradeId ?? ''),
+    queryFn: () => api<{ items: TradeChoice[] }>(`/v1/trades/${tradeId}/choices`),
+    enabled: Boolean(tradeId) && enabled,
+  });
+}
+
+export function useOpenTrade() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateTradeInput) =>
+      api<TradeDetail>('/v1/trades', { method: 'POST', body: input }),
+    onSuccess: (trade) => refreshTrades(queryClient, trade.id),
+  });
+}
+
+export function useProposeTrade(tradeId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TradeLinesInput) =>
+      api<TradeDetail>(`/v1/trades/${tradeId}/propose`, { method: 'POST', body: input }),
+    onSuccess: () => refreshTrades(queryClient, tradeId),
+  });
+}
+
+export function useFinalizeTrade(tradeId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TradeLinesInput) =>
+      api<TradeDetail>(`/v1/trades/${tradeId}/finalize`, { method: 'POST', body: input }),
+    onSuccess: () => refreshTrades(queryClient, tradeId),
+  });
+}
+
+export function useCancelTrade(tradeId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<TradeDetail>(`/v1/trades/${tradeId}/cancel`, { method: 'POST' }),
+    onSuccess: () => refreshTrades(queryClient, tradeId),
   });
 }

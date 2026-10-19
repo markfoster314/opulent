@@ -281,6 +281,17 @@ function BarActions({
           >
             My wants
           </Button>
+          <Button
+            component={RouterLink}
+            to="/trades"
+            color={
+              pathname === '/trades' || pathname.startsWith('/trades/') ? 'primary' : 'inherit'
+            }
+            fullWidth={stacked}
+            sx={itemSx}
+          >
+            Trades
+          </Button>
         </>
       )}
 

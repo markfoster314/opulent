@@ -20,6 +20,7 @@ import {
   addFriend,
   getProfile,
   listFriends,
+  listFriendsOf,
   removeFriend,
   updateProfile,
 } from './service';
@@ -157,6 +158,22 @@ userRoutes.get(
       caller.id,
       { latitude, longitude },
       query.radiusMeters,
+    );
+    return c.json({ items });
+  },
+);
+
+/** Friends of this person. Only they, or someone who added them, can open the list. */
+userRoutes.get(
+  '/:username/friends',
+  requireAuth,
+  requireUser,
+  zValidator('param', z.object({ username: usernameSchema })),
+  async (c) => {
+    const items = await listFriendsOf(
+      c.get('db'),
+      c.get('user').id,
+      c.req.valid('param').username,
     );
     return c.json({ items });
   },

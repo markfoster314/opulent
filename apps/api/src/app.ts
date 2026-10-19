@@ -11,6 +11,7 @@ import { binderRoutes } from './modules/binders/routes';
 import { cardRoutes } from './modules/cards/routes';
 import { healthRoutes } from './modules/health/routes';
 import { placeRoutes } from './modules/places/routes';
+import { tradeRoutes } from './modules/trades/routes';
 import { userRoutes } from './modules/users/routes';
 import { wantRoutes } from './modules/wants/routes';
 
@@ -52,6 +53,7 @@ export function createApp() {
   app.route('/v1/cards', cardRoutes);
   app.route('/v1/binders', binderRoutes);
   app.route('/v1/wants', wantRoutes);
+  app.route('/v1/trades', tradeRoutes);
 
   app.notFound(onNotFound);
   app.onError(onError);

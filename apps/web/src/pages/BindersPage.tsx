@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { clickableSurfaceSx } from '../theme';
 import { useBinders, useCreateBinder } from '../api/queries';
 import { PlusMinusButton } from '../components/PlusMinusButton';
 
@@ -93,7 +94,7 @@ export function BindersPage() {
             key={binder.id}
             component={RouterLink}
             to={`/binders/${binder.id}`}
-            sx={{ p: 2.5, textDecoration: 'none', display: 'block' }}
+            sx={{ p: 2.5, display: 'block', ...clickableSurfaceSx }}
           >
             <Stack
               direction="row"

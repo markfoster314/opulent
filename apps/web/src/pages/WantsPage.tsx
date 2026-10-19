@@ -14,6 +14,7 @@ import {
 import { binderVisibilityLabels } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { clickableSurfaceSx } from '../theme';
 import { useCreateWantList, useWantLists } from '../api/queries';
 import { GenericWantsSection } from '../components/GenericWantsSection';
 import { PlusMinusButton } from '../components/PlusMinusButton';
@@ -95,7 +96,7 @@ export function WantsPage() {
             key={list.id}
             component={RouterLink}
             to={`/wants/${list.id}`}
-            sx={{ p: 2.5, textDecoration: 'none', display: 'block' }}
+            sx={{ p: 2.5, display: 'block', ...clickableSurfaceSx }}
           >
             <Stack
               direction="row"
