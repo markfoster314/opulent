@@ -81,7 +81,7 @@ export function BinderDetailPage() {
               label={binderVisibilityLabels[binder.visibility]}
               size="small"
               variant="outlined"
-              color={binder.visibility === 'private' ? 'default' : 'primary'}
+              color={binder.visibility === 'public' ? 'primary' : 'secondary'}
             />
           </Stack>
 
@@ -89,7 +89,7 @@ export function BinderDetailPage() {
             <Typography color="text.secondary">{binder.description}</Typography>
           )}
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="secondary">
             {totalCards} card{totalCards === 1 ? '' : 's'} across {items.length} stack
             {items.length === 1 ? '' : 's'}
             {itemsQuery.hasNextPage ? ' so far' : ''}

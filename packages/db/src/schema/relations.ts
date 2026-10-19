@@ -3,8 +3,8 @@ import { binderItems, binders } from './binders';
 import { cards } from './cards';
 import { places } from './places';
 import { tradeItems, trades } from './trades';
-import { users } from './users';
-import { wantItems, wantLists } from './wants';
+import { friendships, users } from './users';
+import { genericWants, wantItems, wantLists } from './wants';
 
 export const placesRelations = relations(places, ({ many }) => ({
   users: many(users),
@@ -15,6 +15,21 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   binders: many(binders),
   wantItems: many(wantItems),
   wantLists: many(wantLists),
+  genericWants: many(genericWants),
+  friendships: many(friendships, { relationName: 'friendshipOwner' }),
+}));
+
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  user: one(users, {
+    fields: [friendships.userId],
+    references: [users.id],
+    relationName: 'friendshipOwner',
+  }),
+  friend: one(users, {
+    fields: [friendships.friendId],
+    references: [users.id],
+    relationName: 'friendshipFriend',
+  }),
 }));
 
 export const bindersRelations = relations(binders, ({ one, many }) => ({
@@ -30,6 +45,10 @@ export const binderItemsRelations = relations(binderItems, ({ one }) => ({
 export const wantListsRelations = relations(wantLists, ({ one, many }) => ({
   owner: one(users, { fields: [wantLists.userId], references: [users.id] }),
   items: many(wantItems),
+}));
+
+export const genericWantsRelations = relations(genericWants, ({ one }) => ({
+  user: one(users, { fields: [genericWants.userId], references: [users.id] }),
 }));
 
 export const wantItemsRelations = relations(wantItems, ({ one }) => ({

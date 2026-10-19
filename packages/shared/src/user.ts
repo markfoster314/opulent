@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { profileVisibilitySchema } from './enums';
 import { placeIdSchema, placeRefSchema } from './place';
 
 /**
@@ -97,6 +98,8 @@ export const meSchema = userSchema.extend({
   city: placeRefSchema.nullable(),
   /** False until the user has picked their own username on the welcome screen. */
   onboarded: z.boolean(),
+  profileVisibility: profileVisibilitySchema,
+  bio: z.string().nullable(),
 });
 export type Me = z.infer<typeof meSchema>;
 
@@ -107,10 +110,30 @@ export const completeOnboardingSchema = z.object({
 });
 export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;
 
-export const updateProfileSchema = z.object({
-  username: claimedUsernameSchema,
-  placeId: placeIdSchema.nullable().optional(),
-});
+/** How long a profile bio may be. The page shows the same limit while typing. */
+export const BIO_MAX_LENGTH = 280;
+
+export const bioSchema = z
+  .string()
+  .trim()
+  .max(BIO_MAX_LENGTH, `Use at most ${BIO_MAX_LENGTH} characters`)
+  .transform((value) => (value.length === 0 ? null : value));
+
+export const updateProfileSchema = z
+  .object({
+    username: claimedUsernameSchema.optional(),
+    placeId: placeIdSchema.nullable().optional(),
+    profileVisibility: profileVisibilitySchema.optional(),
+    bio: bioSchema.nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.username !== undefined ||
+      value.placeId !== undefined ||
+      value.profileVisibility !== undefined ||
+      value.bio !== undefined,
+    'Nothing to save',
+  );
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 /**
@@ -148,3 +171,34 @@ export const usernameAvailabilitySchema = z.object({
   reason: z.string().nullable(),
 });
 export type UsernameAvailability = z.infer<typeof usernameAvailabilitySchema>;
+
+const profileEntrySchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+});
+
+/** What /u/:username shows. Lists are left off when the page is private and you are not the owner. */
+export const profileSchema = z.object({
+  username: usernameSchema,
+  avatarUrl: z.string().url().nullable(),
+  bio: z.string().nullable(),
+  visibility: profileVisibilitySchema,
+  isOwner: z.boolean(),
+  isFriend: z.boolean(),
+  friendCount: z.number().int().nonnegative(),
+  binders: z.array(profileEntrySchema).optional(),
+  wantLists: z.array(profileEntrySchema).optional(),
+});
+export type Profile = z.infer<typeof profileSchema>;
+
+export const friendSchema = z.object({
+  username: usernameSchema,
+  avatarUrl: z.string().url().nullable(),
+});
+export type Friend = z.infer<typeof friendSchema>;
+
+export const addFriendSchema = z.object({
+  username: usernameSchema,
+});
+export type AddFriendInput = z.infer<typeof addFriendSchema>;

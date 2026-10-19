@@ -20,13 +20,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useMe } from '../api/queries';
 import { palette } from '../theme';
-import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 
 export function AppLayout() {
   const { isAuthenticated, isLoading, loginWithRedirect, logout, user } = useAuth0();
   const location = useLocation();
   const me = useMe(isAuthenticated);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   /**
@@ -83,11 +81,6 @@ export function AppLayout() {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  function openProfile() {
-    setMenuOpen(false);
-    setProfileOpen(true);
-  }
-
   return (
     <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="sticky">
@@ -119,7 +112,6 @@ export function AppLayout() {
             pathname={location.pathname}
             onSignIn={() => void loginWithRedirect()}
             onSignOut={() => void logout({ logoutParams: { returnTo: window.location.origin } })}
-            onProfile={openProfile}
             sx={{ display: { xs: 'none', sm: 'flex' } }}
           />
 
@@ -135,7 +127,6 @@ export function AppLayout() {
             pathname={location.pathname}
             onSignIn={() => void loginWithRedirect()}
             onSignOut={() => void logout({ logoutParams: { returnTo: window.location.origin } })}
-            onProfile={openProfile}
             sx={{ display: { xs: 'none', sm: 'flex' } }}
           />
 
@@ -197,7 +188,6 @@ export function AppLayout() {
           pathname={location.pathname}
           onSignIn={() => void loginWithRedirect()}
           onSignOut={() => void logout({ logoutParams: { returnTo: window.location.origin } })}
-          onProfile={openProfile}
         />
       </Drawer>
 
@@ -211,14 +201,6 @@ export function AppLayout() {
         )}
         {showLoader ? <FullPageLoader /> : <Outlet />}
       </Container>
-
-      {me.data && (
-        <ProfileSettingsDialog
-          me={me.data}
-          open={profileOpen}
-          onClose={() => setProfileOpen(false)}
-        />
-      )}
 
       <Box
         component="footer"
@@ -246,7 +228,6 @@ interface BarActionsProps {
   pathname: string;
   onSignIn: () => void;
   onSignOut: () => void;
-  onProfile: () => void;
   sx?: SxProps<Theme>;
 }
 
@@ -262,7 +243,6 @@ function BarActions({
   pathname,
   onSignIn,
   onSignOut,
-  onProfile,
   sx,
 }: BarActionsProps) {
   const showLinks = part !== 'account' && isAuthenticated && !needsWelcome;
@@ -313,33 +293,31 @@ function BarActions({
       {showAccount && (
         <>
           {username && !needsWelcome ? (
-            <Button color="inherit" onClick={onProfile} fullWidth={stacked} sx={itemSx}>
-              <Box
-                component="span"
-                sx={
-                  stacked
-                    ? { whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'left' }
-                    : {
-                        maxWidth: '14rem',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }
-                }
-              >
-                {username}
-              </Box>
+            <Button
+              component={RouterLink}
+              to={`/u/${username}`}
+              color={pathname === `/u/${username}` ? 'primary' : 'inherit'}
+              fullWidth={stacked}
+              sx={itemSx}
+            >
+              Profile
             </Button>
           ) : (
             <Typography
               variant="body2"
-              color="text.secondary"
+              color="secondary"
               sx={stacked ? { px: 1, py: 1, overflowWrap: 'anywhere' } : undefined}
             >
               {fallbackName}
             </Typography>
           )}
-          <Button variant="outlined" onClick={onSignOut} fullWidth={stacked} sx={itemSx}>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={onSignOut}
+            fullWidth={stacked}
+            sx={itemSx}
+          >
             Sign out
           </Button>
         </>

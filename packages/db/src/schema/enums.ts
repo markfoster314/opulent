@@ -9,6 +9,9 @@ export const itemPriceKind = pgEnum('item_price_kind', ['market', 'percent', 'cu
 
 export const binderVisibility = pgEnum('binder_visibility', ['private', 'unlisted', 'public']);
 
+/** A profile is either closed to everyone else, or open on /u/:username. */
+export const profileVisibility = pgEnum('profile_visibility', ['private', 'public']);
+
 export const tradeStatus = pgEnum('trade_status', [
   'draft',
   'proposed',

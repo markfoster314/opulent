@@ -1,5 +1,9 @@
 import { zValidator } from '@hono/zod-validator';
-import { cardPrintingsQuerySchema, cardSearchQuerySchema } from '@opulent/shared';
+import {
+  cardPrintingsQuerySchema,
+  cardSearchQuerySchema,
+  setSearchQuerySchema,
+} from '@opulent/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../lib/context';
@@ -11,6 +15,7 @@ import {
   listOracleChoices,
   listSetsByOracleId,
   searchCards,
+  searchSets,
 } from './service';
 
 export const cardRoutes = new Hono<AppEnv>();
@@ -23,6 +28,11 @@ const uuidParam = z.object({ id: z.string().uuid() });
  */
 cardRoutes.get('/search', zValidator('query', cardSearchQuerySchema), async (c) => {
   const items = await searchCards(c.get('db'), c.req.valid('query'));
+  return c.json({ items });
+});
+
+cardRoutes.get('/sets', zValidator('query', setSearchQuerySchema), async (c) => {
+  const items = await searchSets(c.get('db'), c.req.valid('query'));
   return c.json({ items });
 });
 

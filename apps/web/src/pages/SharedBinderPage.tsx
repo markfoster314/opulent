@@ -39,12 +39,7 @@ export function SharedBinderPage() {
     <Stack spacing={4}>
       <Stack spacing={1}>
         <Typography variant="h1">{binderQuery.data?.name}</Typography>
-        <Typography color="text.secondary">
-          Shared by{' '}
-          <Box component="span" sx={{ color: palette.gold }}>
-            @{handle}
-          </Box>
-        </Typography>
+        <Typography color="secondary">Shared by @{handle}</Typography>
         {binderQuery.data?.description && (
           <Typography color="text.secondary">{binderQuery.data.description}</Typography>
         )}

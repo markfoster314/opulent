@@ -17,7 +17,9 @@
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
     "bootstrap": "tsx src/bootstrap.ts",
-    "places:sync": "tsx src/import-places.ts"
+    "places:sync": "tsx src/import-places.ts",
+    "seed": "tsx src/seed.ts",
+    "reset": "tsx src/reset.ts"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.717.0",

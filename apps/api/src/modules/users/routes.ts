@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator';
 import {
+  addFriendSchema,
   completeOnboardingSchema,
   nearbyQuerySchema,
   updateProfileSchema,
@@ -7,7 +8,7 @@ import {
 } from '@opulent/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireAuth, requireUser } from '../../middleware/auth';
+import { requireAuth, requireUser, optionalAuth } from '../../middleware/auth';
 import type { AppEnv } from '../../lib/context';
 import { ApiError } from '../../lib/http';
 import type { Database, UserRow } from '@opulent/db';
@@ -16,7 +17,10 @@ import {
   checkUsernameAvailability,
   completeOnboarding,
   findUsersWithinRadius,
-  getUserByUsername,
+  addFriend,
+  getProfile,
+  listFriends,
+  removeFriend,
   updateProfile,
 } from './service';
 
@@ -44,6 +48,8 @@ async function toMe(db: Database, user: UserRow) {
     email: user.email,
     city: place ? { geonameId: place.geonameId, label: place.label } : null,
     onboarded: user.onboardedAt !== null,
+    profileVisibility: user.profileVisibility,
+    bio: user.bio,
   };
 }
 
@@ -94,6 +100,33 @@ userRoutes.patch(
   },
 );
 
+userRoutes.get('/me/friends', requireAuth, requireUser, async (c) => {
+  const items = await listFriends(c.get('db'), c.get('user').id);
+  return c.json({ items });
+});
+
+userRoutes.post(
+  '/me/friends',
+  requireAuth,
+  requireUser,
+  zValidator('json', addFriendSchema),
+  async (c) => {
+    const friend = await addFriend(c.get('db'), c.get('user').id, c.req.valid('json').username);
+    return c.json(friend, 201);
+  },
+);
+
+userRoutes.delete(
+  '/me/friends/:username',
+  requireAuth,
+  requireUser,
+  zValidator('param', z.object({ username: usernameSchema })),
+  async (c) => {
+    await removeFriend(c.get('db'), c.get('user').id, c.req.valid('param').username);
+    return c.body(null, 204);
+  },
+);
+
 /**
  * Users whose saved city is inside the radius. Registered before `/:username`
  * so the word "nearby" is this search and not somebody's name.
@@ -129,13 +162,13 @@ userRoutes.get(
   },
 );
 
-/** Public profile lookup, used by the share page to render the owner's username. */
+/** The page at /u/:username. A private page leaves the lists off for everyone except the owner. */
 userRoutes.get(
   '/:username',
+  optionalAuth,
   zValidator('param', z.object({ username: usernameSchema })),
   async (c) => {
-    const user = await getUserByUsername(c.get('db'), c.req.valid('param').username);
-    if (!user) throw ApiError.notFound('User not found');
-    return c.json(toPublicUser(user));
+    const profile = await getProfile(c.get('db'), c.req.valid('param').username, c.get('user')?.id);
+    return c.json(profile);
   },
 );

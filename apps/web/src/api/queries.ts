@@ -1,17 +1,22 @@
 import type {
   AddBinderItemInput,
+  AddFriendInput,
   AddWantItemInput,
   Binder,
   CardChoices,
+  CardSet,
+  CreateGenericWantInput,
   CreateWantListInput,
+  Friend,
+  GenericWant,
   WantList,
   BinderItem,
   Card,
-  CardSet,
   CompleteOnboardingInput,
   CreateBinderInput,
   UsernameAvailability,
   Me,
+  Profile,
   PlaceRef,
   Page,
   TradeMatch,
@@ -28,12 +33,16 @@ import { useApi } from './ApiProvider';
 /** Query key factory. Keeping the keys in one place makes cache busting reliable. */
 export const queryKeys = {
   me: ['me'] as const,
+  friends: ['friends'] as const,
+  profile: (username: string) => ['profile', username] as const,
   usernameAvailability: (username: string) => ['username-available', username] as const,
   binders: ['binders'] as const,
   binder: (id: string) => ['binder', id] as const,
   binderItems: (id: string) => ['binder', id, 'items'] as const,
   binderMatches: (id: string) => ['binder', id, 'matches'] as const,
   wants: ['wants'] as const,
+  genericWants: ['wants', 'generic'] as const,
+  setSearch: (term: string) => ['cards', 'sets', 'search', term] as const,
   wantList: (id: string) => ['wants', id] as const,
   wantItems: (id: string) => ['wants', id, 'items'] as const,
   cardChoices: (oracleId: string) => ['cards', 'choices', oracleId] as const,
@@ -118,6 +127,51 @@ export function useUpdateProfile() {
     onSuccess: (me) => {
       queryClient.setQueryData(queryKeys.me, me);
       queryClient.invalidateQueries({ queryKey: queryKeys.binders });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+}
+
+export function useProfile(username: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.profile(username ?? ''),
+    queryFn: () => api<Profile>(`/v1/users/${username}`),
+    enabled: Boolean(username),
+  });
+}
+
+export function useFriends(enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.friends,
+    queryFn: () => api<{ items: Friend[] }>('/v1/users/me/friends'),
+    enabled,
+  });
+}
+
+export function useAddFriend() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddFriendInput) =>
+      api<Friend>('/v1/users/me/friends', { method: 'POST', body: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+}
+
+export function useRemoveFriend() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (username: string) =>
+      api<void>(`/v1/users/me/friends/${username}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 }
@@ -252,6 +306,44 @@ export function useCardLanguages(scryfallId: string | undefined) {
     queryFn: () => api<{ items: Card[] }>(`/v1/cards/${scryfallId}/languages`),
     enabled: Boolean(scryfallId),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSetSearch(term: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.setSearch(term),
+    queryFn: () => api<{ items: CardSet[] }>(`/v1/cards/sets?q=${encodeURIComponent(term)}`),
+    enabled: term.trim().length >= 2,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useGenericWants(enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.genericWants,
+    queryFn: () => api<{ items: GenericWant[] }>('/v1/wants/generic'),
+    enabled,
+  });
+}
+
+export function useCreateGenericWant() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateGenericWantInput) =>
+      api<GenericWant>('/v1/wants/generic', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.genericWants }),
+  });
+}
+
+export function useDeleteGenericWant() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (wantId: string) => api<void>(`/v1/wants/generic/${wantId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.genericWants }),
   });
 }
 

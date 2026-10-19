@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { binderVisibility } from './enums';
 import { users } from './users';
 
@@ -115,7 +124,61 @@ export const wantItems = pgTable(
   ],
 );
 
+/**
+ * A wide interest with no one card.
+ *
+ * Empty lists mean any language, finish, condition, or set. A filled list
+ * keeps cards that match one of those values. A mark set to true means the
+ * copy must carry that mark. A mark left false is not a filter.
+ * `matchKey` is the same choices in a fixed order, so the same mix cannot be saved twice.
+ */
+export const genericWants = pgTable(
+  'generic_wants',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    languages: text('languages')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    finishes: text('finishes')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    conditions: text('conditions')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    sets: text('sets')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+
+    signed: boolean('signed').notNull().default(false),
+    altered: boolean('altered').notNull().default(false),
+    misprint: boolean('misprint').notNull().default(false),
+    miscut: boolean('miscut').notNull().default(false),
+    artistProof: boolean('artist_proof').notNull().default(false),
+
+    matchKey: text('match_key').notNull(),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('generic_wants_user_id_idx').on(table.userId),
+    uniqueIndex('generic_wants_user_match_key').on(table.userId, table.matchKey),
+  ],
+);
+
 export type WantListRow = typeof wantLists.$inferSelect;
 export type NewWantListRow = typeof wantLists.$inferInsert;
 export type WantItemRow = typeof wantItems.$inferSelect;
 export type NewWantItemRow = typeof wantItems.$inferInsert;
+export type GenericWantRow = typeof genericWants.$inferSelect;
+export type NewGenericWantRow = typeof genericWants.$inferInsert;

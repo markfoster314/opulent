@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   addWantItemSchema,
+  createGenericWantSchema,
   createWantListSchema,
   slugSchema,
   updateWantItemSchema,
@@ -14,12 +15,15 @@ import { optionalAuth, requireAuth, requireUser } from '../../middleware/auth';
 import {
   addWantItem,
   assertCanViewWantList,
+  createGenericWant,
   createWantList,
   deleteWantList,
   getWantList,
   getWantListByHandleAndSlug,
+  listGenericWants,
   listWantItems,
   listWantLists,
+  removeGenericWant,
   removeWantItem,
   rotateWantShareToken,
   toPublicWantList,
@@ -36,6 +40,33 @@ const shareParam = z.object({ handle: usernameSchema, slug: slugSchema });
 function viewer(shareToken: string | undefined, userId: string | undefined) {
   return { userId, shareToken };
 }
+
+wantRoutes.get('/generic', requireAuth, requireUser, async (c) => {
+  const items = await listGenericWants(c.get('db'), c.get('user').id);
+  return c.json({ items });
+});
+
+wantRoutes.post(
+  '/generic',
+  requireAuth,
+  requireUser,
+  zValidator('json', createGenericWantSchema),
+  async (c) => {
+    const item = await createGenericWant(c.get('db'), c.get('user').id, c.req.valid('json'));
+    return c.json(item, 201);
+  },
+);
+
+wantRoutes.delete(
+  '/generic/:id',
+  requireAuth,
+  requireUser,
+  zValidator('param', listIdParam),
+  async (c) => {
+    await removeGenericWant(c.get('db'), c.get('user').id, c.req.valid('param').id);
+    return c.body(null, 204);
+  },
+);
 
 wantRoutes.get('/lists', requireAuth, requireUser, async (c) => {
   const items = await listWantLists(c.get('db'), c.get('user').id);

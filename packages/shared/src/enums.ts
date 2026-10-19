@@ -130,6 +130,19 @@ export const binderVisibilityDescriptions: Record<BinderVisibility, string> = {
   public: 'Listed on your profile and open to anyone.',
 };
 
+export const profileVisibilitySchema = z.enum(['private', 'public']);
+export type ProfileVisibility = z.infer<typeof profileVisibilitySchema>;
+
+export const profileVisibilityLabels: Record<ProfileVisibility, string> = {
+  private: 'Private',
+  public: 'Public',
+};
+
+export const profileVisibilityDescriptions: Record<ProfileVisibility, string> = {
+  private: 'Only you can open this page.',
+  public: 'Anyone can open this page and see your public binders and want lists.',
+};
+
 export const wantPriorityLabels: Record<WantPriority, string> = {
   1: 'High',
   2: 'Medium',

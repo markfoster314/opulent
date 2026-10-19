@@ -9,6 +9,8 @@ export {
   tradeItems,
   trades,
   users,
+  friendships,
+  genericWants,
   wantItems,
   wantLists,
 } from './schema';
@@ -21,6 +23,9 @@ export type {
   NewCardRow,
   NewPlaceRow,
   NewUserRow,
+  FriendshipRow,
+  GenericWantRow,
+  NewGenericWantRow,
   NewWantItemRow,
   NewWantListRow,
   PlaceRow,

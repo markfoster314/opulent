@@ -1,13 +1,15 @@
 import type { Database, UserRow } from '@opulent/db';
-import { users } from '@opulent/db';
+import { binders, friendships, users, wantLists } from '@opulent/db';
 import type {
   CompleteOnboardingInput,
+  Friend,
   NearbyUser,
+  Profile,
   UpdateProfileInput,
   UsernameAvailability,
 } from '@opulent/shared';
 import { reservedUsernames, usernameSchema } from '@opulent/shared';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 import { getPlace } from '../places/service';
 
@@ -90,14 +92,18 @@ export async function updateProfile(
     throw ApiError.forbidden('Choose your username on the welcome screen first');
   }
 
-  if (input.username !== current.username) {
+  if (input.username !== undefined && input.username !== current.username) {
     await assertUsernameIsFree(db, input.username, userId);
   }
   await assertPlaceExists(db, input.placeId);
 
   return writeUser(db, userId, {
-    username: input.username,
+    ...(input.username !== undefined ? { username: input.username } : {}),
     ...(input.placeId !== undefined ? { placeId: input.placeId } : {}),
+    ...(input.profileVisibility !== undefined
+      ? { profileVisibility: input.profileVisibility }
+      : {}),
+    ...(input.bio !== undefined ? { bio: input.bio } : {}),
   });
 }
 
@@ -220,4 +226,118 @@ function isUsernameCollision(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const candidate = error as { code?: unknown; constraint_name?: unknown };
   return candidate.code === '23505' && candidate.constraint_name === 'users_username_key';
+}
+
+function isDuplicateFriend(error: unknown): boolean {
+  const candidates = [error, (error as { cause?: unknown } | null)?.cause];
+  return candidates.some((candidate) => {
+    if (typeof candidate !== 'object' || candidate === null) return false;
+    const row = candidate as { code?: unknown; constraint_name?: unknown };
+    return row.code === '23505' && row.constraint_name === 'friendships_pair_key';
+  });
+}
+
+async function listedEntries(
+  db: Database,
+  userId: string,
+  table: typeof binders | typeof wantLists,
+) {
+  return db
+    .select({
+      slug: table.slug,
+      name: table.name,
+      description: table.description,
+    })
+    .from(table)
+    .where(and(eq(table.userId, userId), eq(table.visibility, 'public')))
+    .orderBy(asc(table.name));
+}
+
+/** The page at /u/:username. A private page hides the lists from everyone except the owner. */
+export async function getProfile(
+  db: Database,
+  username: string,
+  viewerId?: string,
+): Promise<Profile> {
+  const user = await getUserByUsername(db, username);
+  if (!user) throw ApiError.notFound('User not found');
+
+  const isOwner = viewerId === user.id;
+  const isFriend = viewerId ? await viewerAddedFriend(db, viewerId, user.id) : false;
+  const profile: Profile = {
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    bio: user.bio,
+    visibility: user.profileVisibility,
+    isOwner,
+    isFriend,
+    friendCount: await countFriends(db, user.id),
+  };
+  if (!isOwner && user.profileVisibility !== 'public') return profile;
+
+  return {
+    ...profile,
+    binders: await listedEntries(db, user.id, binders),
+    wantLists: await listedEntries(db, user.id, wantLists),
+  };
+}
+
+async function countFriends(db: Database, userId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(eq(friendships.userId, userId));
+  return Number(row?.value ?? 0);
+}
+
+async function viewerAddedFriend(
+  db: Database,
+  viewerId: string,
+  friendId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: friendships.id })
+    .from(friendships)
+    .where(and(eq(friendships.userId, viewerId), eq(friendships.friendId, friendId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function listFriends(db: Database, userId: string): Promise<Friend[]> {
+  const friend = users;
+  return db
+    .select({
+      username: friend.username,
+      avatarUrl: friend.avatarUrl,
+    })
+    .from(friendships)
+    .innerJoin(friend, eq(friend.id, friendships.friendId))
+    .where(eq(friendships.userId, userId))
+    .orderBy(asc(friend.username));
+}
+
+export async function addFriend(db: Database, userId: string, username: string): Promise<Friend> {
+  const friend = await getUserByUsername(db, username);
+  if (!friend) throw ApiError.notFound('No one uses that username');
+  if (friend.id === userId) throw ApiError.badRequest('You cannot add yourself');
+
+  try {
+    await db.insert(friendships).values({ userId, friendId: friend.id });
+  } catch (error) {
+    if (isDuplicateFriend(error)) throw ApiError.conflict('You already added that friend');
+    throw error;
+  }
+
+  return { username: friend.username, avatarUrl: friend.avatarUrl };
+}
+
+export async function removeFriend(db: Database, userId: string, username: string): Promise<void> {
+  const friend = await getUserByUsername(db, username);
+  if (!friend) throw ApiError.notFound('No one uses that username');
+
+  const removed = await db
+    .delete(friendships)
+    .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friend.id)))
+    .returning({ id: friendships.id });
+  if (!removed[0]) throw ApiError.notFound('That person is not on your friends list');
 }

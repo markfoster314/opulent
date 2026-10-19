@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { slugSchema } from './binder';
-import { cardImageUrisSchema } from './card';
+import { cardImageUrisSchema, cardSetSchema } from './card';
 import {
   binderVisibilitySchema,
   cardConditionLabels,
@@ -148,6 +148,105 @@ export const updateWantItemSchema = wantScopeSchema
   })
   .superRefine(refineWantScope);
 export type UpdateWantItemInput = z.infer<typeof updateWantItemSchema>;
+
+function uniqueSorted<T extends string>(values: T[]): T[] {
+  return [...new Set(values)].sort();
+}
+
+const genericLanguageList = z.array(cardLanguageSchema).max(20).transform(uniqueSorted);
+const genericFinishList = z.array(cardFinishSchema).max(5).transform(uniqueSorted);
+const genericConditionList = z.array(cardConditionSchema).max(5).transform(uniqueSorted);
+const genericSetList = z.array(setCodeSchema).max(40).transform(uniqueSorted);
+
+export const genericWantSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  languages: z.array(cardLanguageSchema),
+  finishes: z.array(cardFinishSchema),
+  conditions: z.array(cardConditionSchema),
+  sets: z.array(cardSetSchema),
+  signed: z.boolean(),
+  altered: z.boolean(),
+  misprint: z.boolean(),
+  miscut: z.boolean(),
+  artistProof: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type GenericWant = z.infer<typeof genericWantSchema>;
+
+export const createGenericWantSchema = z
+  .object({
+    languages: genericLanguageList.default([]),
+    finishes: genericFinishList.default([]),
+    conditions: genericConditionList.default([]),
+    sets: genericSetList.default([]),
+    signed: z.boolean().default(false),
+    altered: z.boolean().default(false),
+    misprint: z.boolean().default(false),
+    miscut: z.boolean().default(false),
+    artistProof: z.boolean().default(false),
+  })
+  .superRefine((value, ctx) => {
+    const hasChoice =
+      value.languages.length > 0 ||
+      value.finishes.length > 0 ||
+      value.conditions.length > 0 ||
+      value.sets.length > 0 ||
+      value.signed ||
+      value.altered ||
+      value.misprint ||
+      value.miscut ||
+      value.artistProof;
+    if (!hasChoice) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Pick at least one choice.' });
+    }
+  });
+export type CreateGenericWantInput = z.infer<typeof createGenericWantSchema>;
+
+/** Same choices, always in the same order, so a second save of the same mix can be refused. */
+export function genericWantMatchKey(input: CreateGenericWantInput): string {
+  const list = (name: string, values: readonly string[]) => `${name}:${values.join(',')}`;
+  return [
+    list('lang', input.languages),
+    list('finish', input.finishes),
+    list('cond', input.conditions),
+    list('set', input.sets),
+    `signed:${input.signed ? 1 : 0}`,
+    `altered:${input.altered ? 1 : 0}`,
+    `misprint:${input.misprint ? 1 : 0}`,
+    `miscut:${input.miscut ? 1 : 0}`,
+    `proof:${input.artistProof ? 1 : 0}`,
+  ].join('|');
+}
+
+/** One line for a saved generic want: "Russian, Foil" or "Artist proof". */
+export function describeGenericWant(item: {
+  languages: readonly string[];
+  finishes: readonly string[];
+  conditions: readonly string[];
+  sets: readonly { setCode: string; setName: string | null }[];
+  signed: boolean;
+  altered: boolean;
+  misprint: boolean;
+  miscut: boolean;
+  artistProof: boolean;
+}): string {
+  const parts = [
+    ...named(item.languages, cardLanguageLabels),
+    ...named(item.finishes, cardFinishLabels),
+    ...named(item.conditions, cardConditionLabels),
+    ...item.sets.map((set) =>
+      set.setName ? `${set.setName} (${set.setCode.toUpperCase()})` : set.setCode.toUpperCase(),
+    ),
+  ];
+  if (item.signed) parts.push('Signed');
+  if (item.altered) parts.push('Altered');
+  if (item.misprint) parts.push('Misprint');
+  if (item.miscut) parts.push('Miscut');
+  if (item.artistProof) parts.push('Artist proof');
+  return parts.join(', ');
+}
 
 function named(codes: readonly string[], labels: Record<string, string>): string[] {
   return codes.map((code) => labels[code] ?? code.toUpperCase());

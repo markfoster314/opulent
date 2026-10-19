@@ -9,6 +9,7 @@ import type {
   CardSearchQuery,
   CardSet,
   Page,
+  SetSearchQuery,
 } from '@opulent/shared';
 import {
   cardFinishSchema,
@@ -368,6 +369,27 @@ export async function listOracleChoices(db: Database, oracleId: string): Promise
       (a.setName ?? a.setCode).localeCompare(b.setName ?? b.setCode),
     ),
   };
+}
+
+/** Sets whose name or code matches the typed text. Art cards are left out. */
+export async function searchSets(db: Database, query: SetSearchQuery): Promise<CardSet[]> {
+  const pattern = `%${query.q.trim()}%`;
+  const rows = (await db.execute(sql`
+    SELECT
+      ${cards.setCode} AS "setCode",
+      max(${cards.setName}) AS "setName"
+    FROM ${cards}
+    WHERE ${cards.layout} IS DISTINCT FROM 'art_series'
+      AND (
+        ${cards.setName} ILIKE ${pattern}
+        OR ${cards.setCode} ILIKE ${pattern}
+      )
+    GROUP BY ${cards.setCode}
+    ORDER BY max(${cards.setName}) ASC NULLS LAST, ${cards.setCode}
+    LIMIT ${query.limit}
+  `)) as unknown as { setCode: string; setName: string | null }[];
+
+  return rows.filter((row) => row.setCode.length > 0);
 }
 
 export async function listSetsByOracleId(db: Database, oracleId: string): Promise<CardSet[]> {

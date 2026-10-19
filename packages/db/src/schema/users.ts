@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { profileVisibility } from './enums';
 import { places } from './places';
 
 export const users = pgTable(
@@ -25,6 +26,15 @@ export const users = pgTable(
 
     email: text('email'),
     avatarUrl: text('avatar_url'),
+
+    /** A short note on the profile page. Null means they have not written one. */
+    bio: text('bio'),
+
+    /**
+     * private  only this person can open /u/:username
+     * public   anyone can open it and see the public binders and want lists
+     */
+    profileVisibility: profileVisibility('profile_visibility').notNull().default('private'),
 
     /**
      * Optional city, chosen from the GeoNames list. Null means they skipped it.
@@ -55,3 +65,30 @@ export const users = pgTable(
 
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
+
+/**
+ * One person added another. It is not mutual: the other person has their own list.
+ * Removing the row drops only this side.
+ */
+export const friendships = pgTable(
+  'friendships',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    friendId: uuid('friend_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('friendships_pair_key').on(table.userId, table.friendId),
+    index('friendships_friend_id_idx').on(table.friendId),
+  ],
+);
+
+export type FriendshipRow = typeof friendships.$inferSelect;
+export type NewFriendshipRow = typeof friendships.$inferInsert;

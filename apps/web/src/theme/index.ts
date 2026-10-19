@@ -31,7 +31,15 @@ export const palette = {
   /** Bar over the page, same black as the background with some see-through. */
   appBar: 'rgba(11, 11, 12, 0.82)',
 
-  secondary: '#6E7B8B',
+  /**
+   * Muted steel blue. Facts and quiet controls. Gold stays on the action.
+   * steel is the text and icon. steelDeep is a fill. The wash is a thin tint.
+   */
+  steel: '#9BB0C0',
+  steelDeep: '#4A6574',
+  steelWash: 'rgba(155, 176, 192, 0.12)',
+  steelBorder: 'rgba(155, 176, 192, 0.45)',
+
   success: '#4F8A5B',
   warning: '#C9962F',
   error: '#B4544A',
@@ -71,7 +79,8 @@ const themeOptions: ThemeOptions = {
       contrastText: palette.background,
     },
     secondary: {
-      main: palette.secondary,
+      main: palette.steel,
+      dark: palette.steelDeep,
       contrastText: palette.background,
     },
     background: {
@@ -167,11 +176,16 @@ const themeOptions: ThemeOptions = {
           borderColor: palette.goldBorder,
           '&:hover': { borderColor: palette.goldLight, backgroundColor: palette.goldTint },
         },
+        outlinedSecondary: {
+          borderColor: palette.steelBorder,
+          '&:hover': { borderColor: palette.steel, backgroundColor: palette.steelWash },
+        },
       },
     },
     MuiChip: {
       styleOverrides: {
         outlinedPrimary: { borderColor: palette.goldBorder },
+        outlinedSecondary: { borderColor: palette.steelBorder },
       },
     },
     MuiTooltip: {

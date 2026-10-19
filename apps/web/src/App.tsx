@@ -4,6 +4,7 @@ import { BinderDetailPage } from './pages/BinderDetailPage';
 import { BindersPage } from './pages/BindersPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { SharedBinderPage } from './pages/SharedBinderPage';
 import { SharedWantListPage } from './pages/SharedWantListPage';
 import { WantListPage } from './pages/WantListPage';
@@ -24,6 +25,7 @@ export function App() {
         {/* Public share URL. Matches the API's /binders/by/:handle/:slug route. */}
         <Route path="/u/:handle/wants/:slug" element={<SharedWantListPage />} />
         <Route path="/u/:handle/:slug" element={<SharedBinderPage />} />
+        <Route path="/u/:handle" element={<ProfilePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

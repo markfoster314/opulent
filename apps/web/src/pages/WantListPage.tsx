@@ -80,7 +80,7 @@ export function WantListPage() {
               label={binderVisibilityLabels[list.visibility]}
               size="small"
               variant="outlined"
-              color={list.visibility === 'private' ? 'default' : 'primary'}
+              color={list.visibility === 'public' ? 'primary' : 'secondary'}
             />
           </Stack>
           {list.description && (
@@ -88,7 +88,7 @@ export function WantListPage() {
               {list.description}
             </Typography>
           )}
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="secondary">
             {list.itemCount ?? items.length} card{(list.itemCount ?? items.length) === 1 ? '' : 's'}
           </Typography>
         </Stack>

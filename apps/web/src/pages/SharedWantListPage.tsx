@@ -1,9 +1,8 @@
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, CircularProgress, Stack, Typography } from '@mui/material';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useSharedWantItems, useSharedWantList } from '../api/queries';
 import { CardGrid } from '../components/CardGrid';
 import { WantItemTile } from '../components/WantItemTile';
-import { palette } from '../theme';
 
 export function SharedWantListPage() {
   const { handle, slug } = useParams<{ handle: string; slug: string }>();
@@ -25,14 +24,9 @@ export function SharedWantListPage() {
         <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
           {list?.name}
         </Typography>
-        <Typography color="text.secondary">
-          Shared by{' '}
-          <Box component="span" sx={{ color: palette.gold }}>
-            @{handle}
-          </Box>
-        </Typography>
+        <Typography color="secondary">Shared by @{handle}</Typography>
         {list?.description && <Typography color="text.secondary">{list.description}</Typography>}
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="secondary">
           {items.length} card{items.length === 1 ? '' : 's'}
         </Typography>
       </Stack>

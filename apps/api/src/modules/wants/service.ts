@@ -1,17 +1,20 @@
 import type { Database, WantListRow } from '@opulent/db';
-import { cards, users, wantItems, wantLists } from '@opulent/db';
+import { cards, genericWants, users, wantItems, wantLists } from '@opulent/db';
 import type {
   AddWantItemInput,
   CardImageUris,
+  CardSet,
+  CreateGenericWantInput,
   CreateWantListInput,
+  GenericWant,
   UpdateWantItemInput,
   UpdateWantListInput,
   WantItem,
   WantList,
   WantPriority,
 } from '@opulent/shared';
-import { wantScopeError } from '@opulent/shared';
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { genericWantMatchKey, wantScopeError } from '@opulent/shared';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
 
 const scopeColumns = {
@@ -482,6 +485,141 @@ export async function updateWantItem(
   const [item] = await withFaces(db, [row]);
   if (!item) throw ApiError.notFound('Want not found');
   return item;
+}
+
+function isDuplicateGenericWant(error: unknown): boolean {
+  const candidates = [error, (error as { cause?: unknown } | null)?.cause];
+  return candidates.some((candidate) => {
+    if (typeof candidate !== 'object' || candidate === null) return false;
+    const row = candidate as { code?: unknown; constraint_name?: unknown };
+    return row.code === '23505' && row.constraint_name === 'generic_wants_user_match_key';
+  });
+}
+
+async function namesForSets(
+  db: Database,
+  codes: readonly string[],
+): Promise<Map<string, string | null>> {
+  const unique = [...new Set(codes)];
+  const names = new Map<string, string | null>();
+  if (unique.length === 0) return names;
+
+  const rows = (await db.execute(sql`
+    SELECT
+      ${cards.setCode} AS "setCode",
+      max(${cards.setName}) AS "setName"
+    FROM ${cards}
+    WHERE ${cards.setCode} IN (${sql.join(
+      unique.map((code) => sql`${code}`),
+      sql`, `,
+    )})
+    GROUP BY ${cards.setCode}
+  `)) as unknown as { setCode: string; setName: string | null }[];
+
+  for (const row of rows) names.set(row.setCode, row.setName);
+  return names;
+}
+
+function toGenericWant(
+  row: {
+    id: string;
+    userId: string;
+    languages: string[];
+    finishes: string[];
+    conditions: string[];
+    sets: string[];
+    signed: boolean;
+    altered: boolean;
+    misprint: boolean;
+    miscut: boolean;
+    artistProof: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  setNames: Map<string, string | null>,
+): GenericWant {
+  return {
+    id: row.id,
+    userId: row.userId,
+    languages: row.languages as GenericWant['languages'],
+    finishes: row.finishes as GenericWant['finishes'],
+    conditions: row.conditions as GenericWant['conditions'],
+    sets: row.sets.map((setCode): CardSet => ({ setCode, setName: setNames.get(setCode) ?? null })),
+    signed: row.signed,
+    altered: row.altered,
+    misprint: row.misprint,
+    miscut: row.miscut,
+    artistProof: row.artistProof,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export async function listGenericWants(db: Database, userId: string): Promise<GenericWant[]> {
+  const rows = await db
+    .select()
+    .from(genericWants)
+    .where(eq(genericWants.userId, userId))
+    .orderBy(desc(genericWants.createdAt));
+
+  const setNames = await namesForSets(
+    db,
+    rows.flatMap((row) => row.sets),
+  );
+  return rows.map((row) => toGenericWant(row, setNames));
+}
+
+export async function createGenericWant(
+  db: Database,
+  userId: string,
+  input: CreateGenericWantInput,
+): Promise<GenericWant> {
+  const setNames = await namesForSets(db, input.sets);
+  const missing = input.sets.filter((code) => !setNames.has(code));
+  if (missing.length > 0) {
+    throw ApiError.badRequest(
+      `Unknown set: ${missing.map((code) => code.toUpperCase()).join(', ')}`,
+    );
+  }
+
+  try {
+    const inserted = await db
+      .insert(genericWants)
+      .values({
+        userId,
+        languages: [...input.languages],
+        finishes: [...input.finishes],
+        conditions: [...input.conditions],
+        sets: [...input.sets],
+        signed: input.signed,
+        altered: input.altered,
+        misprint: input.misprint,
+        miscut: input.miscut,
+        artistProof: input.artistProof,
+        matchKey: genericWantMatchKey(input),
+      })
+      .returning();
+    const row = inserted[0];
+    if (!row) throw new ApiError('internal_error', 'Could not save that interest');
+    return toGenericWant(row, setNames);
+  } catch (error) {
+    if (isDuplicateGenericWant(error)) {
+      throw ApiError.conflict('You already saved that mix of choices.');
+    }
+    throw error;
+  }
+}
+
+export async function removeGenericWant(
+  db: Database,
+  userId: string,
+  wantId: string,
+): Promise<void> {
+  const removed = await db
+    .delete(genericWants)
+    .where(and(eq(genericWants.id, wantId), eq(genericWants.userId, userId)))
+    .returning({ id: genericWants.id });
+  if (!removed[0]) throw ApiError.notFound('Generic want not found');
 }
 
 export async function removeWantItem(
