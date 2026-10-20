@@ -43,6 +43,7 @@ function TradeEditor({ trade }: { trade: TradeDetail }) {
   const [lines, setLines] = useState<DraftCard[]>(trade.youReceive);
   const [search, setSearch] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const draft = trade.status === 'draft';
   const closed =
     trade.status === 'completed' || trade.status === 'cancelled' || trade.status === 'declined';
   const pending = propose.isPending || finalize.isPending || cancel.isPending;
@@ -78,6 +79,12 @@ function TradeEditor({ trade }: { trade: TradeDetail }) {
         </Typography>
         <Typography color="text.secondary">{statusLine(trade)}</Typography>
       </Stack>
+
+      {draft && (
+        <Alert severity="info">
+          Only you can see this draft. Add the cards you want, then propose the trade.
+        </Alert>
+      )}
 
       {trade.yourTurn && trade.theyFinalized && (
         <Alert severity="info">
@@ -163,20 +170,22 @@ function TradeEditor({ trade }: { trade: TradeDetail }) {
         >
           <Button
             variant="contained"
-            disabled={!trade.yourTurn || pending || over}
+            disabled={!trade.yourTurn || pending || over || (draft && lines.length === 0)}
             onClick={() => propose.mutate(payload)}
             sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Propose
+            {draft ? 'Propose trade' : 'Propose'}
           </Button>
-          <Button
-            variant="outlined"
-            disabled={!trade.yourTurn || pending || over}
-            onClick={() => finalize.mutate(payload)}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            Finalize
-          </Button>
+          {!draft && (
+            <Button
+              variant="outlined"
+              disabled={!trade.yourTurn || pending || over}
+              onClick={() => finalize.mutate(payload)}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Finalize
+            </Button>
+          )}
           <Button
             variant="outlined"
             color="secondary"
@@ -287,6 +296,7 @@ function CardFace({
 }
 
 function statusLine(trade: TradeDetail): string {
+  if (trade.status === 'draft') return 'Draft. The other person cannot see this yet.';
   if (trade.status === 'completed') return 'This trade is complete.';
   if (trade.status === 'cancelled' || trade.status === 'declined')
     return 'This trade was cancelled.';

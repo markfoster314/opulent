@@ -9,20 +9,26 @@ import type {
   TradeLinesInput,
   TradeSummary,
 } from '@opulent/shared';
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
-import { getUserByUsername, viewerAddedFriend } from '../users/service';
+import { getUserByUsername } from '../users/service';
 
 type Line = { scryfallId: string; quantity: number };
 type Side = 'offered' | 'requested';
 
 const finished = new Set(['completed', 'cancelled', 'declined']);
+const live = new Set(['proposed', 'countered', 'accepted']);
 
 export async function listTrades(db: Database, userId: string): Promise<TradeSummary[]> {
   const rows = await db
     .select()
     .from(trades)
-    .where(or(eq(trades.proposerId, userId), eq(trades.receiverId, userId)))
+    .where(
+      or(
+        eq(trades.proposerId, userId),
+        and(eq(trades.receiverId, userId), ne(trades.status, 'draft')),
+      ),
+    )
     .orderBy(desc(trades.updatedAt));
   if (rows.length === 0) return [];
 
@@ -102,12 +108,25 @@ export async function openTrade(
   const partner = await getUserByUsername(db, input.username);
   if (!partner) throw ApiError.notFound('User not found');
   if (partner.id === userId) throw ApiError.badRequest('You cannot trade with yourself.');
-  if (!(await viewerAddedFriend(db, userId, partner.id))) {
-    throw ApiError.forbidden('Add this person as a friend before you open a trade.');
-  }
 
   const incoming = normalize(input.items);
-  const open = await findOpenTrade(db, userId, partner.id);
+  const pair = await pairTrades(db, userId, partner.id);
+  const draft = pair.find((row) => row.status === 'draft' && row.proposerId === userId);
+  const open = pair.find((row) => live.has(row.status));
+
+  if (!open && draft) {
+    const merged = mergeMax(await loadSide(db, draft.id, 'requested'), incoming);
+    await assertStock(db, partner.id, merged);
+    await replaceSide(db, draft.id, 'requested', merged);
+    const updated = await saveTrade(db, draft.id, {
+      status: 'draft',
+      turnUserId: userId,
+      proposerFinalizedAt: null,
+      receiverFinalizedAt: null,
+    });
+    return toDetail(db, updated, userId);
+  }
+
   if (!open) {
     await assertStock(db, partner.id, incoming);
     const [created] = await db
@@ -115,8 +134,8 @@ export async function openTrade(
       .values({
         proposerId: userId,
         receiverId: partner.id,
-        turnUserId: partner.id,
-        status: 'proposed',
+        turnUserId: userId,
+        status: 'draft',
       })
       .returning();
     if (!created) throw ApiError.badRequest('Could not open the trade.');
@@ -181,6 +200,9 @@ async function moveTrade(
   if (finished.has(trade.status)) {
     throw ApiError.conflict('This trade is already finished.');
   }
+  if (trade.status === 'draft') {
+    return proposeDraft(db, userId, trade, input, action);
+  }
   if (trade.turnUserId !== userId) {
     throw ApiError.forbidden('Wait for the other person.');
   }
@@ -219,21 +241,67 @@ async function moveTrade(
   return toDetail(db, updated, userId);
 }
 
+/**
+ * A draft stays with the person who started it. Propose is what the other person can see.
+ * If a live trade already exists, the draft cards fold into that trade.
+ */
+async function proposeDraft(
+  db: Database,
+  userId: string,
+  trade: TradeRow,
+  input: TradeLinesInput,
+  action: 'propose' | 'finalize',
+): Promise<TradeDetail> {
+  if (action === 'finalize') {
+    throw ApiError.badRequest('Propose this trade before you finalize it.');
+  }
+  const items = normalize(input.items);
+  if (items.length === 0) throw ApiError.badRequest('Add a card before you propose.');
+  const partner = partnerId(trade, userId);
+  await assertStock(db, partner, items);
+
+  const liveTrade = (await pairTrades(db, userId, partner)).find(
+    (row) => row.id !== trade.id && live.has(row.status),
+  );
+  if (!liveTrade) {
+    await replaceSide(db, trade.id, 'requested', items);
+    const updated = await saveTrade(db, trade.id, {
+      status: 'proposed',
+      turnUserId: partner,
+      proposerFinalizedAt: null,
+      receiverFinalizedAt: null,
+    });
+    return toDetail(db, updated, userId);
+  }
+
+  const side = receiveSide(liveTrade, userId);
+  const merged = mergeMax(await loadSide(db, liveTrade.id, side), items);
+  await assertStock(db, partnerId(liveTrade, userId), merged);
+  await replaceSide(db, liveTrade.id, side, merged);
+  await db.delete(trades).where(eq(trades.id, trade.id));
+  const updated = await saveTrade(db, liveTrade.id, {
+    proposerFinalizedAt: null,
+    receiverFinalizedAt: null,
+    status: liveTrade.proposerId === userId ? 'proposed' : 'countered',
+    turnUserId: partnerId(liveTrade, userId),
+  });
+  return toDetail(db, updated, userId);
+}
+
 async function requireTrade(db: Database, tradeId: string, userId: string): Promise<TradeRow> {
   const [trade] = await db.select().from(trades).where(eq(trades.id, tradeId)).limit(1);
   if (!trade) throw ApiError.notFound('Trade not found');
   if (trade.proposerId !== userId && trade.receiverId !== userId) {
     throw ApiError.forbidden('You are not part of this trade.');
   }
+  if (trade.status === 'draft' && trade.proposerId !== userId) {
+    throw ApiError.notFound('Trade not found');
+  }
   return trade;
 }
 
-async function findOpenTrade(
-  db: Database,
-  userId: string,
-  otherId: string,
-): Promise<TradeRow | undefined> {
-  const rows = await db
+async function pairTrades(db: Database, userId: string, otherId: string): Promise<TradeRow[]> {
+  return db
     .select()
     .from(trades)
     .where(
@@ -243,7 +311,6 @@ async function findOpenTrade(
       ),
     )
     .orderBy(desc(trades.updatedAt));
-  return rows.find((row) => !finished.has(row.status));
 }
 
 async function loadSide(db: Database, tradeId: string, side: Side): Promise<Line[]> {

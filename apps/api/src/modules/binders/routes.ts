@@ -2,8 +2,8 @@ import { zValidator } from '@hono/zod-validator';
 import {
   addBinderItemSchema,
   createBinderSchema,
+  binderItemQuerySchema,
   usernameSchema,
-  paginationQuerySchema,
   slugSchema,
   updateBinderItemSchema,
   updateBinderSchema,
@@ -13,6 +13,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../../lib/context';
 import { ApiError } from '../../lib/http';
 import { optionalAuth, requireAuth, requireUser } from '../../middleware/auth';
+import { getUserByUsername } from '../users/service';
 import {
   addBinderItem,
   assertCanEdit,
@@ -23,6 +24,7 @@ import {
   getBinderByHandleAndSlug,
   getBinderById,
   listBinderItems,
+  listCollectedBinderItems,
   listBindersForOwner,
   listPublicBindersByHandle,
   removeBinderItem,
@@ -114,18 +116,54 @@ binderRoutes.post(
   },
 );
 
+/** Every card in the signed-in person's binders. */
+binderRoutes.get(
+  '/mine/items',
+  requireAuth,
+  requireUser,
+  zValidator('query', binderItemQuerySchema),
+  async (c) => {
+    return c.json(
+      await listCollectedBinderItems(
+        c.get('db'),
+        c.get('user').id,
+        c.req.valid('query'),
+        false,
+        c.get('user').id,
+      ),
+    );
+  },
+);
+
+/** Every card in this person's public binders. */
+binderRoutes.get(
+  '/by/:handle/public-items',
+  optionalAuth,
+  zValidator('param', z.object({ handle: usernameSchema })),
+  zValidator('query', binderItemQuerySchema),
+  async (c) => {
+    const db = c.get('db');
+    const user = await getUserByUsername(db, c.req.valid('param').handle);
+    if (!user) throw ApiError.notFound('User not found');
+    return c.json(
+      await listCollectedBinderItems(db, user.id, c.req.valid('query'), true, c.get('user')?.id),
+    );
+  },
+);
+
 // --- Cards inside a binder ---
 
 binderRoutes.get(
   '/:id/items',
   optionalAuth,
   zValidator('param', binderIdParam),
-  zValidator('query', paginationQuerySchema),
+  zValidator('query', binderItemQuerySchema),
   async (c) => {
     const db = c.get('db');
+    const viewerId = c.get('user')?.id;
     const binder = await getBinderById(db, c.req.valid('param').id);
-    assertCanView(binder, viewer(c.req.query('t'), c.get('user')?.id));
-    return c.json(await listBinderItems(db, binder.id, c.req.valid('query')));
+    assertCanView(binder, viewer(c.req.query('t'), viewerId));
+    return c.json(await listBinderItems(db, binder.id, c.req.valid('query'), viewerId));
   },
 );
 

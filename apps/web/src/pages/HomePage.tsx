@@ -10,11 +10,11 @@ const steps = [
   },
   {
     title: 'Share one link',
-    body: 'Send friends a link. They do not need an account to look, and a private binder stays private until you share it.',
+    body: 'Send someone a link. They do not need an account to look, and a private binder stays private until you share it.',
   },
   {
     title: 'See the overlap',
-    body: 'When a friend opens your binder while signed in, we show exactly which cards on their want list you are holding.',
+    body: 'When someone opens your binder while signed in, we show exactly which cards on their want list you are holding.',
   },
 ];
 
@@ -33,7 +33,7 @@ export function HomePage() {
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
           Opulent Tutor turns the pile of cards you are willing to trade into a shareable binder,
-          then finds the overlap with what your friends are hunting for.
+          then finds the overlap with what other people are hunting for.
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ pt: 1 }}>

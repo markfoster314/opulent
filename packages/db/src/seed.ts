@@ -11,6 +11,8 @@ import {
   friendships,
   genericWants,
   places,
+  tradeItems,
+  trades,
   users,
   wantItems,
   wantLists,
@@ -23,7 +25,7 @@ import {
  * Each binder and each want list gets 100 cards. Part of each list is shared
  * across these users. The rest of each list is unique.
  * Safe to run again. It replaces seed binders, seed want lists, seed generic
- * wants, and friendships between these ten users. It leaves every other row alone.
+ * wants, friendships, and trades between these ten users. It leaves every other row alone.
  *
  *   pnpm db:seed
  */
@@ -57,6 +59,7 @@ type Person = {
   auth0Sub: string;
   place: string;
   visibility: Visibility;
+  bio: string;
 };
 
 const PEOPLE: Person[] = [
@@ -65,60 +68,70 @@ const PEOPLE: Person[] = [
     auth0Sub: 'auth0|6ad52793a07a8bf37e40baf6',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
+    bio: 'Trading from Atlanta. Near mint copies preferred.',
   },
   {
     username: 'ava_lane',
     auth0Sub: 'seed|ava_lane',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
+    bio: 'Looking for foils and signed copies.',
   },
   {
     username: 'jordan_cole',
     auth0Sub: 'seed|jordan_cole',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
+    bio: 'Happy to meet in Atlanta for a trade.',
   },
   {
     username: 'priya_shah',
     auth0Sub: 'seed|priya_shah',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
+    bio: 'Mostly modern cards, some older staples.',
   },
   {
     username: 'sam_ortiz',
     auth0Sub: 'seed|sam_ortiz',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
+    bio: 'Will trade extras for cards on my lists.',
   },
   {
     username: 'nia_brooks',
     auth0Sub: 'seed|nia_brooks',
     place: 'Atlanta, Georgia, United States',
     visibility: 'private',
+    bio: 'Private page. Message through a trade.',
   },
   {
     username: 'chris_hale',
     auth0Sub: 'seed|chris_hale',
     place: 'Marietta, Georgia, United States',
     visibility: 'public',
+    bio: 'Just north of Atlanta, in Marietta.',
   },
   {
     username: 'devon_park',
     auth0Sub: 'seed|devon_park',
     place: 'Decatur, Georgia, United States',
     visibility: 'public',
+    bio: 'Decatur trader. Even trades welcome.',
   },
   {
     username: 'riley_nguyen',
     auth0Sub: 'seed|riley_nguyen',
     place: 'Chicago, Illinois, United States',
     visibility: 'public',
+    bio: 'Shipping from Chicago.',
   },
   {
     username: 'morgan_ellis',
     auth0Sub: 'seed|morgan_ellis',
     place: 'Seattle, Washington, United States',
     visibility: 'public',
+    bio: 'Seattle. Foils and artist proofs.',
   },
 ];
 
@@ -136,6 +149,8 @@ const WANT_PLANS = [
   { name: 'Commander upgrades', slug: WANT_SLUGS[1], visibility: 'private' as const },
   { name: 'Specs', slug: WANT_SLUGS[2], visibility: 'unlisted' as const },
 ];
+
+type StockCard = { oracleId: string; scryfallId: string };
 
 type Printing = {
   name: string;
@@ -288,6 +303,8 @@ export async function runSeed() {
 
     const held = new Map<string, Set<string>>();
     const wanted = new Map<string, Set<string>>();
+    const stock = new Map<string, StockCard[]>();
+    const wantsByUser = new Map<string, Set<string>>();
     let binderCount = 0;
     let copyCount = 0;
     let listCount = 0;
@@ -333,11 +350,17 @@ export async function runSeed() {
         await db.insert(binderItems).values(copies.map((copy) => toBinderItem(binder.id, copy)));
         binderCount += 1;
         copyCount += copies.length;
+        const pile = stock.get(person.username) ?? [];
         for (const copy of copies) {
           const owners = held.get(copy.printing.oracleId) ?? new Set<string>();
           owners.add(person.username);
           held.set(copy.printing.oracleId, owners);
+          pile.push({
+            oracleId: copy.printing.oracleId,
+            scryfallId: copy.printing.scryfallId,
+          });
         }
+        stock.set(person.username, pile);
       }
 
       const wantSlices = splitEven(wantedShared, listTotal);
@@ -375,11 +398,14 @@ export async function runSeed() {
         );
         listCount += 1;
         wantCount += group.length;
+        const wish = wantsByUser.get(person.username) ?? new Set<string>();
         for (const card of group) {
           const owners = wanted.get(card.oracleId) ?? new Set<string>();
           owners.add(person.username);
           wanted.set(card.oracleId, owners);
+          wish.add(card.oracleId);
         }
+        wantsByUser.set(person.username, wish);
       }
 
       const chosenMixes = Array.from({ length: genericTotal }, (_, offset) => {
@@ -432,6 +458,11 @@ export async function runSeed() {
       })),
     );
 
+    await db
+      .delete(trades)
+      .where(and(inArray(trades.proposerId, ids), inArray(trades.receiverId, ids)));
+    const tradeCount = await seedTrades(db, userIds, stock, wantsByUser);
+
     let sharedWants = 0;
     for (const [oracleId, wanters] of wanted) {
       const owners = held.get(oracleId);
@@ -450,6 +481,7 @@ export async function runSeed() {
     console.log(`Each binder and each want list has ${CARDS_PER_COLLECTION} cards.`);
     console.log(`${sharedWants} wants are cards another seeded user already has for trade.`);
     console.log(`${friendPairs.length} friend links between these users.`);
+    console.log(`${tradeCount} trades between these users.`);
   } finally {
     await client.end();
   }
@@ -598,6 +630,7 @@ async function upsertPerson(
     username: person.username,
     placeId,
     profileVisibility: person.visibility,
+    bio: person.bio,
     onboardedAt: existing?.onboardedAt ?? new Date(),
     updatedAt: new Date(),
   };
@@ -635,6 +668,169 @@ function toBinderItem(binderId: string, copy: OwnedCopy) {
     pricePercent: 100,
     priceAmount: '',
   };
+}
+
+type SeedTrade = {
+  proposer: string;
+  receiver: string;
+  status: 'draft' | 'proposed' | 'countered' | 'accepted' | 'completed' | 'cancelled';
+  turn: string;
+  receive: number;
+  give: number;
+  proposerFinalized?: boolean;
+  receiverFinalized?: boolean;
+};
+
+/** One of each trade state Mark can open, plus a couple between the other users. */
+const TRADE_PLANS: SeedTrade[] = [
+  { proposer: 'mark', receiver: 'ava_lane', status: 'draft', turn: 'mark', receive: 3, give: 0 },
+  {
+    proposer: 'jordan_cole',
+    receiver: 'mark',
+    status: 'proposed',
+    turn: 'mark',
+    receive: 3,
+    give: 2,
+  },
+  {
+    proposer: 'mark',
+    receiver: 'priya_shah',
+    status: 'proposed',
+    turn: 'priya_shah',
+    receive: 3,
+    give: 2,
+  },
+  {
+    proposer: 'sam_ortiz',
+    receiver: 'mark',
+    status: 'accepted',
+    turn: 'mark',
+    receive: 2,
+    give: 2,
+    proposerFinalized: true,
+  },
+  {
+    proposer: 'mark',
+    receiver: 'chris_hale',
+    status: 'accepted',
+    turn: 'chris_hale',
+    receive: 2,
+    give: 2,
+    proposerFinalized: true,
+  },
+  {
+    proposer: 'mark',
+    receiver: 'devon_park',
+    status: 'completed',
+    turn: 'devon_park',
+    receive: 2,
+    give: 2,
+    proposerFinalized: true,
+    receiverFinalized: true,
+  },
+  {
+    proposer: 'riley_nguyen',
+    receiver: 'mark',
+    status: 'cancelled',
+    turn: 'mark',
+    receive: 2,
+    give: 1,
+  },
+  {
+    proposer: 'nia_brooks',
+    receiver: 'mark',
+    status: 'countered',
+    turn: 'mark',
+    receive: 2,
+    give: 2,
+  },
+  {
+    proposer: 'morgan_ellis',
+    receiver: 'ava_lane',
+    status: 'draft',
+    turn: 'morgan_ellis',
+    receive: 2,
+    give: 0,
+  },
+  {
+    proposer: 'jordan_cole',
+    receiver: 'priya_shah',
+    status: 'proposed',
+    turn: 'priya_shah',
+    receive: 2,
+    give: 2,
+  },
+];
+
+async function seedTrades(
+  db: ReturnType<typeof drizzle>,
+  userIds: Map<string, string>,
+  stock: Map<string, StockCard[]>,
+  wantsByUser: Map<string, Set<string>>,
+): Promise<number> {
+  const now = Date.now();
+  for (const [index, plan] of TRADE_PLANS.entries()) {
+    const requested = pickCards(stock, wantsByUser, plan.receiver, plan.proposer, plan.receive);
+    const offered = pickCards(stock, wantsByUser, plan.proposer, plan.receiver, plan.give);
+    const [trade] = await db
+      .insert(trades)
+      .values({
+        proposerId: requiredId(userIds, plan.proposer),
+        receiverId: requiredId(userIds, plan.receiver),
+        turnUserId: requiredId(userIds, plan.turn),
+        status: plan.status,
+        proposerFinalizedAt: plan.proposerFinalized ? new Date(now) : null,
+        receiverFinalizedAt: plan.receiverFinalized ? new Date(now) : null,
+        updatedAt: new Date(now - index * 60_000),
+      })
+      .returning({ id: trades.id });
+    if (!trade) throw new Error(`Could not create the trade for ${plan.proposer}`);
+    const lines = [
+      ...requested.map((scryfallId) => ({
+        tradeId: trade.id,
+        side: 'requested' as const,
+        scryfallId,
+        quantity: 1,
+      })),
+      ...offered.map((scryfallId) => ({
+        tradeId: trade.id,
+        side: 'offered' as const,
+        scryfallId,
+        quantity: 1,
+      })),
+    ];
+    if (lines.length > 0) await db.insert(tradeItems).values(lines);
+  }
+  return TRADE_PLANS.length;
+}
+
+/** Cards `holder` has for trade. Prefer cards `wanter` already wants. */
+function pickCards(
+  stock: Map<string, StockCard[]>,
+  wantsByUser: Map<string, Set<string>>,
+  holder: string,
+  wanter: string,
+  limit: number,
+): string[] {
+  if (limit <= 0) return [];
+  const wish = wantsByUser.get(wanter) ?? new Set<string>();
+  const cards = stock.get(holder) ?? [];
+  const ordered = [
+    ...cards.filter((card) => wish.has(card.oracleId)),
+    ...cards.filter((card) => !wish.has(card.oracleId)),
+  ];
+  const chosen: string[] = [];
+  const seen = new Set<string>();
+  for (const card of ordered) {
+    if (seen.has(card.scryfallId)) continue;
+    seen.add(card.scryfallId);
+    chosen.push(card.scryfallId);
+    if (chosen.length === limit) break;
+  }
+  if (chosen.length < limit) {
+    throw new Error(`${holder} does not have ${limit} cards for a seed trade.`);
+  }
+  return chosen;
 }
 
 function requiredId(userIds: Map<string, string>, username: string): string {

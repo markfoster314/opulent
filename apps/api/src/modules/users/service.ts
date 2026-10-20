@@ -12,6 +12,7 @@ import { reservedUsernames, usernameSchema } from '@opulent/shared';
 import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 import { getPlace } from '../places/service';
+import { listGenericWants } from '../wants/service';
 
 export async function getUserByUsername(
   db: Database,
@@ -237,6 +238,82 @@ function isDuplicateFriend(error: unknown): boolean {
   });
 }
 
+/** Same copy rules as a binder match: language, finish, condition, and set. */
+function copyScope() {
+  return sql`
+    AND (cardinality(w.wanted_languages) = 0 OR c.lang = ANY(w.wanted_languages))
+    AND (cardinality(w.unwanted_languages) = 0 OR NOT (c.lang = ANY(w.unwanted_languages)))
+    AND (cardinality(w.wanted_finishes) = 0 OR bi.finish::text = ANY(w.wanted_finishes))
+    AND (cardinality(w.unwanted_finishes) = 0 OR NOT (bi.finish::text = ANY(w.unwanted_finishes)))
+    AND (cardinality(w.wanted_conditions) = 0 OR bi.condition::text = ANY(w.wanted_conditions))
+    AND (cardinality(w.unwanted_conditions) = 0 OR NOT (bi.condition::text = ANY(w.unwanted_conditions)))
+    AND (cardinality(w.wanted_sets) = 0 OR lower(c.set_code) = ANY(w.wanted_sets))
+    AND (cardinality(w.unwanted_sets) = 0 OR NOT (lower(c.set_code) = ANY(w.unwanted_sets)))
+  `;
+}
+
+/** Viewer wants that this person's public binders are holding for trade. */
+function binderMatchSql(ownerId: string, viewerId: string) {
+  return sql`
+    SELECT b.slug AS slug, COUNT(DISTINCT w.id)::int AS "matchCount"
+    FROM want_items w
+    JOIN cards c ON c.oracle_id = w.oracle_id
+    JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
+    JOIN binders b ON b.id = bi.binder_id
+    WHERE w.user_id = ${viewerId}
+      AND b.user_id = ${ownerId}
+      AND b.visibility = 'public'
+      AND bi.for_trade = true
+      ${copyScope()}
+    GROUP BY GROUPING SETS ((b.slug), ())
+  `;
+}
+
+/** Their public wants that the viewer is holding for trade. */
+function wantMatchSql(ownerId: string, viewerId: string) {
+  return sql`
+    SELECT wl.slug AS slug, COUNT(DISTINCT w.id)::int AS "matchCount"
+    FROM want_items w
+    JOIN want_lists wl ON wl.id = w.want_list_id
+    JOIN cards c ON c.oracle_id = w.oracle_id
+    JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
+    JOIN binders b ON b.id = bi.binder_id
+    WHERE w.user_id = ${ownerId}
+      AND wl.user_id = ${ownerId}
+      AND wl.visibility = 'public'
+      AND b.user_id = ${viewerId}
+      AND bi.for_trade = true
+      ${copyScope()}
+    GROUP BY GROUPING SETS ((wl.slug), ())
+  `;
+}
+
+async function matchCountsBySlug(db: Database, query: ReturnType<typeof binderMatchSql>) {
+  const rows = (await db.execute(query)) as unknown as {
+    slug: string | null;
+    matchCount: number | string;
+  }[];
+  const bySlug = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    const value = Number(row.matchCount);
+    if (!row.slug) total = value;
+    else if (value > 0) bySlug.set(row.slug, value);
+  }
+  return { bySlug, total };
+}
+
+function withMatchCounts<T extends { slug: string }>(
+  entries: T[],
+  bySlug: Map<string, number> | undefined,
+) {
+  if (!bySlug) return entries;
+  return entries.map((entry) => {
+    const matchCount = bySlug.get(entry.slug) ?? 0;
+    return matchCount > 0 ? { ...entry, matchCount } : entry;
+  });
+}
+
 async function listedEntries(
   db: Database,
   userId: string,
@@ -253,7 +330,7 @@ async function listedEntries(
     .orderBy(asc(table.name));
 }
 
-/** The page at /u/:username. A private page hides the lists from everyone except the owner. */
+/** The page at /u/:username. A private page hides the lists from everyone, including the owner. */
 export async function getProfile(
   db: Database,
   username: string,
@@ -262,27 +339,53 @@ export async function getProfile(
   const user = await getUserByUsername(db, username);
   if (!user) throw ApiError.notFound('User not found');
 
+  const place = user.placeId === null ? undefined : await getPlace(db, user.placeId);
   const isOwner = viewerId === user.id;
-  const isFriend = viewerId ? await viewerAddedFriend(db, viewerId, user.id) : false;
+  const isFollowing = viewerId ? await viewerAddedFriend(db, viewerId, user.id) : false;
   const profile: Profile = {
     username: user.username,
     avatarUrl: user.avatarUrl,
     bio: user.bio,
+    city: place ? { geonameId: place.geonameId, label: place.label } : null,
     visibility: user.profileVisibility,
     isOwner,
-    isFriend,
-    friendCount: await countFriends(db, user.id),
+    isFollowing,
+    followerCount: await countFollowers(db, user.id),
+    followingCount: await countFollowing(db, user.id),
   };
-  if (!isOwner && user.profileVisibility !== 'public') return profile;
+  if (user.profileVisibility !== 'public') return profile;
+
+  const [binderEntries, wantEntries] = await Promise.all([
+    listedEntries(db, user.id, binders),
+    listedEntries(db, user.id, wantLists),
+  ]);
+  const viewerCanMatch = viewerId !== undefined && viewerId !== user.id;
+  const [binderMatches, wantMatches] = viewerCanMatch
+    ? await Promise.all([
+        matchCountsBySlug(db, binderMatchSql(user.id, viewerId)),
+        matchCountsBySlug(db, wantMatchSql(user.id, viewerId)),
+      ])
+    : [undefined, undefined];
 
   return {
     ...profile,
-    binders: await listedEntries(db, user.id, binders),
-    wantLists: await listedEntries(db, user.id, wantLists),
+    ...(binderMatches && binderMatches.total > 0 ? { binderMatchCount: binderMatches.total } : {}),
+    ...(wantMatches && wantMatches.total > 0 ? { wantMatchCount: wantMatches.total } : {}),
+    binders: withMatchCounts(binderEntries, binderMatches?.bySlug),
+    wantLists: withMatchCounts(wantEntries, wantMatches?.bySlug),
+    genericWants: await listGenericWants(db, user.id),
   };
 }
 
-async function countFriends(db: Database, userId: string): Promise<number> {
+async function countFollowers(db: Database, userId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(eq(friendships.friendId, userId));
+  return Number(row?.value ?? 0);
+}
+
+async function countFollowing(db: Database, userId: string): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(friendships)
@@ -303,18 +406,27 @@ export async function viewerAddedFriend(
   return rows.length > 0;
 }
 
-/** The owner's own list, or the list of someone the viewer has added. */
-export async function listFriendsOf(
-  db: Database,
-  viewerId: string,
-  username: string,
-): Promise<Friend[]> {
+/** People this username follows. */
+export async function listFollowing(db: Database, username: string): Promise<Friend[]> {
   const user = await getUserByUsername(db, username);
   if (!user) throw ApiError.notFound('User not found');
-  if (viewerId !== user.id && !(await viewerAddedFriend(db, viewerId, user.id))) {
-    throw ApiError.forbidden('Add this person as a friend to see their friends.');
-  }
   return listFriends(db, user.id);
+}
+
+/** People who follow this username. */
+export async function listFollowers(db: Database, username: string): Promise<Friend[]> {
+  const user = await getUserByUsername(db, username);
+  if (!user) throw ApiError.notFound('User not found');
+  const follower = users;
+  return db
+    .select({
+      username: follower.username,
+      avatarUrl: follower.avatarUrl,
+    })
+    .from(friendships)
+    .innerJoin(follower, eq(follower.id, friendships.userId))
+    .where(eq(friendships.friendId, user.id))
+    .orderBy(asc(follower.username));
 }
 
 export async function listFriends(db: Database, userId: string): Promise<Friend[]> {
@@ -333,12 +445,12 @@ export async function listFriends(db: Database, userId: string): Promise<Friend[
 export async function addFriend(db: Database, userId: string, username: string): Promise<Friend> {
   const friend = await getUserByUsername(db, username);
   if (!friend) throw ApiError.notFound('No one uses that username');
-  if (friend.id === userId) throw ApiError.badRequest('You cannot add yourself');
+  if (friend.id === userId) throw ApiError.badRequest('You cannot follow yourself');
 
   try {
     await db.insert(friendships).values({ userId, friendId: friend.id });
   } catch (error) {
-    if (isDuplicateFriend(error)) throw ApiError.conflict('You already added that friend');
+    if (isDuplicateFriend(error)) throw ApiError.conflict('You already follow that person');
     throw error;
   }
 
@@ -353,5 +465,5 @@ export async function removeFriend(db: Database, userId: string, username: strin
     .delete(friendships)
     .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friend.id)))
     .returning({ id: friendships.id });
-  if (!removed[0]) throw ApiError.notFound('That person is not on your friends list');
+  if (!removed[0]) throw ApiError.notFound('You do not follow that person');
 }

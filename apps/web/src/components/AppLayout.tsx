@@ -1,5 +1,4 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import {
@@ -20,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useMe } from '../api/queries';
 import { palette } from '../theme';
+import { LogoMark } from './LogoMark';
 
 export function AppLayout() {
   const { isAuthenticated, isLoading, loginWithRedirect, logout, user } = useAuth0();
@@ -93,7 +93,7 @@ export function AppLayout() {
             to="/"
             sx={{ textDecoration: 'none', color: 'inherit', minWidth: 0, mr: { sm: 2 } }}
           >
-            <AutoStoriesIcon sx={{ color: palette.gold }} />
+            <LogoMark />
             <Typography variant="h6" noWrap sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
               Opulent{' '}
               <Box component="span" sx={{ color: palette.gold }}>

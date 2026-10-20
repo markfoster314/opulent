@@ -14,7 +14,7 @@ import type {
   WantPriority,
 } from '@opulent/shared';
 import { genericWantMatchKey, wantScopeError } from '@opulent/shared';
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
 
 const scopeColumns = {
@@ -207,10 +207,10 @@ async function ownedList(db: Database, userId: string, listId: string) {
 
 async function itemCountFor(db: Database, listId: string): Promise<number> {
   const counts = await db
-    .select({ itemCount: sql<number>`count(*)::int` })
+    .select({ itemCount: sql<number>`coalesce(sum(${wantItems.quantity}), 0)::int` })
     .from(wantItems)
     .where(eq(wantItems.wantListId, listId));
-  return counts[0]?.itemCount ?? 0;
+  return Number(counts[0]?.itemCount ?? 0);
 }
 
 /**
@@ -245,35 +245,30 @@ export function assertCanViewWantList(
 
 export async function listWantLists(db: Database, userId: string): Promise<WantList[]> {
   const rows = await db
-    .select({
-      id: wantLists.id,
-      userId: wantLists.userId,
-      slug: wantLists.slug,
-      name: wantLists.name,
-      description: wantLists.description,
-      visibility: wantLists.visibility,
-      shareToken: wantLists.shareToken,
-      createdAt: wantLists.createdAt,
-      updatedAt: wantLists.updatedAt,
-      itemCount: sql<number>`(
-        SELECT count(*)::int FROM ${wantItems}
-        WHERE ${wantItems.wantListId} = ${wantLists.id}
-      )`,
-    })
+    .select()
     .from(wantLists)
     .where(eq(wantLists.userId, userId))
     .orderBy(asc(wantLists.name), asc(wantLists.id));
 
-  return rows.map((row) =>
-    toWantList(
-      {
-        ...row,
-        shareToken: row.shareToken,
-      },
-      row.itemCount,
-      true,
-    ),
-  );
+  const totals = new Map<string, number>();
+  if (rows.length > 0) {
+    const counts = await db
+      .select({
+        id: wantItems.wantListId,
+        itemCount: sql<number>`coalesce(sum(${wantItems.quantity}), 0)::int`,
+      })
+      .from(wantItems)
+      .where(
+        inArray(
+          wantItems.wantListId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .groupBy(wantItems.wantListId);
+    for (const count of counts) totals.set(count.id, Number(count.itemCount));
+  }
+
+  return rows.map((row) => toWantList(row, totals.get(row.id) ?? 0, true));
 }
 
 export async function createWantList(
@@ -387,6 +382,24 @@ export async function listWantItems(db: Database, listId: string): Promise<WantI
     .select(wantSelection)
     .from(wantItems)
     .where(eq(wantItems.wantListId, listId))
+    .orderBy(asc(wantItems.priority), asc(wantItems.createdAt));
+  return withFaces(db, rows);
+}
+
+/** Every want across this person's lists. Public skips private and unlisted lists. */
+export async function listCollectedWants(
+  db: Database,
+  userId: string,
+  onlyPublic: boolean,
+): Promise<WantItem[]> {
+  const scope = onlyPublic
+    ? and(eq(wantItems.userId, userId), eq(wantLists.visibility, 'public'))
+    : eq(wantItems.userId, userId);
+  const rows = await db
+    .select(wantSelection)
+    .from(wantItems)
+    .innerJoin(wantLists, eq(wantLists.id, wantItems.wantListId))
+    .where(scope)
     .orderBy(asc(wantItems.priority), asc(wantItems.createdAt));
   return withFaces(db, rows);
 }

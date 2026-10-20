@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { clickableSurfaceSx } from '../theme';
+import { clickableSurfaceSx, palette } from '../theme';
 import { useBinders, useCreateBinder } from '../api/queries';
 import { PlusMinusButton } from '../components/PlusMinusButton';
 
@@ -35,6 +35,29 @@ export function BindersPage() {
 
   return (
     <Stack spacing={4}>
+      <Paper
+        component={RouterLink}
+        to="/binders/all"
+        sx={{
+          p: 2.5,
+          display: 'block',
+          ...clickableSurfaceSx,
+          borderColor: palette.steelBorder,
+          '&:hover, &:focus-visible': {
+            borderColor: palette.gold,
+            backgroundColor: palette.goldWash,
+            transform: 'translateY(-2px)',
+          },
+        }}
+      >
+        <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          All cards
+        </Typography>
+        <Typography variant="body2" color="secondary" sx={{ mt: 0.5 }}>
+          Every card across your binders
+        </Typography>
+      </Paper>
+
       <Box>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>

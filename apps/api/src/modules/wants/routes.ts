@@ -11,7 +11,9 @@ import {
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../lib/context';
+import { ApiError } from '../../lib/http';
 import { optionalAuth, requireAuth, requireUser } from '../../middleware/auth';
+import { getUserByUsername } from '../users/service';
 import {
   addWantItem,
   assertCanViewWantList,
@@ -22,6 +24,7 @@ import {
   getWantListByHandleAndSlug,
   listGenericWants,
   listWantItems,
+  listCollectedWants,
   listWantLists,
   removeGenericWant,
   removeWantItem,
@@ -65,6 +68,23 @@ wantRoutes.delete(
   async (c) => {
     await removeGenericWant(c.get('db'), c.get('user').id, c.req.valid('param').id);
     return c.body(null, 204);
+  },
+);
+
+wantRoutes.get('/mine/items', requireAuth, requireUser, async (c) => {
+  const items = await listCollectedWants(c.get('db'), c.get('user').id, false);
+  return c.json({ items });
+});
+
+wantRoutes.get(
+  '/by/:handle/public-items',
+  zValidator('param', z.object({ handle: usernameSchema })),
+  async (c) => {
+    const db = c.get('db');
+    const user = await getUserByUsername(db, c.req.valid('param').handle);
+    if (!user) throw ApiError.notFound('User not found');
+    const items = await listCollectedWants(db, user.id, true);
+    return c.json({ items });
   },
 );
 

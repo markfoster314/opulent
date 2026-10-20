@@ -20,7 +20,8 @@ import {
   addFriend,
   getProfile,
   listFriends,
-  listFriendsOf,
+  listFollowers,
+  listFollowing,
   removeFriend,
   updateProfile,
 } from './service';
@@ -163,18 +164,22 @@ userRoutes.get(
   },
 );
 
-/** Friends of this person. Only they, or someone who added them, can open the list. */
+/** People this person follows. */
 userRoutes.get(
-  '/:username/friends',
-  requireAuth,
-  requireUser,
+  '/:username/following',
   zValidator('param', z.object({ username: usernameSchema })),
   async (c) => {
-    const items = await listFriendsOf(
-      c.get('db'),
-      c.get('user').id,
-      c.req.valid('param').username,
-    );
+    const items = await listFollowing(c.get('db'), c.req.valid('param').username);
+    return c.json({ items });
+  },
+);
+
+/** People who follow this person. */
+userRoutes.get(
+  '/:username/followers',
+  zValidator('param', z.object({ username: usernameSchema })),
+  async (c) => {
+    const items = await listFollowers(c.get('db'), c.req.valid('param').username);
     return c.json({ items });
   },
 );

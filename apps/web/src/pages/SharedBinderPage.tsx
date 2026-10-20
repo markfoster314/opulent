@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { TradeMatch } from '@opulent/shared';
+import type { BinderItem, TradeMatch } from '@opulent/shared';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -24,6 +24,9 @@ import {
   useProfile,
   useSharedBinder,
 } from '../api/queries';
+import { emptyBinderSearch, binderSearchIsActive, type BinderSearch } from '../binderSearch';
+import { BinderCardDialog } from '../components/BinderCardDialog';
+import { BinderSearchFields } from '../components/BinderSearchFields';
 import { CardGrid } from '../components/CardGrid';
 import { binderTileCaption, binderTilePrice, CardTile } from '../components/CardTile';
 import { palette } from '../theme';
@@ -36,6 +39,8 @@ export function SharedBinderPage() {
   const openTrade = useOpenTrade();
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<BinderItem | null>(null);
+  const [search, setSearch] = useState<BinderSearch>(emptyBinderSearch);
 
   // Unlisted binders are reachable only with ?t=<share token>.
   const shareToken = searchParams.get('t') ?? undefined;
@@ -43,15 +48,19 @@ export function SharedBinderPage() {
   const binderQuery = useSharedBinder(handle, slug, shareToken);
   const binderId = binderQuery.data?.id;
   const profile = useProfile(isAuthenticated ? handle : undefined);
+  const wantListReady = Boolean(isAuthenticated && profile.data && !profile.data.isOwner);
+  const itemSearch = { ...search, onWantList: wantListReady && search.onWantList };
 
-  const itemsQuery = useBinderItems(binderId, shareToken);
+  const itemsQuery = useBinderItems(binderId, shareToken, itemSearch);
   const matchesQuery = useBinderMatches(binderId, isAuthenticated);
 
   if (binderQuery.isLoading) return <CircularProgress />;
   if (binderQuery.error) return <Alert severity="error">{binderQuery.error.message}</Alert>;
 
   const matches = matchesQuery.data?.items ?? [];
-  const canTrade = Boolean(profile.data?.isFriend && !profile.data.isOwner && matches.length > 0);
+  const ownBinder = profile.data?.isOwner === true;
+  const canTrade = Boolean(isAuthenticated && profile.data && !ownBinder && matches.length > 0);
+  const canAddCard = Boolean(handle) && (!isAuthenticated || (profile.isSuccess && !ownBinder));
 
   function toggleCard(scryfallId: string, max: number) {
     setPicked((current) => {
@@ -124,7 +133,7 @@ export function SharedBinderPage() {
                 onClick={() => setPicking((open) => !open)}
                 sx={{ width: { xs: '100%', sm: 'auto' }, flexShrink: 0 }}
               >
-                {picking ? 'Close' : 'Open a trade'}
+                {picking ? 'Close' : 'Start a draft'}
               </Button>
             )}
           </Stack>
@@ -196,7 +205,7 @@ export function SharedBinderPage() {
                 disabled={openTrade.isPending || readyItems.length === 0}
                 sx={{ width: { xs: '100%', sm: 'auto' }, alignSelf: { sm: 'flex-start' } }}
               >
-                Send trade
+                Save draft
               </Button>
             </Stack>
           )}
@@ -207,10 +216,30 @@ export function SharedBinderPage() {
         <Alert severity="info">No overlap with your want list yet.</Alert>
       )}
 
+      {canAddCard && (
+        <Alert severity="info">
+          Click a card to see its details. Cards marked for trade can be added from there.
+        </Alert>
+      )}
+
       <Divider />
 
+      <BinderSearchFields value={search} onChange={setSearch} canUseWantList={wantListReady} />
+
       {itemsQuery.isLoading && <CircularProgress />}
+      {itemsQuery.isFetching && !itemsQuery.isFetchingNextPage && itemsQuery.isPlaceholderData && (
+        <Typography color="text.secondary">Updating the list.</Typography>
+      )}
       {itemsQuery.error && <Alert severity="error">{itemsQuery.error.message}</Alert>}
+      {itemsQuery.isSuccess &&
+        !itemsQuery.isPlaceholderData &&
+        flattenPages(itemsQuery.data?.pages).length === 0 && (
+          <Alert severity="info">
+            {binderSearchIsActive(itemSearch)
+              ? 'No cards match this search.'
+              : 'No cards here yet.'}
+          </Alert>
+        )}
 
       <CardGrid>
         {flattenPages(itemsQuery.data?.pages).map((item) =>
@@ -229,6 +258,7 @@ export function SharedBinderPage() {
               photoUrl={item.photoUrl}
               caption={binderTileCaption(item)}
               foil={item.finish === 'foil'}
+              onClick={canAddCard ? () => setSelected(item) : undefined}
             />
           ) : null,
         )}
@@ -245,6 +275,14 @@ export function SharedBinderPage() {
           </Button>
         </Box>
       )}
+
+      <BinderCardDialog
+        key={selected?.id ?? 'closed'}
+        item={selected}
+        ownerUsername={canAddCard ? handle : undefined}
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+      />
     </Stack>
   );
 }

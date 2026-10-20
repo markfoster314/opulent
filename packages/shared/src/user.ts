@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { profileVisibilitySchema } from './enums';
 import { placeIdSchema, placeRefSchema } from './place';
+import { genericWantSchema } from './want';
 
 /**
  * Usernames that must never belong to a person.
@@ -176,19 +177,29 @@ const profileEntrySchema = z.object({
   slug: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  /** Cards in this list that overlap with the signed-in viewer. Omitted for the owner. */
+  matchCount: z.number().int().nonnegative().optional(),
 });
 
-/** What /u/:username shows. Lists are left off when the page is private and you are not the owner. */
+/** What /u/:username shows. A private page leaves the lists off for everyone. */
 export const profileSchema = z.object({
   username: usernameSchema,
   avatarUrl: z.string().url().nullable(),
   bio: z.string().nullable(),
+  city: placeRefSchema.nullable(),
   visibility: profileVisibilitySchema,
   isOwner: z.boolean(),
-  isFriend: z.boolean(),
-  friendCount: z.number().int().nonnegative(),
+  /** True when the viewer follows this person. */
+  isFollowing: z.boolean(),
+  followerCount: z.number().int().nonnegative(),
+  followingCount: z.number().int().nonnegative(),
+  /** Matches across every public binder. Omitted for the owner and for signed-out visitors. */
+  binderMatchCount: z.number().int().nonnegative().optional(),
+  /** Matches across every public want list. Omitted for the owner and for signed-out visitors. */
+  wantMatchCount: z.number().int().nonnegative().optional(),
   binders: z.array(profileEntrySchema).optional(),
   wantLists: z.array(profileEntrySchema).optional(),
+  genericWants: z.array(genericWantSchema).optional(),
 });
 export type Profile = z.infer<typeof profileSchema>;
 

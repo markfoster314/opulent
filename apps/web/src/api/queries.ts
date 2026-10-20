@@ -32,13 +32,28 @@ import type {
   UpdateWantListInput,
   WantItem,
 } from '@opulent/shared';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth0 } from '@auth0/auth0-react';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { binderSearchParams, emptyBinderSearch, type BinderSearch } from '../binderSearch';
+import { useDebounced } from '../hooks/useDebounced';
 import { useApi } from './ApiProvider';
 
 /** Query key factory. Keeping the keys in one place makes cache busting reliable. */
 export const queryKeys = {
   me: ['me'] as const,
   friends: ['friends'] as const,
+  followers: (username: string) => ['followers', username] as const,
+  following: (username: string) => ['following', username] as const,
+  allBinderItems: ['binders', 'all', 'items'] as const,
+  publicBinderItems: (handle: string) => ['binders', 'public', handle, 'items'] as const,
+  allWantItems: ['wants', 'all', 'items'] as const,
+  publicWantItems: (handle: string) => ['wants', 'public', handle, 'items'] as const,
   profile: (username: string) => ['profile', username] as const,
   usernameAvailability: (username: string) => ['username-available', username] as const,
   binders: ['binders'] as const,
@@ -57,6 +72,7 @@ export const queryKeys = {
     ['cards', 'printings', oracleId, setFilter] as const,
   cardSets: (oracleId: string) => ['cards', 'sets', oracleId] as const,
   cardLanguages: (scryfallId: string) => ['cards', 'languages', scryfallId] as const,
+  card: (scryfallId: string) => ['cards', scryfallId] as const,
   sharedBinder: (handle: string, slug: string) => ['binder', 'by', handle, slug] as const,
   sharedWantList: (handle: string, slug: string) => ['wants', 'by', handle, slug] as const,
   sharedWantItems: (handle: string, slug: string) =>
@@ -142,18 +158,30 @@ export function useUpdateProfile() {
 
 export function useProfile(username: string | undefined) {
   const api = useApi();
+  const { isAuthenticated } = useAuth0();
+  const me = useMe(isAuthenticated);
+  const viewer = isAuthenticated ? (me.data?.id ?? 'signed-in') : 'guest';
   return useQuery({
-    queryKey: queryKeys.profile(username ?? ''),
+    queryKey: [...queryKeys.profile(username ?? ''), viewer],
     queryFn: () => api<Profile>(`/v1/users/${username}`),
+    enabled: Boolean(username) && (!isAuthenticated || me.isFetched),
+  });
+}
+
+export function useFollowers(username: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.followers(username ?? ''),
+    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/followers`),
     enabled: Boolean(username),
   });
 }
 
-export function useFriends(username: string | undefined) {
+export function useFollowing(username: string | undefined) {
   const api = useApi();
   return useQuery({
-    queryKey: [...queryKeys.friends, username ?? ''],
-    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/friends`),
+    queryKey: queryKeys.following(username ?? ''),
+    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/following`),
     enabled: Boolean(username),
   });
 }
@@ -166,6 +194,8 @@ export function useAddFriend() {
       api<Friend>('/v1/users/me/friends', { method: 'POST', body: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      queryClient.invalidateQueries({ queryKey: ['followers'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
@@ -179,6 +209,8 @@ export function useRemoveFriend() {
       api<void>(`/v1/users/me/friends/${username}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      queryClient.invalidateQueries({ queryKey: ['followers'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
@@ -212,20 +244,68 @@ const BINDER_PAGE_SIZE = 24;
  * The server hands back an opaque `nextCursor` rather than a page number, so
  * adding a card mid-scroll cannot duplicate or skip a row.
  */
-export function useBinderItems(binderId: string | undefined, shareToken?: string) {
+function useDebouncedSearch(search: BinderSearch): BinderSearch {
+  const q = useDebounced(search.q);
+  const set = useDebounced(search.set);
+  return { ...search, q, set };
+}
+
+export function useBinderItems(
+  binderId: string | undefined,
+  shareToken?: string,
+  search: BinderSearch = emptyBinderSearch,
+) {
   const api = useApi();
+  const filters = useDebouncedSearch(search);
   return useInfiniteQuery({
-    queryKey: queryKeys.binderItems(binderId ?? 'none'),
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: String(BINDER_PAGE_SIZE) });
-      if (pageParam) params.set('cursor', pageParam);
-      return api<Page<BinderItem>>(`/v1/binders/${binderId}/items?${params.toString()}`, {
-        ...(shareToken ? { shareToken } : {}),
-      });
-    },
+    queryKey: [...queryKeys.binderItems(binderId ?? 'none'), filters],
+    queryFn: ({ pageParam }) =>
+      api<Page<BinderItem>>(
+        `/v1/binders/${binderId}/items?${binderSearchParams(filters, pageParam, BINDER_PAGE_SIZE).toString()}`,
+        { ...(shareToken ? { shareToken } : {}) },
+      ),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: keepPreviousData,
     enabled: Boolean(binderId),
+  });
+}
+
+function binderItemPage(api: ReturnType<typeof useApi>, path: string, pageParam: string | null) {
+  const params = new URLSearchParams({ limit: String(BINDER_PAGE_SIZE) });
+  if (pageParam) params.set('cursor', pageParam);
+  return api<Page<BinderItem>>(`${path}?${params.toString()}`);
+}
+
+/** Every card across the signed-in person's binders. */
+export function useAllBinderItems(enabled: boolean) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.allBinderItems,
+    queryFn: ({ pageParam }) => binderItemPage(api, '/v1/binders/mine/items', pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled,
+  });
+}
+
+/** Every card in this person's public binders. */
+export function usePublicBinderItems(
+  handle: string | undefined,
+  search: BinderSearch = emptyBinderSearch,
+) {
+  const api = useApi();
+  const filters = useDebouncedSearch(search);
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.publicBinderItems(handle ?? ''), filters],
+    queryFn: ({ pageParam }) =>
+      api<Page<BinderItem>>(
+        `/v1/binders/by/${handle}/public-items?${binderSearchParams(filters, pageParam, BINDER_PAGE_SIZE).toString()}`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: keepPreviousData,
+    enabled: Boolean(handle),
   });
 }
 
@@ -252,6 +332,15 @@ export function usePlaceSearch(term: string) {
     queryFn: () => api<{ items: PlaceRef[] }>(`/v1/places?q=${encodeURIComponent(term)}`),
     enabled: term.trim().length >= 2,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCard(scryfallId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.card(scryfallId ?? ''),
+    queryFn: () => api<Card>(`/v1/cards/${scryfallId}`),
+    enabled: Boolean(scryfallId),
   });
 }
 
@@ -379,6 +468,26 @@ export function useWantItems(listId: string | undefined) {
     queryKey: queryKeys.wantItems(listId ?? 'none'),
     queryFn: () => api<{ items: WantItem[] }>(`/v1/wants/lists/${listId}/items`),
     enabled: Boolean(listId),
+  });
+}
+
+/** Every want across the signed-in person's lists. */
+export function useAllWantItems(enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.allWantItems,
+    queryFn: () => api<{ items: WantItem[] }>('/v1/wants/mine/items'),
+    enabled,
+  });
+}
+
+/** Every want in this person's public lists. */
+export function usePublicWantItems(handle: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.publicWantItems(handle ?? ''),
+    queryFn: () => api<{ items: WantItem[] }>(`/v1/wants/by/${handle}/public-items`),
+    enabled: Boolean(handle),
   });
 }
 

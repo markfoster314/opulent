@@ -7,6 +7,7 @@ import {
   type CardFinish,
 } from './enums';
 import { cardSchema, priceForFinish, type CardPrices } from './card';
+import { paginationQuerySchema } from './pagination';
 
 /** Lowercase letters, numbers and single hyphens. Used in share URLs. */
 export const slugSchema = z
@@ -178,3 +179,60 @@ export const tradeMatchSchema = z.object({
   printings: z.array(binderItemSchema),
 });
 export type TradeMatch = z.infer<typeof tradeMatchSchema>;
+
+/** Rarities a binder search can narrow to. These are the ones Scryfall prints on a card. */
+export const binderRaritySchema = z.enum([
+  'common',
+  'uncommon',
+  'rare',
+  'mythic',
+  'special',
+  'bonus',
+]);
+export type BinderRarity = z.infer<typeof binderRaritySchema>;
+
+export const binderRarityLabels: Record<BinderRarity, string> = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  mythic: 'Mythic',
+  special: 'Special',
+  bonus: 'Bonus',
+};
+
+function blankToUndefined(value: unknown) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+/** A checked box arrives as the string "true". Missing means leave that rule off. */
+function queryFlag() {
+  return z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true');
+}
+
+/**
+ * Filters for the cards inside a binder.
+ *
+ * Name and set are typed text. The rest pick one value, or a mark that must be present.
+ * `onWantList` keeps cards that sit on one of the signed-in viewer's want lists.
+ */
+export const binderItemQuerySchema = paginationQuerySchema.extend({
+  q: z.preprocess(blankToUndefined, z.string().max(80).optional()),
+  set: z.preprocess(blankToUndefined, z.string().max(80).optional()),
+  finish: z.preprocess(blankToUndefined, cardFinishSchema.optional()),
+  condition: z.preprocess(blankToUndefined, cardConditionSchema.optional()),
+  language: z.preprocess(blankToUndefined, cardLanguageSchema.optional()),
+  rarity: z.preprocess(blankToUndefined, binderRaritySchema.optional()),
+  forTrade: queryFlag(),
+  signed: queryFlag(),
+  altered: queryFlag(),
+  misprint: queryFlag(),
+  miscut: queryFlag(),
+  artistProof: queryFlag(),
+  onWantList: queryFlag(),
+});
+export type BinderItemQuery = z.infer<typeof binderItemQuerySchema>;

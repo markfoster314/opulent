@@ -7,10 +7,10 @@ import { users } from './users';
 /**
  * One trade between two people.
  *
- * The proposer opened it. The receiver is the other person. `turnUserId` is
- * whose move it is. A finalize time is set when that person says yes to the
- * current cards. Both times must be set before the trade is complete. Changing
- * the cards clears both times.
+ * The proposer opened it. The receiver is the other person. A draft is visible
+ * only to the proposer until they propose it. `turnUserId` is whose move it is.
+ * A finalize time is set when that person says yes to the current cards. Both
+ * times must be set before the trade is complete. Changing the cards clears both times.
  */
 export const trades = pgTable(
   'trades',

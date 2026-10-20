@@ -1,13 +1,13 @@
 import type { BinderRow, Database } from '@opulent/db';
-import { binderItems, binders, cards, users } from '@opulent/db';
+import { binderItems, binders, cards, users, wantItems } from '@opulent/db';
 import type {
   AddBinderItemInput,
   BinderItem,
+  BinderItemQuery,
   CardFinish,
   CreateBinderInput,
   ItemPrice,
   Page,
-  PaginationQuery,
   TradeMatch,
   UpdateBinderInput,
   UpdateBinderItemInput,
@@ -18,7 +18,7 @@ import {
   marketPrices,
   parseCustomAmount,
 } from '@opulent/shared';
-import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   assertPaperPrinting,
@@ -71,7 +71,7 @@ export function toBinderResponse(binder: BinderRow, viewerUserId: string | undef
 }
 
 export async function listBindersForOwner(db: Database, userId: string) {
-  return db
+  const rows = await db
     .select({
       id: binders.id,
       userId: binders.userId,
@@ -82,15 +82,18 @@ export async function listBindersForOwner(db: Database, userId: string) {
       shareToken: binders.shareToken,
       createdAt: binders.createdAt,
       updatedAt: binders.updatedAt,
-      itemCount: sql<number>`(
-        SELECT COALESCE(SUM(${binderItems.quantity}), 0)::int
-        FROM ${binderItems}
-        WHERE ${binderItems.binderId} = ${binders.id}
-      )`,
     })
     .from(binders)
     .where(eq(binders.userId, userId))
     .orderBy(asc(binders.name));
+
+  const counts = await cardTotals(
+    db,
+    binderItems.binderId,
+    binderItems.quantity,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => ({ ...row, itemCount: counts.get(row.id) ?? 0 }));
 }
 
 export async function listPublicBindersByHandle(db: Database, handle: string) {
@@ -346,21 +349,26 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
  * Keyset pagination ordered by card name. The cursor carries the last name and
  * row id, so adding a card mid-scroll never duplicates or skips a row.
  */
+/** Parsed search, or just a page size. A missing flag means that rule is off. */
+type BinderItemListQuery = Partial<BinderItemQuery> & { limit: number };
+
 export async function listBinderItems(
   db: Database,
   binderId: string,
-  pagination: PaginationQuery,
+  pagination: BinderItemListQuery,
+  viewerId?: string,
 ): Promise<Page<BinderItem>> {
   const after = decodeCursor(pagination.cursor);
 
   const rows = await selectBinderItems(db)
     .where(
-      after
-        ? and(
-            eq(binderItems.binderId, binderId),
-            sql`(${cards.name}, ${binderItems.id}) > (${after.name}, ${after.id}::uuid)`,
-          )
-        : eq(binderItems.binderId, binderId),
+      and(
+        eq(binderItems.binderId, binderId),
+        after
+          ? sql`(${cards.name}, ${binderItems.id}) > (${after.name}, ${after.id}::uuid)`
+          : undefined,
+        ...binderItemFilters(pagination, viewerId),
+      ),
     )
     .orderBy(asc(cards.name), asc(binderItems.id))
     .limit(pagination.limit + 1);
@@ -373,6 +381,103 @@ export async function listBinderItems(
     items: page.map(toBinderItem),
     nextCursor: hasMore && last ? encodeCursor(last.cardName, last.id) : null,
   };
+}
+
+/** Every card this person holds, across their binders. Public skips private and unlisted binders. */
+export async function listCollectedBinderItems(
+  db: Database,
+  userId: string,
+  pagination: BinderItemListQuery,
+  onlyPublic: boolean,
+  viewerId?: string,
+): Promise<Page<BinderItem>> {
+  const after = decodeCursor(pagination.cursor);
+  const scope = onlyPublic
+    ? and(eq(binders.userId, userId), eq(binders.visibility, 'public'))
+    : eq(binders.userId, userId);
+
+  const rows = await selectBinderItems(db)
+    .innerJoin(binders, eq(binders.id, binderItems.binderId))
+    .where(
+      and(
+        scope,
+        after
+          ? sql`(${cards.name}, ${binderItems.id}) > (${after.name}, ${after.id}::uuid)`
+          : undefined,
+        ...binderItemFilters(pagination, viewerId),
+      ),
+    )
+    .orderBy(asc(cards.name), asc(binderItems.id))
+    .limit(pagination.limit + 1);
+
+  const hasMore = rows.length > pagination.limit;
+  const page = hasMore ? rows.slice(0, pagination.limit) : rows;
+  const last = page[page.length - 1];
+
+  return {
+    items: page.map(toBinderItem),
+    nextCursor: hasMore && last ? encodeCursor(last.cardName, last.id) : null,
+  };
+}
+
+/** Turns a typed name into a safe contains-match. % and _ stay as letters, not wildcards. */
+function containsPattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+}
+
+function binderItemFilters(query: BinderItemListQuery, viewerId: string | undefined): SQL[] {
+  const clauses: SQL[] = [];
+  if (query.q) {
+    clauses.push(sql`${cards.name} ILIKE ${containsPattern(query.q)} ESCAPE '\\'`);
+  }
+  if (query.set) {
+    clauses.push(
+      sql`(
+        lower(${cards.setCode}) = lower(${query.set})
+        OR ${cards.setName} ILIKE ${containsPattern(query.set)} ESCAPE '\\'
+      )`,
+    );
+  }
+  if (query.finish) clauses.push(eq(binderItems.finish, query.finish));
+  if (query.condition) clauses.push(eq(binderItems.condition, query.condition));
+  if (query.language) clauses.push(eq(binderItems.language, query.language));
+  if (query.rarity) clauses.push(eq(cards.rarity, query.rarity));
+  if (query.forTrade) clauses.push(eq(binderItems.forTrade, true));
+  if (query.signed) clauses.push(eq(binderItems.signed, true));
+  if (query.altered) clauses.push(eq(binderItems.altered, true));
+  if (query.misprint) clauses.push(eq(binderItems.misprint, true));
+  if (query.miscut) clauses.push(eq(binderItems.miscut, true));
+  if (query.artistProof) clauses.push(eq(binderItems.artistProof, true));
+  if (query.onWantList) {
+    if (!viewerId) throw ApiError.unauthorized('Sign in to filter by your want lists.');
+    clauses.push(sql`EXISTS (
+      SELECT 1 FROM ${wantItems}
+      WHERE ${wantItems.userId} = ${viewerId}
+        AND ${wantItems.oracleId} = ${cards.oracleId}
+    )`);
+  }
+  return clauses;
+}
+
+/** Total copies in each binder. A binder with no cards is left out of the map. */
+async function cardTotals(
+  db: Database,
+  idColumn: typeof binderItems.binderId,
+  quantityColumn: typeof binderItems.quantity,
+  ids: string[],
+) {
+  const totals = new Map<string, number>();
+  if (ids.length === 0) return totals;
+  const rows = await db
+    .select({
+      id: idColumn,
+      itemCount: sql<number>`coalesce(sum(${quantityColumn}), 0)::int`,
+    })
+    .from(binderItems)
+    .where(inArray(idColumn, ids))
+    .groupBy(idColumn);
+  for (const row of rows) totals.set(row.id, Number(row.itemCount));
+  return totals;
 }
 
 function encodeCursor(name: string, id: string): string {
