@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40">
-  <rect x="2" y="2" width="28" height="36" rx="4" fill="#B8860B" />
+  <rect x="2" y="2" width="28" height="36" rx="4" fill="#B8860B" stroke="#0B0B0C" stroke-width="2" />
   <path
     fill="#0B0B0C"
     fill-rule="evenodd"

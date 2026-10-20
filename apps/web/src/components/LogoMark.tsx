@@ -10,7 +10,16 @@ export function LogoMark() {
       aria-hidden
       sx={{ width: 26, height: 32, flexShrink: 0, display: 'block' }}
     >
-      <rect x="2" y="2" width="28" height="36" rx="4" fill={palette.gold} />
+      <rect
+        x="2"
+        y="2"
+        width="28"
+        height="36"
+        rx="4"
+        fill={palette.gold}
+        stroke={palette.background}
+        strokeWidth="2"
+      />
       <path
         fill={palette.background}
         fillRule="evenodd"
