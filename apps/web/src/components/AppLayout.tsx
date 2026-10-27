@@ -123,7 +123,7 @@ export function AppLayout() {
             pathname={location.pathname}
             onSignIn={() => void loginWithRedirect()}
             onSignOut={() => void logout({ logoutParams: { returnTo: window.location.origin } })}
-            sx={{ display: { xs: 'none', sm: 'flex' } }}
+            sx={{ display: { xs: 'none', sm: 'flex' }, flexWrap: 'wrap', rowGap: 0.5 }}
           />
 
           <Box sx={{ flexGrow: 1 }} />
@@ -288,7 +288,9 @@ function BarActions({
             component={RouterLink}
             to="/collection"
             color={
-              pathname.startsWith('/collection') || pathname.startsWith('/groups/')
+              (pathname.startsWith('/collection') &&
+                !pathname.startsWith('/collectionReference')) ||
+              pathname.startsWith('/groups/')
                 ? 'primary'
                 : 'inherit'
             }
@@ -296,6 +298,15 @@ function BarActions({
             sx={itemSx}
           >
             My collection
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/collectionReference"
+            color={pathname.startsWith('/collectionReference') ? 'primary' : 'inherit'}
+            fullWidth={stacked}
+            sx={itemSx}
+          >
+            Old My collection
           </Button>
           <Button
             component={RouterLink}

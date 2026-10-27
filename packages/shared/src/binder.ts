@@ -195,6 +195,27 @@ export const collectionSummarySchema = z.object({
 });
 export type CollectionSummary = z.infer<typeof collectionSummarySchema>;
 
+/** One row of the most expensive cards table on the collection dashboard. */
+export const collectionHighlightSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  /** Short set code, for the narrow column. */
+  setCode: z.string(),
+  finish: cardFinishSchema,
+  quantity: z.number().int().positive(),
+  imageUrl: z.string().nullable(),
+  /** Asking price for one copy, in dollars. Null when no price is known. */
+  price: z.string().nullable(),
+  /** Dollars gained or lost in the past week. Null means no change, or nothing to compare. */
+  weekChange: z.string().nullable(),
+});
+export type CollectionHighlight = z.infer<typeof collectionHighlightSchema>;
+
+export const collectionHighlightsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export type CollectionHighlightsQuery = z.infer<typeof collectionHighlightsQuerySchema>;
+
 /** What a visitor learns about a trade binder before the cards load. */
 export const tradeBinderSchema = z.object({
   username: z.string(),

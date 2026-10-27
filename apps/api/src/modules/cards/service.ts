@@ -1,14 +1,16 @@
 import type { Database } from '@opulent/db';
-import { cards } from '@opulent/db';
+import { cardPriceSeries, cards } from '@opulent/db';
 import type {
   Card,
   CardChoices,
   CardFinish,
   CardLanguage,
+  CardPriceSeries,
   CardPrintingsQuery,
   CardSearchQuery,
   CardSet,
   Page,
+  PriceRange,
   SetSearchQuery,
 } from '@opulent/shared';
 import {
@@ -442,4 +444,38 @@ function decodeOffset(cursor?: string): number {
   const offset = Number(cursor);
   if (!Number.isInteger(offset) || offset < 0) throw ApiError.badRequest('Malformed cursor');
   return offset;
+}
+
+/** Days back for each chart window. */
+const PRICE_RANGE_DAYS: Record<PriceRange, number> = {
+  '1w': 7,
+  '1m': 30,
+  '6m': 182,
+  '1y': 365,
+};
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Daily prices for one printing over a window, with the last stored price
+ * carried forward. History holds change points, so most days have no row of
+ * their own; `cardPriceSeries` fills them.
+ */
+export async function getCardPriceSeries(
+  db: Database,
+  scryfallId: string,
+  range: PriceRange,
+): Promise<CardPriceSeries> {
+  const today = new Date();
+  const from = new Date(
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() - PRICE_RANGE_DAYS[range],
+    ),
+  );
+  const points = await cardPriceSeries(db, scryfallId, isoDay(from), isoDay(today));
+  return { range, points };
 }

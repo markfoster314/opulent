@@ -15,6 +15,9 @@ import {
   assertCanViewTradeBinder,
   type CollectionItemInput,
   findTradeBinderMatches,
+  getCollectionItem,
+  listCollectionCardsByValue,
+  listCollectionHighlights,
   listCollectionItems,
   updateCollectionItem,
 } from './modules/collection/service';
@@ -28,6 +31,7 @@ import {
   removeMembership,
 } from './modules/groups/service';
 import {
+  getCardPriceSeries,
   getPrintingsByOracleId,
   listLanguagePrintings,
   listLanguagesForPrinting,
@@ -695,6 +699,89 @@ async function main() {
         }),
       )),
     );
+
+    // --- Dashboard highlights ---
+
+    const highlights = await listCollectionHighlights(db, owner.id, 10);
+    check('highlights returned rows', highlights.length > 0, `${highlights.length}`);
+    check(
+      'highlights are sorted by asking price',
+      highlights.every(
+        (row, index) =>
+          index === 0 || Number(highlights[index - 1]!.price ?? 0) >= Number(row.price ?? 0),
+      ),
+    );
+    check(
+      'highlight prices are dollar strings',
+      highlights.every((row) => row.price !== null && /^\d+\.\d{2}$/.test(row.price)),
+    );
+    check(
+      'weekly change is signed or empty',
+      highlights.every((row) => row.weekChange === null || /^[+-]\d+\.\d{2}$/.test(row.weekChange)),
+    );
+    const cheapest = highlights[highlights.length - 1]!;
+    await updateCollectionItem(db, owner.id, cheapest.id, {
+      price: { kind: 'custom', amount: '900' },
+    });
+    const withCustom = await listCollectionHighlights(db, owner.id, 10);
+    check(
+      'a custom price beats the market price',
+      withCustom[0]?.id === cheapest.id && withCustom[0]?.price === '900.00',
+      `${withCustom[0]?.price}`,
+    );
+    check(
+      'the highlights limit is respected',
+      (await listCollectionHighlights(db, owner.id, 2)).length <= 2,
+    );
+
+    const allCards = await listCollectionCardsByValue(db, owner.id, { limit: 2 });
+    check(
+      'the cards page respects its page size',
+      allCards.items.length === 2,
+      `${allCards.items.length}`,
+    );
+    check('the cards page returns a cursor', Boolean(allCards.nextCursor));
+    const nextCards = await listCollectionCardsByValue(db, owner.id, {
+      limit: 2,
+      cursor: allCards.nextCursor ?? undefined,
+    });
+    const allCardIds = new Set(allCards.items.map((item) => item.id));
+    check(
+      'the next cards page does not repeat a row',
+      nextCards.items.every((item) => !allCardIds.has(item.id)),
+    );
+
+    // --- Expanded row: detail and price history ---
+
+    const detail = await getCollectionItem(db, owner.id, bumped.id);
+    check(
+      'the detail returns the card record',
+      detail.card?.name === 'Smoke Test Bolt',
+      detail.card?.name,
+    );
+    check(
+      'the detail refuses another owner',
+      !(await resolves(() => getCollectionItem(db, viewer.id, bumped.id))),
+    );
+
+    // Two change points: one just outside the week window, one inside it.
+    await db.execute(sql`
+      INSERT INTO card_price_history (scryfall_id, recorded_on, usd, usd_foil, usd_etched)
+      VALUES
+        (${PRINTING_A}::uuid, CURRENT_DATE - 8, 10.00, 20.00, NULL),
+        (${PRINTING_A}::uuid, CURRENT_DATE - 2, 11.00, 22.00, NULL)
+      ON CONFLICT (scryfall_id, recorded_on) DO UPDATE SET
+        usd = excluded.usd,
+        usd_foil = excluded.usd_foil
+    `);
+    const week = await getCardPriceSeries(db, PRINTING_A, '1w');
+    check('a week of prices has eight days', week.points.length === 8, `${week.points.length}`);
+    check(
+      'the week carries the old price forward and ends on the new one',
+      week.points[0]?.prices.usd === '10.00' && week.points[7]?.prices.usd === '11.00',
+      `${week.points[0]?.prices.usd} -> ${week.points[7]?.prices.usd}`,
+    );
+    await db.execute(sql`DELETE FROM card_price_history WHERE scryfall_id = ${PRINTING_A}::uuid`);
 
     // --- Trade binder doors ---
 

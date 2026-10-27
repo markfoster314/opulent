@@ -60,6 +60,10 @@ export const cardSchema = z.object({
   imageUris: cardImageUrisSchema.nullable(),
   prices: cardPricesSchema.nullable(),
   scryfallUri: z.string().nullable(),
+  /** Rules text, promoted from the raw object for the detail view. */
+  oracleText: z.string().nullable().optional(),
+  /** The illustrator, promoted from the raw object for the detail view. */
+  artist: z.string().nullable().optional(),
   /**
    * Shop links Scryfall attaches to this printing. A field is missing when that
    * shop has no page for the card.
@@ -171,3 +175,24 @@ export function formatUsd(value: string | null | undefined): string | null {
   if (!Number.isFinite(amount)) return null;
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
+
+/** The windows the price chart offers. */
+export const priceRangeSchema = z.enum(['1w', '1m', '6m', '1y']);
+export type PriceRange = z.infer<typeof priceRangeSchema>;
+
+/** One day of prices. History carries the last known price forward. */
+export const cardPricePointSchema = z.object({
+  recordedOn: z.string(),
+  prices: cardPricesSchema,
+});
+export type CardPricePoint = z.infer<typeof cardPricePointSchema>;
+
+export const cardPriceSeriesSchema = z.object({
+  range: priceRangeSchema,
+  points: z.array(cardPricePointSchema),
+});
+export type CardPriceSeries = z.infer<typeof cardPriceSeriesSchema>;
+
+export const cardPriceSeriesQuerySchema = z.object({
+  range: priceRangeSchema.default('1y'),
+});

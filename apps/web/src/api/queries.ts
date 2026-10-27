@@ -4,7 +4,9 @@ import type {
   AddWantItemInput,
   CardGroup,
   CardChoices,
+  CardPriceSeries,
   CardSet,
+  CollectionHighlight,
   CollectionImportInput,
   CollectionImportResult,
   CollectionSummary,
@@ -24,6 +26,7 @@ import type {
   Profile,
   PlaceRef,
   Page,
+  PriceRange,
   TradeMatch,
   TradeChoices,
   TradeDetail,
@@ -228,6 +231,54 @@ export function useCollectionSummary(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.collectionSummary,
     queryFn: () => api<CollectionSummary>('/v1/collection/summary'),
+    enabled,
+  });
+}
+
+/** The dashboard table: the priciest stacks plus their one-week move. */
+export function useCollectionHighlights(enabled: boolean, limit = 10) {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...queryKeys.collection, 'highlights', limit] as const,
+    queryFn: () =>
+      api<{ items: CollectionHighlight[] }>(`/v1/collection/highlights?limit=${limit}`),
+    enabled,
+  });
+}
+
+/** Every card ranked by value, one page at a time. */
+/** One stack, with its groups and card detail. Fetched when a row expands. */
+export function useCollectionItem(itemId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...queryKeys.collection, 'item', itemId ?? 'none'] as const,
+    queryFn: () => api<CollectionItem>(`/v1/collection/items/${itemId}`),
+    enabled: Boolean(itemId),
+  });
+}
+
+/** Daily prices for one printing over a chosen window. */
+export function useCardPriceSeries(scryfallId: string | undefined, range: PriceRange) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['cards', 'price-series', scryfallId ?? 'none', range] as const,
+    queryFn: () => api<CardPriceSeries>(`/v1/cards/${scryfallId}/prices?range=${range}`),
+    enabled: Boolean(scryfallId),
+  });
+}
+
+export function useCollectionCardsByValue(enabled: boolean) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.collection, 'cardsByValue'] as const,
+    queryFn: ({ pageParam }) =>
+      api<Page<CollectionHighlight>>(
+        `/v1/collection/cards?limit=50${
+          pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''
+        }`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled,
   });
 }

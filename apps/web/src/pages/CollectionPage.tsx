@@ -21,7 +21,6 @@ import {
   useCollectionItems,
   useCollectionSummary,
   useCreateGroup,
-  useExportCollection,
   useGroups,
   useMe,
   useRemoveCollectionItem,
@@ -29,7 +28,9 @@ import {
 } from '../api/queries';
 import { binderSearchIsActive, emptyBinderSearch, type BinderSearch } from '../binderSearch';
 import { AddCardPanel } from '../components/AddCardPanel';
+import { CollectionHeader } from '../components/CollectionHeader';
 import { CollectionItemTile } from '../components/CollectionItemTile';
+import { MostExpensiveCards } from '../components/MostExpensiveCards';
 import { BinderSearchFields } from '../components/BinderSearchFields';
 import { CardGrid } from '../components/CardGrid';
 import { CardSearchField } from '../components/CardSearchField';
@@ -37,21 +38,6 @@ import { PlusMinusButton } from '../components/PlusMinusButton';
 import { TradeBinderSettings } from '../components/TradeBinderSettings';
 import { takePendingAdd } from '../pendingAdd';
 import { clickableSurfaceSx, palette } from '../theme';
-
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-
-/** Hands the CSV text to the browser as a file download. */
-function downloadCsv(csv: string) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'opulent-tutor-collection.csv';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * Every card the signed-in person owns, in one place.
@@ -70,7 +56,6 @@ export function CollectionPage() {
   const addItem = useAddCollectionItem();
   const updateItem = useUpdateCollectionItem();
   const removeItem = useRemoveCollectionItem();
-  const exportCsv = useExportCollection();
 
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
   const draftTaken = useRef(false);
@@ -117,48 +102,9 @@ export function CollectionPage() {
         </Alert>
       )}
       {addItem.error && !draftCard && <Alert severity="error">{addItem.error.message}</Alert>}
-      <Stack spacing={1}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1}
-          justifyContent="space-between"
-          alignItems={{ sm: 'center' }}
-        >
-          <Typography variant="h1">My collection</Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
-            <Button
-              component={RouterLink}
-              to="/collection/import"
-              variant="outlined"
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              Import CSV
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => exportCsv.mutate(undefined, { onSuccess: downloadCsv })}
-              disabled={exportCsv.isPending}
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              {exportCsv.isPending ? 'Preparing…' : 'Export CSV'}
-            </Button>
-          </Stack>
-        </Stack>
-        {exportCsv.error && <Alert severity="error">{exportCsv.error.message}</Alert>}
-        {totals && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
-            <Chip label={`${money.format(Number(totals.marketValue))} market value`} />
-            <Chip
-              color="primary"
-              variant="outlined"
-              label={`${totals.forTradeCount} for trade · ${money.format(Number(totals.forTradeValue))}`}
-            />
-          </Stack>
-        )}
-        {summary.error && <Alert severity="error">{summary.error.message}</Alert>}
-      </Stack>
+      <CollectionHeader title="My collection" totals={totals} summaryError={summary.error} />
+
+      <MostExpensiveCards enabled={isAuthenticated} />
 
       {me.data && <TradeBinderSettings me={me.data} forTradeCount={totals?.forTradeCount ?? 0} />}
 

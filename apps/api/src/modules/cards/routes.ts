@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator';
 import {
+  cardPriceSeriesQuerySchema,
   cardPrintingsQuerySchema,
   cardSearchQuerySchema,
   setSearchQuerySchema,
@@ -10,6 +11,7 @@ import type { AppEnv } from '../../lib/context';
 import { ApiError } from '../../lib/http';
 import {
   getCardById,
+  getCardPriceSeries,
   getPrintingsByOracleId,
   listLanguagePrintings,
   listOracleChoices,
@@ -41,6 +43,17 @@ cardRoutes.get('/:id/languages', zValidator('param', uuidParam), async (c) => {
   if (items.length === 0) throw ApiError.notFound('Card not found');
   return c.json({ items });
 });
+
+cardRoutes.get(
+  '/:id/prices',
+  zValidator('param', uuidParam),
+  zValidator('query', cardPriceSeriesQuerySchema),
+  async (c) => {
+    return c.json(
+      await getCardPriceSeries(c.get('db'), c.req.valid('param').id, c.req.valid('query').range),
+    );
+  },
+);
 
 cardRoutes.get('/:id', zValidator('param', uuidParam), async (c) => {
   const card = await getCardById(c.get('db'), c.req.valid('param').id);

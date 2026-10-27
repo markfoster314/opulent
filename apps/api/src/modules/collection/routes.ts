@@ -1,8 +1,10 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   addCollectionItemSchema,
+  collectionHighlightsQuerySchema,
   collectionItemQuerySchema,
   collectionImportSchema,
+  paginationQuerySchema,
   updateCollectionItemSchema,
 } from '@opulent/shared';
 import { Hono } from 'hono';
@@ -11,7 +13,10 @@ import type { AppEnv } from '../../lib/context';
 import { requireAuth, requireUser } from '../../middleware/auth';
 import {
   addCollectionItem,
+  getCollectionItem,
   getCollectionSummary,
+  listCollectionCardsByValue,
+  listCollectionHighlights,
   listCollectionItems,
   removeCollectionItem,
   updateCollectionItem,
@@ -34,12 +39,41 @@ collectionRoutes.get('/summary', async (c) => {
   return c.json(await getCollectionSummary(c.get('db'), c.get('user').id));
 });
 
+/** Every card in the collection, ranked by value, one page at a time. */
+collectionRoutes.get('/cards', zValidator('query', paginationQuerySchema), async (c) => {
+  return c.json(
+    await listCollectionCardsByValue(c.get('db'), c.get('user').id, c.req.valid('query')),
+  );
+});
+
+/** The dashboard table: the priciest stacks, with their one-week move. */
+collectionRoutes.get(
+  '/highlights',
+  zValidator('query', collectionHighlightsQuerySchema),
+  async (c) => {
+    return c.json({
+      items: await listCollectionHighlights(
+        c.get('db'),
+        c.get('user').id,
+        c.req.valid('query').limit,
+      ),
+    });
+  },
+);
+
 collectionRoutes.get('/items', zValidator('query', collectionItemQuerySchema), async (c) => {
   return c.json(await listCollectionItems(c.get('db'), c.get('user').id, c.req.valid('query')));
 });
 
 collectionRoutes.post('/items', zValidator('json', addCollectionItemSchema), async (c) => {
   return c.json(await addCollectionItem(c.get('db'), c.get('user').id, c.req.valid('json')), 201);
+});
+
+/** One stack, with everything the expanded row shows. */
+collectionRoutes.get('/items/:itemId', zValidator('param', itemParam), async (c) => {
+  return c.json(
+    await getCollectionItem(c.get('db'), c.get('user').id, c.req.valid('param').itemId),
+  );
 });
 
 collectionRoutes.patch(

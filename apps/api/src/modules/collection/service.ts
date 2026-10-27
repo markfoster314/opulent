@@ -10,12 +10,14 @@ import {
 import type {
   AddCollectionItemInput,
   CardFinish,
+  CollectionHighlight,
   CollectionItem,
   CollectionItemQuery,
   CollectionSummary,
   GroupRef,
   ItemPrice,
   Page,
+  PaginationQuery,
   TradeBinder,
   TradeMatch,
   UpdateCollectionItemInput,
@@ -164,6 +166,13 @@ const collectionItemSelection = {
   cardImageUris: cards.imageUris,
   cardPrices: cards.prices,
   cardFinishes: cards.finishes,
+  cardLayout: cards.layout,
+  cardTypeLine: cards.typeLine,
+  cardManaCost: cards.manaCost,
+  cardScryfallUri: cards.scryfallUri,
+  cardReleasedAt: cards.releasedAt,
+  cardOracleText: sql<string | null>`${cards.raw}->>'oracle_text'`,
+  cardArtist: sql<string | null>`${cards.raw}->>'artist'`,
 };
 
 type CollectionItemJoinRow = Awaited<ReturnType<typeof selectCollectionItems>>[number];
@@ -251,16 +260,235 @@ function toCollectionItem(row: CollectionItemJoinRow, groups: GroupRef[]): Colle
       collectorNumber: row.cardCollectorNumber,
       rarity: row.cardRarity,
       lang: row.language,
-      layout: null,
-      typeLine: null,
-      manaCost: null,
+      layout: row.cardLayout,
+      typeLine: row.cardTypeLine,
+      manaCost: row.cardManaCost,
       finishes: (row.cardFinishes ?? []).filter(isCardFinish),
       imageUris: row.cardImageUris ?? null,
       prices: marketPrices(row.cardPrices, row.englishPrices),
-      scryfallUri: null,
-      releasedAt: null,
+      scryfallUri: row.cardScryfallUri,
+      oracleText: row.cardOracleText,
+      artist: row.cardArtist,
+      releasedAt: row.cardReleasedAt,
     },
   };
+}
+
+interface ValueRow {
+  id: string;
+  name: string;
+  setCode: string;
+  finish: string;
+  quantity: number;
+  imageUrl: string | null;
+  askingNow: string | null;
+  sortPrice: string;
+  oldAsking: string | null;
+}
+
+interface ValueCursor {
+  price: string;
+  id: string;
+}
+
+function encodeValueCursor(price: string, id: string): string {
+  return Buffer.from(`${price}\u0000${id}`, 'utf8').toString('base64url');
+}
+
+function decodeValueCursor(cursor: string): ValueCursor {
+  const [price, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('\u0000');
+  if (!price || !id || !Number.isFinite(Number(price))) {
+    throw ApiError.badRequest('Malformed cursor');
+  }
+  return { price, id };
+}
+
+function toCollectionHighlight(row: ValueRow): CollectionHighlight {
+  const price = row.askingNow === null ? null : Number(row.askingNow);
+  const old = row.oldAsking === null ? null : Number(row.oldAsking);
+  const change = price === null || old === null ? null : Math.round((price - old) * 100) / 100;
+
+  return {
+    id: row.id,
+    name: row.name,
+    setCode: row.setCode,
+    finish: row.finish as CollectionHighlight['finish'],
+    quantity: Number(row.quantity),
+    imageUrl: row.imageUrl,
+    price: price === null ? null : price.toFixed(2),
+    weekChange:
+      change === null || change === 0 ? null : `${change > 0 ? '+' : ''}${change.toFixed(2)}`,
+  };
+}
+
+/**
+ * Cards in one collection, ranked by the asking price of a single copy.
+ *
+ * The asking price is the market price for the stack's finish, unless the owner
+ * set a percent or a custom amount, in which case the owner's number wins. A
+ * non-English printing falls back to the English printing of the same set and
+ * number, like `marketPrices`.
+ *
+ * The weekly figure compares that number with the price in force seven days
+ * ago. History stores change points rather than a row per day, so "seven days
+ * ago" means the newest row on or before that date. A custom price is fixed by
+ * the owner, so it reports no change.
+ *
+ * `pricedOnly` is the dashboard: the ten most valuable cards. Without it the
+ * list is every card, and a stack with no known price sorts last with a dash.
+ * The cursor carries the sort price and the row id, so a page never repeats or
+ * skips a row.
+ */
+async function queryCardsByValue(
+  db: Database,
+  userId: string,
+  options: { limit: number; cursor?: ValueCursor; pricedOnly: boolean },
+): Promise<Page<CollectionHighlight>> {
+  const { cursor, pricedOnly } = options;
+
+  const rows = (await db.execute(sql`
+    WITH scoped AS (
+      SELECT
+        ci.id,
+        ci.scryfall_id,
+        ci.finish,
+        ci.quantity,
+        ci.price_kind,
+        ci.price_percent,
+        ci.price_amount,
+        c.name,
+        c.set_code,
+        c.image_uris,
+        ec.scryfall_id AS english_scryfall_id,
+        CASE ci.finish::text
+          WHEN 'foil' THEN NULLIF(c.prices->>'usd_foil', '')
+          WHEN 'etched' THEN NULLIF(c.prices->>'usd_etched', '')
+          ELSE NULLIF(c.prices->>'usd', '')
+        END AS own_market,
+        CASE ci.finish::text
+          WHEN 'foil' THEN NULLIF(ec.prices->>'usd_foil', '')
+          WHEN 'etched' THEN NULLIF(ec.prices->>'usd_etched', '')
+          ELSE NULLIF(ec.prices->>'usd', '')
+        END AS english_market
+      FROM collection_items ci
+      JOIN cards c ON c.scryfall_id = ci.scryfall_id
+      LEFT JOIN cards ec
+        ON ec.set_code = c.set_code
+       AND ec.collector_number = c.collector_number
+       AND ec.lang = 'en'
+       AND ec.layout IS DISTINCT FROM 'art_series'
+       AND jsonb_exists(ec.raw->'games', 'paper')
+      WHERE ci.user_id = ${userId}
+        AND c.game = ${CARD_GAME}
+    ),
+    asking AS (
+      SELECT
+        scoped.*,
+        CASE price_kind
+          WHEN 'custom' THEN NULLIF(price_amount, '')::numeric
+          WHEN 'percent' THEN
+            ROUND(COALESCE(own_market::numeric, english_market::numeric) * price_percent / 100.0, 2)
+          ELSE COALESCE(own_market::numeric, english_market::numeric)
+        END AS asking_now
+      FROM scoped
+    ),
+    keyed AS (
+      SELECT *, COALESCE(asking_now, 0) AS sort_price FROM asking
+    ),
+    ranked AS (
+      SELECT * FROM keyed
+      WHERE TRUE
+        ${pricedOnly ? sql`AND asking_now > 0` : sql``}
+        ${
+          cursor
+            ? sql`AND (sort_price, id) < (${cursor.price}::numeric, ${cursor.id}::uuid)`
+            : sql``
+        }
+      ORDER BY sort_price DESC, id DESC
+      LIMIT ${options.limit + 1}
+    )
+    SELECT
+      r.id,
+      r.name,
+      r.set_code AS "setCode",
+      r.finish::text AS finish,
+      r.quantity,
+      COALESCE(
+        r.image_uris->>'normal',
+        r.image_uris->>'large',
+        r.image_uris->>'small'
+      ) AS "imageUrl",
+      CASE WHEN r.asking_now IS NULL THEN NULL ELSE r.asking_now::text END AS "askingNow",
+      r.sort_price::text AS "sortPrice",
+      (
+        CASE r.price_kind
+          WHEN 'custom' THEN NULLIF(r.price_amount, '')::numeric
+          WHEN 'percent' THEN
+            ROUND(COALESCE(old_own.price, old_english.price) * r.price_percent / 100.0, 2)
+          ELSE COALESCE(old_own.price, old_english.price)
+        END
+      )::text AS "oldAsking"
+    FROM ranked r
+    LEFT JOIN LATERAL (
+      SELECT
+        CASE r.finish::text
+          WHEN 'foil' THEN h.usd_foil
+          WHEN 'etched' THEN h.usd_etched
+          ELSE h.usd
+        END::numeric AS price
+      FROM card_price_history h
+      WHERE h.scryfall_id = r.scryfall_id
+        AND h.recorded_on <= CURRENT_DATE - 7
+      ORDER BY h.recorded_on DESC
+      LIMIT 1
+    ) old_own ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        CASE r.finish::text
+          WHEN 'foil' THEN h.usd_foil
+          WHEN 'etched' THEN h.usd_etched
+          ELSE h.usd
+        END::numeric AS price
+      FROM card_price_history h
+      WHERE h.scryfall_id = r.english_scryfall_id
+        AND h.recorded_on <= CURRENT_DATE - 7
+      ORDER BY h.recorded_on DESC
+      LIMIT 1
+    ) old_english ON true
+    ORDER BY r.sort_price DESC, r.id DESC
+  `)) as unknown as ValueRow[];
+
+  const hasMore = rows.length > options.limit;
+  const page = hasMore ? rows.slice(0, options.limit) : rows;
+  const last = page[page.length - 1];
+
+  return {
+    items: page.map(toCollectionHighlight),
+    nextCursor: hasMore && last ? encodeValueCursor(last.sortPrice, last.id) : null,
+  };
+}
+
+/** The dashboard: the ten most valuable stacks, always priced. */
+export async function listCollectionHighlights(
+  db: Database,
+  userId: string,
+  limit: number,
+): Promise<CollectionHighlight[]> {
+  const page = await queryCardsByValue(db, userId, { limit, pricedOnly: true });
+  return page.items;
+}
+
+/** Every card, ranked by value. Unpriced stacks come last with a dash. */
+export async function listCollectionCardsByValue(
+  db: Database,
+  userId: string,
+  query: PaginationQuery,
+): Promise<Page<CollectionHighlight>> {
+  return queryCardsByValue(db, userId, {
+    limit: query.limit,
+    pricedOnly: false,
+    ...(query.cursor ? { cursor: decodeValueCursor(query.cursor) } : {}),
+  });
 }
 
 /** Every group each of these stacks sits in, keyed by item id. */
@@ -524,6 +752,21 @@ export async function addCollectionItem(
   if (!row) throw new ApiError('internal_error', 'Could not read back the added card');
   const groups = await loadGroupsForItems(db, [id]);
   return toCollectionItem(row, groups.get(id) ?? []);
+}
+
+/** One stack, with its groups and the card detail the expanded row shows. */
+export async function getCollectionItem(
+  db: Database,
+  userId: string,
+  itemId: string,
+): Promise<CollectionItem> {
+  const rows = await selectCollectionItems(db)
+    .where(and(eq(collectionItems.id, itemId), eq(collectionItems.userId, userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Card not found in your collection');
+  const groups = await loadGroupsForItems(db, [itemId]);
+  return toCollectionItem(row, groups.get(itemId) ?? []);
 }
 
 export async function updateCollectionItem(
