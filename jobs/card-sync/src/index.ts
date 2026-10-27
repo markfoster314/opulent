@@ -2,6 +2,7 @@ import { createDatabase, resolveConnectionString } from '@opulent/db';
 import { loadEnv } from '@opulent/db/env';
 import { importCatalog } from './importer';
 import { recordDailyPrices } from './prices';
+import { snapshotCollectionValues } from './snapshots';
 import { scryfallSource } from './scryfall';
 
 loadEnv();
@@ -28,12 +29,14 @@ async function main() {
   const source = scryfallSource(bulkType);
   const stats = await importCatalog(db, source);
   const priced = await recordDailyPrices(db);
+  const snapped = await snapshotCollectionValues(db);
 
   const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(
     `${source.name} done in ${seconds}s: read ${stats.read}, written ${stats.written}, skipped ${stats.skipped}`,
   );
   console.log(`${priced} price rows recorded for today.`);
+  console.log(`${snapped} collection value snapshots written.`);
 }
 
 main().catch((error: unknown) => {

@@ -1,18 +1,31 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
-import { Alert, Box, Button, IconButton, Link, Paper, Stack, Typography } from '@mui/material';
+import {
+  Alert,
+  Autocomplete,
+  Box,
+  Button,
+  Collapse,
+  IconButton,
+  Link,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import type { AddCollectionItemInput, Card, CardLanguage } from '@opulent/shared';
 import {
   askingPrice,
   cardLanguageOrEnglish,
   formatUsd,
+  NOTES_MAX_LENGTH,
   parseCustomAmount,
   parsePhotoLink,
   priceForFinish,
 } from '@opulent/shared';
-import { useEffect, useRef, useState } from 'react';
-import { palette } from '../theme';
-import { useCardLanguages } from '../api/queries';
+import { useAuth0 } from '@auth0/auth0-react';
+import { useEffect, useState } from 'react';
+import { useCardLanguages, useGroups } from '../api/queries';
 import type { CardDetails } from './CardDetailsFields';
 import {
   CardDetailsFields,
@@ -68,9 +81,9 @@ export function AddCardPanel({
 }: AddCardPanelProps) {
   const [step, setStep] = useState<'set' | 'details'>('set');
   const [hasChosenSet, setHasChosenSet] = useState(false);
+  /** The first set expansion animates; later step switches are instant. */
+  const [settled, setSettled] = useState(false);
   const [printing, setPrinting] = useState<Card>(card);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const skipFirstScroll = useRef(true);
   const [details, setDetails] = useState<CardDetails>({
     quantity: '1',
     finish: defaultFinish(card.finishes),
@@ -87,6 +100,7 @@ export function AddCardPanel({
     priceKind: 'market',
     pricePercent: '100',
     priceAmount: marketDollar(card.prices, defaultFinish(card.finishes)),
+    groupIds: [],
   });
 
   /**
@@ -118,19 +132,10 @@ export function AddCardPanel({
     setStep('details');
   }
 
-  // The set list can be long. After a choice, bring the new step into view
-  // so the form is not left below the fold.
-  useEffect(() => {
-    if (skipFirstScroll.current) {
-      skipFirstScroll.current = false;
-      return;
-    }
-    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [step]);
-
   const quantityError = isQuantityInvalid(details.quantity);
   const priceError = isPriceInvalid(details);
   const photoError = isPhotoLinkInvalid(details.photoUrl);
+  const notesError = details.notes.length > NOTES_MAX_LENGTH;
   const quantity = Number(details.quantity);
   const chosenPrice = priceFromDetails(details);
 
@@ -154,7 +159,7 @@ export function AddCardPanel({
   if (lineTotal) priceCaption = `${priceCaption} · ${quantity} copies about ${lineTotal}`;
 
   function handleAdd() {
-    if (quantityError || priceError || photoError || !chosenPrice) return;
+    if (quantityError || priceError || photoError || notesError || !chosenPrice) return;
     const photoUrl = parsePhotoLink(details.photoUrl);
     onAdd({
       scryfallId: printing.scryfallId,
@@ -169,13 +174,14 @@ export function AddCardPanel({
       artistProof: details.artistProof,
       forTrade: details.forTrade,
       price: chosenPrice,
+      groupIds: details.groupIds,
       ...(details.notes.trim() ? { notes: details.notes.trim() } : {}),
       ...(photoUrl ? { photoUrl } : {}),
     });
   }
 
   return (
-    <Paper ref={panelRef} sx={{ p: 3, borderColor: palette.goldLight }}>
+    <Paper sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
         <Stack spacing={1} sx={{ minWidth: 0 }}>
           <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
@@ -200,24 +206,28 @@ export function AddCardPanel({
                 Change set
               </Button>
             </>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Choose the set you have.
-            </Typography>
-          )}
+          ) : null}
         </Stack>
         <IconButton onClick={onCancel} aria-label="Cancel adding this card" size="small">
           <CloseIcon />
         </IconButton>
       </Stack>
 
-      {step === 'set' ? (
+      <Collapse
+        in={step === 'set'}
+        timeout={settled ? 0 : 240}
+        appear
+        unmountOnExit
+        onEntered={() => setSettled(true)}
+      >
         <PrintingPicker
           oracleId={card.oracleId}
           selectedId={hasChosenSet ? printing.scryfallId : ''}
           onSelect={handleSelectPrinting}
         />
-      ) : (
+      </Collapse>
+
+      <Collapse in={step === 'details'} timeout={settled ? 0 : 240} unmountOnExit>
         <DetailsStep
           cardName={card.name}
           printing={printing}
@@ -238,6 +248,7 @@ export function AddCardPanel({
           quantityError={quantityError}
           priceError={priceError}
           photoError={photoError}
+          notesError={notesError}
           formattedUnitPrice={formattedUnitPrice}
           priceCaption={priceCaption}
           priceKind={details.priceKind}
@@ -248,7 +259,7 @@ export function AddCardPanel({
           onSelectPrinting={handleSelectPrinting}
           foldAdvanced={foldAdvanced}
         />
-      )}
+      </Collapse>
     </Paper>
   );
 }
@@ -261,6 +272,7 @@ function DetailsStep({
   quantityError,
   priceError,
   photoError,
+  notesError,
   formattedUnitPrice,
   priceCaption,
   priceKind,
@@ -278,6 +290,7 @@ function DetailsStep({
   quantityError: boolean;
   priceError: boolean;
   photoError: boolean;
+  notesError: boolean;
   formattedUnitPrice: string | null;
   priceCaption: string;
   priceKind: CardDetails['priceKind'];
@@ -292,6 +305,10 @@ function DetailsStep({
   const languagesQuery = useCardLanguages(printing.scryfallId);
   const languagePrintings = languagesQuery.data?.items;
   const printedLanguages = languagePrintings?.map((card) => cardLanguageOrEnglish(card.lang));
+  const { isAuthenticated } = useAuth0();
+  const groupsQuery = useGroups(isAuthenticated);
+  const groupOptions = groupsQuery.data?.items ?? [];
+  const selectedGroups = groupOptions.filter((group) => details.groupIds.includes(group.id));
 
   useEffect(() => {
     if (!languagePrintings || languagePrintings.length === 0) return;
@@ -416,7 +433,7 @@ function DetailsStep({
         </Stack>
       </Stack>
 
-      <Stack spacing={3}>
+      <Stack spacing={2}>
         <CardDetailsFields
           value={details}
           onChange={(patch) => {
@@ -436,7 +453,24 @@ function DetailsStep({
           languagesReady={languagesQuery.isSuccess}
           prices={printing.prices}
           foldAdvanced={foldAdvanced}
+          columns={2}
         />
+
+        {groupOptions.length > 0 && (
+          <Autocomplete
+            multiple
+            filterSelectedOptions
+            size="small"
+            options={groupOptions}
+            value={selectedGroups}
+            getOptionLabel={(group) => group.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            onChange={(_event, next) => onDetails({ groupIds: next.map((group) => group.id) })}
+            renderInput={(params) => (
+              <TextField {...params} label="Groups" placeholder="Add to a group" />
+            )}
+          />
+        )}
 
         {error && <Alert severity="error">{error}</Alert>}
 
@@ -454,7 +488,7 @@ function DetailsStep({
           <Button
             variant="contained"
             onClick={onAdd}
-            disabled={quantityError || priceError || photoError || pending}
+            disabled={quantityError || priceError || photoError || notesError || pending}
           >
             {pending ? 'Adding…' : 'Add to collection'}
           </Button>

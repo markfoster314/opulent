@@ -169,6 +169,13 @@
       "when": 1793064902533,
       "tag": "0023_collection_model",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793140671525,
+      "tag": "0024_dry_bastion",
+      "breakpoints": true
     }
   ]
 }

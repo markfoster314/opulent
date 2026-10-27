@@ -1,10 +1,13 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   addCollectionItemSchema,
+  collectionCardsQuerySchema,
   collectionHighlightsQuerySchema,
   collectionItemQuerySchema,
   collectionImportSchema,
-  paginationQuerySchema,
+  collectionMoversQuerySchema,
+  collectionValueBreakdownQuerySchema,
+  collectionValueHistoryQuerySchema,
   updateCollectionItemSchema,
 } from '@opulent/shared';
 import { Hono } from 'hono';
@@ -17,11 +20,13 @@ import {
   getCollectionSummary,
   listCollectionCardsByValue,
   listCollectionHighlights,
+  listCollectionMovers,
   listCollectionItems,
   removeCollectionItem,
   updateCollectionItem,
 } from './service';
 import { exportCollectionCsv, importCollection } from './import';
+import { getCollectionValueBreakdown, getCollectionValueHistory } from './value';
 
 /**
  * The signed-in person's own cards, as one collection.
@@ -40,9 +45,46 @@ collectionRoutes.get('/summary', async (c) => {
 });
 
 /** Every card in the collection, ranked by value, one page at a time. */
-collectionRoutes.get('/cards', zValidator('query', paginationQuerySchema), async (c) => {
+collectionRoutes.get('/cards', zValidator('query', collectionCardsQuerySchema), async (c) => {
+  const { limit, cursor, sort, dir, range, changeBy, ...filters } = c.req.valid('query');
   return c.json(
-    await listCollectionCardsByValue(c.get('db'), c.get('user').id, c.req.valid('query')),
+    await listCollectionCardsByValue(c.get('db'), c.get('user').id, {
+      limit,
+      cursor,
+      sort,
+      dir,
+      range,
+      changeBy,
+      filters,
+    }),
+  );
+});
+
+/** The whole collection's value, one point per day. */
+collectionRoutes.get(
+  '/value-history',
+  zValidator('query', collectionValueHistoryQuerySchema),
+  async (c) => {
+    const { range } = c.req.valid('query');
+    return c.json(await getCollectionValueHistory(c.get('db'), c.get('user').id, range));
+  },
+);
+
+/** Current asking value, split by one card factor. */
+collectionRoutes.get(
+  '/value-breakdown',
+  zValidator('query', collectionValueBreakdownQuerySchema),
+  async (c) => {
+    const { by } = c.req.valid('query');
+    return c.json(await getCollectionValueBreakdown(c.get('db'), c.get('user').id, by));
+  },
+);
+
+/** Biggest gainers and losers for the dashboard. */
+collectionRoutes.get('/movers', zValidator('query', collectionMoversQuerySchema), async (c) => {
+  const { limit, range, changeBy } = c.req.valid('query');
+  return c.json(
+    await listCollectionMovers(c.get('db'), c.get('user').id, { limit, range, changeBy }),
   );
 });
 

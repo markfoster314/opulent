@@ -1,8 +1,25 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Box, Collapse, Divider, Paper, Stack, Typography } from '@mui/material';
-import type { CollectionHighlight } from '@opulent/shared';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import {
+  Box,
+  Button,
+  Collapse,
+  Divider,
+  IconButton,
+  Paper,
+  Popper,
+  Stack,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import type { CollectionHighlight, CollectionSort, SortDirection } from '@opulent/shared';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { palette } from '../theme';
+import { FoilSheen } from './FoilSheen';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -68,21 +85,139 @@ function artCropSx() {
   };
 }
 
-/** One square of card artwork, flush with the row's left edge. */
-function ArtSquare({ url }: { url: string | null }) {
+/**
+ * One square of card artwork, flush with the row's left edge.
+ *
+ * Hovering shows the whole card to the right of the square, top-aligned with
+ * the row. The preview is portalled so the table cannot clip it.
+ */
+function ArtSquare({ url, foil }: { url: string | null; foil: boolean }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+
+  return (
+    <>
+      <Box
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse' && url) setAnchor(event.currentTarget);
+        }}
+        onPointerLeave={() => setAnchor(null)}
+        sx={{
+          width: ART_SIZE,
+          height: ART_SIZE,
+          flexShrink: 0,
+          position: 'relative',
+          overflow: 'hidden',
+          backgroundColor: palette.surfaceRaised,
+        }}
+      >
+        {url && <Box component="img" src={url} alt="" loading="lazy" sx={artCropSx()} />}
+        {foil && url && <FoilSheen />}
+      </Box>
+
+      <Popper
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        placement="right-start"
+        modifiers={[{ name: 'offset', options: { offset: [8, 0] } }]}
+        sx={{ zIndex: (theme) => theme.zIndex.modal, pointerEvents: 'none' }}
+      >
+        <Paper
+          sx={{
+            p: 0.5,
+            border: `1px solid ${palette.goldBorder}`,
+            backgroundColor: palette.surfaceRaised,
+          }}
+        >
+          <Box
+            component="img"
+            src={url ?? ''}
+            alt=""
+            sx={{ width: 200, display: 'block', borderRadius: 0.5 }}
+          />
+        </Paper>
+      </Popper>
+    </>
+  );
+}
+
+/**
+ * A column title that sorts the table.
+ *
+ * The down caret always means the column's natural order: A to Z for the name,
+ * and largest first for the two numbers. Clicking the active column flips it,
+ * which shows the up caret and the reverse order.
+ */
+function SortHeader({
+  label,
+  column,
+  sort,
+  dir,
+  onSortChange,
+}: {
+  label: string;
+  column: CollectionSort;
+  sort: CollectionSort | undefined;
+  dir: SortDirection | undefined;
+  onSortChange: (sort: CollectionSort, dir: SortDirection) => void;
+}) {
+  const active = sort === column;
+  const nextDir: SortDirection = active
+    ? dir === 'asc'
+      ? 'desc'
+      : 'asc'
+    : column === 'name'
+      ? 'asc'
+      : 'desc';
+
+  // Down means the natural order: A-Z for text, biggest first for numbers.
+  const downCaret = column === 'name' ? dir === 'asc' : dir === 'desc';
+
   return (
     <Box
-      sx={{
-        width: ART_SIZE,
-        height: ART_SIZE,
-        flexShrink: 0,
-        position: 'relative',
-        overflow: 'hidden',
-        backgroundColor: palette.surfaceRaised,
-      }}
+      role="columnheader"
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      sx={{ display: 'flex', justifyContent: 'inherit', minWidth: 0 }}
     >
-      {url && <Box component="img" src={url} alt="" loading="lazy" sx={artCropSx()} />}
+      <Button
+        size="small"
+        onClick={() => onSortChange(column, nextDir)}
+        endIcon={
+          active ? (
+            downCaret ? (
+              <KeyboardArrowDownIcon fontSize="inherit" />
+            ) : (
+              <KeyboardArrowUpIcon fontSize="inherit" />
+            )
+          ) : (
+            <UnfoldMoreIcon fontSize="inherit" sx={{ opacity: 0.55 }} />
+          )
+        }
+        sx={{
+          minWidth: 0,
+          minHeight: 40,
+          px: 0.5,
+          color: active ? palette.textPrimary : palette.steel,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          fontWeight: 700,
+          fontSize: '0.7rem',
+          whiteSpace: 'nowrap',
+          '& .MuiButton-endIcon': { ml: 0.25, mr: 0 },
+          '&:hover': { color: palette.textPrimary, backgroundColor: palette.steelWash },
+        }}
+      >
+        {label}
+      </Button>
     </Box>
+  );
+}
+
+/** Gold arrows when offered, grey arrows when kept. */
+function TradeMark({ forTrade }: { forTrade: boolean }) {
+  return forTrade ? (
+    <SwapHorizIcon fontSize="small" color="primary" />
+  ) : (
+    <SwapHorizIcon fontSize="small" sx={{ color: 'text.disabled' }} />
   );
 }
 
@@ -92,11 +227,17 @@ export function CollectionCardRow({
   onClick,
   expandable = false,
   expanded = false,
+  changeMode = 'amount',
+  onToggleTrade,
+  tradeSaving = false,
 }: {
   item: CollectionHighlight;
   onClick?: (() => void) | undefined;
   expandable?: boolean;
   expanded?: boolean;
+  changeMode?: 'amount' | 'percent';
+  onToggleTrade?: ((item: CollectionHighlight) => void) | undefined;
+  tradeSaving?: boolean;
 }) {
   const finishNote = item.finish === 'nonfoil' ? '' : ` · ${finishLabels[item.finish] ?? ''}`;
 
@@ -121,7 +262,7 @@ export function CollectionCardRow({
       }}
     >
       <Stack direction="row" sx={{ height: ART_SIZE, minWidth: 0 }}>
-        <ArtSquare url={item.imageUrl} />
+        <ArtSquare url={item.imageUrl} foil={item.finish === 'foil'} />
 
         <Stack
           direction="row"
@@ -130,31 +271,79 @@ export function CollectionCardRow({
           sx={{ flex: 1, minWidth: 0, pl: 1.25, pr: expandable ? 0.5 : { xs: 1.25, sm: 1.75 } }}
         >
           <Stack sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="body2" noWrap title={item.name}>
-              {item.name}
-            </Typography>
+            <Stack direction="row" spacing={0.75} alignItems="baseline" sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap title={item.name} sx={{ minWidth: 0 }}>
+                {item.name}
+              </Typography>
+              {item.quantity > 1 && (
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'primary.main', fontWeight: 700, flexShrink: 0 }}
+                >
+                  (x{item.quantity})
+                </Typography>
+              )}
+            </Stack>
             <Typography variant="caption" color="text.secondary" noWrap>
               {item.setCode.toUpperCase()}
               {finishNote}
             </Typography>
           </Stack>
 
-          <Typography variant="body2" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              width: 84,
+              flexShrink: 0,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
             {item.price === null ? '—' : money.format(Number(item.price))}
           </Typography>
 
           <Typography
             variant="body2"
             sx={{
-              width: 64,
+              width: 96,
               flexShrink: 0,
               textAlign: 'right',
               fontVariantNumeric: 'tabular-nums',
-              color: changeColor(item.weekChange),
+              ml: 1,
+              color: changeColor(changeMode === 'percent' ? item.changePercent : item.change),
             }}
           >
-            {item.weekChange ?? '—'}
+            {(changeMode === 'percent' ? item.changePercent : item.change) ?? '—'}
           </Typography>
+
+          {onToggleTrade && (
+            <Tooltip
+              title={item.forTrade ? 'For trade. Click to keep it.' : 'Kept. Click to offer it.'}
+            >
+              <IconButton
+                aria-label={
+                  item.forTrade
+                    ? `Stop offering ${item.name} for trade`
+                    : `Offer ${item.name} for trade`
+                }
+                aria-pressed={item.forTrade}
+                disabled={tradeSaving}
+                onKeyDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleTrade(item);
+                }}
+                sx={{
+                  width: 40,
+                  height: 40,
+                  flexShrink: 0,
+                  display: { xs: 'none', sm: 'inline-flex' },
+                }}
+              >
+                <TradeMark forTrade={item.forTrade} />
+              </IconButton>
+            </Tooltip>
+          )}
         </Stack>
 
         {expandable && (
@@ -189,15 +378,82 @@ export function CollectionCardTable({
   onRowClick,
   expandedIds,
   renderDetail,
+  sort,
+  dir,
+  onSortChange,
+  changeMode = 'amount',
+  onToggleTrade,
+  tradeSaving = false,
 }: {
   items: CollectionHighlight[];
   onRowClick?: (item: CollectionHighlight) => void;
   /** Rows that are open. Several may be open at once. */
   expandedIds?: ReadonlySet<string>;
   renderDetail?: (item: CollectionHighlight) => ReactNode;
+  /** Current order, and the setter. Headers appear only when the setter is given. */
+  sort?: CollectionSort;
+  dir?: SortDirection;
+  onSortChange?: (sort: CollectionSort, dir: SortDirection) => void;
+  changeMode?: 'amount' | 'percent';
+  /** Shows the trade button and flips the flag. */
+  onToggleTrade?: (item: CollectionHighlight) => void;
+  tradeSaving?: boolean;
 }) {
   return (
     <Paper sx={{ p: 0, minWidth: 0, overflow: 'hidden' }}>
+      {onSortChange && (
+        <Box
+          role="row"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: `1px solid ${palette.divider}`,
+            pr: renderDetail ? 0 : { xs: 1.25, sm: 1.75 },
+          }}
+        >
+          <Box sx={{ width: ART_SIZE, flexShrink: 0 }} />
+          <Box sx={{ flex: 1, minWidth: 0, pl: 1.25 }}>
+            <SortHeader
+              label="Name"
+              column="name"
+              sort={sort}
+              dir={dir}
+              onSortChange={onSortChange}
+            />
+          </Box>
+          <Box sx={{ width: 84, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+            <SortHeader
+              label="Price"
+              column="price"
+              sort={sort}
+              dir={dir}
+              onSortChange={onSortChange}
+            />
+          </Box>
+          <Box
+            sx={{
+              width: 96,
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              ml: 1,
+            }}
+          >
+            <SortHeader
+              label={changeMode === 'percent' ? 'Change %' : 'Change'}
+              column="change"
+              sort={sort}
+              dir={dir}
+              onSortChange={onSortChange}
+            />
+          </Box>
+          {onToggleTrade && (
+            <Box sx={{ width: 40, flexShrink: 0, display: { xs: 'none', sm: 'block' } }} />
+          )}
+          {renderDetail && <Box sx={{ width: 28, flexShrink: 0 }} />}
+        </Box>
+      )}
+
       <Stack divider={<Divider flexItem />} spacing={0}>
         {items.map((item) => {
           const expanded = Boolean(renderDetail) && (expandedIds?.has(item.id) ?? false);
@@ -208,6 +464,9 @@ export function CollectionCardTable({
                 onClick={onRowClick ? () => onRowClick(item) : undefined}
                 expandable={Boolean(renderDetail)}
                 expanded={expanded}
+                changeMode={changeMode}
+                onToggleTrade={onToggleTrade}
+                tradeSaving={tradeSaving}
               />
               {renderDetail && (
                 <Collapse in={expanded} timeout={240} unmountOnExit>

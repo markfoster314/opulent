@@ -1,5 +1,6 @@
 import {
   collectionItems,
+  collectionValueSnapshots,
   cards,
   createDatabase,
   places,
@@ -16,11 +17,18 @@ import {
   type CollectionItemInput,
   findTradeBinderMatches,
   getCollectionItem,
+  getCollectionSummary,
   listCollectionCardsByValue,
   listCollectionHighlights,
   listCollectionItems,
+  listCollectionMovers,
   updateCollectionItem,
 } from './modules/collection/service';
+import {
+  getCollectionValueBreakdown,
+  getCollectionValueHistory,
+  snapshotCollectionValues,
+} from './modules/collection/value';
 import {
   addMembership,
   createGroup,
@@ -525,6 +533,19 @@ async function main() {
       `${groupsWithCounts.find((row) => row.id === group.id)?.itemCount}`,
     );
 
+    const groupItems = await listGroupItems(db, owner.id, group.id, { limit: 50 });
+    const expectedGroupValue = groupItems.items.reduce((sum, item) => {
+      const market = item.card ? priceForFinish(item.card.prices, item.finish) : null;
+      const unit = askingPrice(market, item.price);
+      return sum + Number(unit ?? 0) * item.quantity;
+    }, 0);
+    const listedGroup = groupsWithCounts.find((row) => row.id === group.id);
+    check(
+      'the group list values its copies',
+      Math.abs(Number(listedGroup?.value ?? 0) - expectedGroupValue) < 0.05,
+      `${listedGroup?.value} vs ${expectedGroupValue}`,
+    );
+
     // The viewer wants the concept, not either specific printing.
     const [smokeList] = await db
       .insert(wantLists)
@@ -717,7 +738,7 @@ async function main() {
     );
     check(
       'weekly change is signed or empty',
-      highlights.every((row) => row.weekChange === null || /^[+-]\d+\.\d{2}$/.test(row.weekChange)),
+      highlights.every((row) => row.change === null || /^[+-]\d+\.\d{2}$/.test(row.change)),
     );
     const cheapest = highlights[highlights.length - 1]!;
     await updateCollectionItem(db, owner.id, cheapest.id, {
@@ -734,7 +755,26 @@ async function main() {
       (await listCollectionHighlights(db, owner.id, 2)).length <= 2,
     );
 
-    const allCards = await listCollectionCardsByValue(db, owner.id, { limit: 2 });
+    const summaryAfterCustom = await getCollectionSummary(db, owner.id);
+    const setsAfterCustom = await getCollectionValueBreakdown(db, owner.id, 'set');
+    check(
+      'the summary follows the custom price',
+      Math.abs(Number(summaryAfterCustom.marketValue) - setsAfterCustom.total) < 0.05,
+      `${summaryAfterCustom.marketValue} vs ${setsAfterCustom.total}`,
+    );
+
+    check(
+      'the summary counts cards on the table',
+      summaryAfterCustom.onTheTable === 0,
+      `${summaryAfterCustom.onTheTable}`,
+    );
+
+    const allCards = await listCollectionCardsByValue(db, owner.id, {
+      limit: 2,
+      sort: 'price',
+      dir: 'desc',
+      range: '1w',
+    });
     check(
       'the cards page respects its page size',
       allCards.items.length === 2,
@@ -743,12 +783,138 @@ async function main() {
     check('the cards page returns a cursor', Boolean(allCards.nextCursor));
     const nextCards = await listCollectionCardsByValue(db, owner.id, {
       limit: 2,
+      sort: 'price',
+      dir: 'desc',
+      range: '1w',
       cursor: allCards.nextCursor ?? undefined,
     });
     const allCardIds = new Set(allCards.items.map((item) => item.id));
     check(
       'the next cards page does not repeat a row',
       nextCards.items.every((item) => !allCardIds.has(item.id)),
+    );
+
+    const sortedByName = await listCollectionCardsByValue(db, owner.id, {
+      limit: 50,
+      sort: 'name',
+      dir: 'asc',
+      range: '1w',
+    });
+    check(
+      'name sort is alphabetical',
+      sortedByName.items.every(
+        (row, index) =>
+          index === 0 || sortedByName.items[index - 1]!.name.localeCompare(row.name) <= 0,
+      ),
+    );
+
+    check(
+      'cards report the trade flag',
+      sortedByName.items.every((row) => typeof row.forTrade === 'boolean'),
+    );
+
+    const sortedByPrice = await listCollectionCardsByValue(db, owner.id, {
+      limit: 50,
+      sort: 'price',
+      dir: 'desc',
+      range: '1w',
+    });
+    check(
+      'price sort runs high to low',
+      sortedByPrice.items.every(
+        (row, index) =>
+          index === 0 ||
+          Number(sortedByPrice.items[index - 1]!.price ?? 0) >= Number(row.price ?? 0),
+      ),
+    );
+
+    const valueHistory = await getCollectionValueHistory(db, owner.id, '1m');
+    check(
+      'a month of collection value has points',
+      valueHistory.points.length > 0 && valueHistory.points.length <= 31,
+      `${valueHistory.points.length} points`,
+    );
+    check(
+      'collection value is never negative',
+      valueHistory.points.every((point) => point.value >= 0),
+    );
+
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await db
+      .insert(collectionValueSnapshots)
+      .values({ userId: owner.id, day: yesterday, value: '4321.00' })
+      .onConflictDoUpdate({
+        target: [collectionValueSnapshots.userId, collectionValueSnapshots.day],
+        set: { value: '4321.00' },
+      });
+    const snappedHistory = await getCollectionValueHistory(db, owner.id, '1w');
+    check(
+      'a past day uses its snapshot',
+      snappedHistory.points.find((point) => point.date === yesterday)?.value === 4321,
+    );
+    await db
+      .delete(collectionValueSnapshots)
+      .where(
+        and(
+          eq(collectionValueSnapshots.userId, owner.id),
+          eq(collectionValueSnapshots.day, yesterday),
+        ),
+      );
+
+    const snapshotCount = await snapshotCollectionValues(db);
+    check('daily snapshots are written', snapshotCount > 0, `${snapshotCount} rows`);
+
+    const bySet = await getCollectionValueBreakdown(db, owner.id, 'set');
+    check(
+      'value buckets add up',
+      Math.abs(bySet.buckets.reduce((sum, bucket) => sum + bucket.value, 0) - bySet.total) < 0.05,
+    );
+    check(
+      'value buckets run high to low',
+      bySet.buckets.every(
+        (bucket, index) => index === 0 || bySet.buckets[index - 1]!.value >= bucket.value,
+      ),
+    );
+
+    const byPercent = await listCollectionCardsByValue(db, owner.id, {
+      limit: 50,
+      sort: 'change',
+      dir: 'desc',
+      range: '1w',
+      changeBy: 'percent',
+    });
+    check(
+      'percent change is formatted',
+      byPercent.items.every(
+        (row) => row.changePercent === null || /^[+-]\d+\.\d{2}%$/.test(row.changePercent),
+      ),
+    );
+
+    const namedCards = await listCollectionCardsByValue(db, owner.id, {
+      limit: 50,
+      sort: 'name',
+      dir: 'asc',
+      range: '1w',
+      filters: { q: 'Smoke Test Bolt' },
+    });
+    check(
+      'the name filter narrowed the list',
+      namedCards.items.length > 0 &&
+        namedCards.items.every((row) => row.name.includes('Smoke Test Bolt')),
+      `${namedCards.items.length}`,
+    );
+
+    const groupedCards = await listCollectionCardsByValue(db, owner.id, {
+      limit: 50,
+      sort: 'name',
+      dir: 'asc',
+      range: '1w',
+      filters: { groupId: group.id },
+    });
+    check(
+      'the group filter keeps that group',
+      groupedCards.items.length > 0 && groupedCards.items.every((row) => row.id === bumped.id),
+      `${groupedCards.items.length}`,
     );
 
     // --- Expanded row: detail and price history ---
@@ -780,6 +946,21 @@ async function main() {
       'the week carries the old price forward and ends on the new one',
       week.points[0]?.prices.usd === '10.00' && week.points[7]?.prices.usd === '11.00',
       `${week.points[0]?.prices.usd} -> ${week.points[7]?.prices.usd}`,
+    );
+    const movers = await listCollectionMovers(db, owner.id, {
+      limit: 5,
+      range: '1w',
+      changeBy: 'amount',
+    });
+    check(
+      'movers split into gains and losses',
+      movers.gainers.every((row) => row.change !== null && Number(row.change) > 0) &&
+        movers.losers.every((row) => row.change !== null && Number(row.change) < 0),
+    );
+    check(
+      'movers list the changed cards',
+      movers.gainers.length + movers.losers.length > 0,
+      `${movers.gainers.length} gainers, ${movers.losers.length} losers`,
     );
     await db.execute(sql`DELETE FROM card_price_history WHERE scryfall_id = ${PRINTING_A}::uuid`);
 

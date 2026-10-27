@@ -1,3 +1,4 @@
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Alert,
   Button,
@@ -5,10 +6,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Stack,
+  Typography,
+  useMediaQuery,
 } from '@mui/material';
+import type { Theme } from '@mui/material/styles';
 import type { CollectionItem, UpdateCollectionItemInput } from '@opulent/shared';
-import { cardLanguageOrEnglish, parsePhotoLink } from '@opulent/shared';
+import { NOTES_MAX_LENGTH, cardLanguageOrEnglish, parsePhotoLink } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { useCardLanguages } from '../api/queries';
 import { palette } from '../theme';
@@ -48,6 +53,7 @@ function detailsFromItem(item: CollectionItem): CardDetails {
     priceKind: item.price.kind,
     pricePercent: item.price.kind === 'percent' ? String(item.price.percent) : '',
     priceAmount: item.price.kind === 'custom' ? item.price.amount : '',
+    groupIds: [],
   };
 }
 
@@ -61,6 +67,8 @@ export function CollectionItemDialog({
   error,
 }: CollectionItemDialogProps) {
   const [details, setDetails] = useState<CardDetails>(() => detailsFromItem(item));
+  // A phone gets the full screen: one column, nothing cut off by a small window.
+  const fullScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down('sm'));
   const languagesQuery = useCardLanguages(open ? item.scryfallId : undefined);
   const printedLanguages = languagesQuery.data?.items.map((card) =>
     cardLanguageOrEnglish(card.lang),
@@ -83,6 +91,7 @@ export function CollectionItemDialog({
   const quantityError = isQuantityInvalid(details.quantity);
   const priceError = isPriceInvalid(details);
   const photoError = isPhotoLinkInvalid(details.photoUrl);
+  const notesError = details.notes.length > NOTES_MAX_LENGTH;
   const chosenPrice = priceFromDetails(details);
 
   function handleSave() {
@@ -105,10 +114,44 @@ export function CollectionItemDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{item.card?.name ?? 'Edit card'}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="md"
+      fullScreen={fullScreen}
+      slotProps={{ paper: { sx: { borderColor: palette.goldBorder } } }}
+    >
+      <DialogTitle component="div" sx={{ pr: 1.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+            <Typography
+              variant="overline"
+              sx={{ color: palette.goldLight, letterSpacing: '0.14em', lineHeight: 1.4 }}
+            >
+              Edit card
+            </Typography>
+            <Typography
+              variant="h2"
+              component="span"
+              sx={{ display: 'block', overflowWrap: 'anywhere' }}
+            >
+              {item.card?.name ?? 'Card'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              {[item.card?.setName, item.card?.setCode?.toUpperCase(), item.card?.collectorNumber]
+                .filter(Boolean)
+                .join(' · ')}
+            </Typography>
+          </Stack>
+          <IconButton aria-label="Close card editor" onClick={onClose} edge="end">
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+      </DialogTitle>
 
       <DialogContent
+        dividers
         sx={{
           colorScheme: 'dark',
           scrollbarColor: `${palette.goldDark} ${palette.surface}`,
@@ -131,13 +174,14 @@ export function CollectionItemDialog({
             languagesReady={languagesQuery.isSuccess}
             prices={item.card?.prices}
             stackNote="Changing finish, condition, language, price, or a mark moves these copies into their own stack."
+            columns={2}
           />
 
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ justifyContent: 'space-between' }}>
+      <DialogActions sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 }, py: 2 }}>
         <Button color="error" onClick={onDelete} disabled={saving}>
           Remove
         </Button>
@@ -146,7 +190,7 @@ export function CollectionItemDialog({
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={quantityError || priceError || photoError || saving}
+            disabled={quantityError || priceError || photoError || notesError || saving}
           >
             Save
           </Button>

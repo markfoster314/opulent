@@ -1,4 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Alert,
   Box,
@@ -7,55 +9,53 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Fade,
+  IconButton,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import type { Card } from '@opulent/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-  flattenPages,
   useAddCollectionItem,
-  useCollectionItems,
   useCollectionSummary,
   useCreateGroup,
   useGroups,
   useMe,
-  useRemoveCollectionItem,
-  useUpdateCollectionItem,
 } from '../api/queries';
-import { binderSearchIsActive, emptyBinderSearch, type BinderSearch } from '../binderSearch';
 import { AddCardPanel } from '../components/AddCardPanel';
-import { CollectionHeader } from '../components/CollectionHeader';
-import { CollectionItemTile } from '../components/CollectionItemTile';
-import { MostExpensiveCards } from '../components/MostExpensiveCards';
-import { BinderSearchFields } from '../components/BinderSearchFields';
-import { CardGrid } from '../components/CardGrid';
 import { CardSearchField } from '../components/CardSearchField';
+import { CollectionHeader } from '../components/CollectionHeader';
+import { CollectionOverview } from '../components/CollectionOverview';
+import { MostExpensiveCards } from '../components/MostExpensiveCards';
+import { TopMovers } from '../components/TopMovers';
 import { PlusMinusButton } from '../components/PlusMinusButton';
-import { TradeBinderSettings } from '../components/TradeBinderSettings';
+import { TradeBinderPreview } from '../components/TradeBinderPreview';
 import { takePendingAdd } from '../pendingAdd';
-import { clickableSurfaceSx, palette } from '../theme';
+import { palette } from '../theme';
+
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 /**
- * Every card the signed-in person owns, in one place.
+ * The collection dashboard.
  *
- * The For trade switch on each tile is what fills their trade binder. Groups
- * are optional labels, and a card can sit in several of them.
+ * The overview and the two tables tell the story of the value. Groups label the
+ * piles, and the trade binder sits at the bottom. The full card grid lives on
+ * /collection/cards, so this page no longer loads every stack.
  */
 export function CollectionPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth0();
   const me = useMe(isAuthenticated);
   const summary = useCollectionSummary(isAuthenticated);
-  const [search, setSearch] = useState<BinderSearch>(emptyBinderSearch);
-  const itemsQuery = useCollectionItems(isAuthenticated, search);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addFocus, setAddFocus] = useState(0);
+  const [panelClosing, setPanelClosing] = useState(false);
   const [draftCard, setDraftCard] = useState<Card | undefined>(undefined);
 
   const addItem = useAddCollectionItem();
-  const updateItem = useUpdateCollectionItem();
-  const removeItem = useRemoveCollectionItem();
 
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
   const draftTaken = useRef(false);
@@ -79,20 +79,27 @@ export function CollectionPage() {
     });
   }, [isAuthenticated, addItem]);
 
-  // Stable identities keep the quantity stepper's debounce timer from resetting
-  // on every parent re-render.
-  const handleUpdate = useCallback(
-    (itemId: string, input: Parameters<typeof updateItem.mutate>[0]['input']) =>
-      updateItem.mutate({ itemId, input }),
-    [updateItem],
-  );
-  const handleRemove = useCallback((itemId: string) => removeItem.mutate(itemId), [removeItem]);
-
   if (authLoading) return <CircularProgress />;
   if (!isAuthenticated) return <Alert severity="info">Sign in to see your collection.</Alert>;
 
-  const items = flattenPages(itemsQuery.data?.pages);
   const totals = summary.data;
+
+  function closeAdd() {
+    // The draft clears in onExited, so the whole panel collapses together.
+    setAddOpen(false);
+  }
+
+  /** The card panel has finished fading up; return to the search for the next card. */
+  function handlePanelClosed() {
+    // A new card may have been chosen while the old panel was fading out.
+    if (!panelClosing) return;
+    setDraftCard(undefined);
+    setPanelClosing(false);
+    setAddFocus((current) => current + 1);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   return (
     <Stack spacing={4}>
@@ -102,88 +109,112 @@ export function CollectionPage() {
         </Alert>
       )}
       {addItem.error && !draftCard && <Alert severity="error">{addItem.error.message}</Alert>}
-      <CollectionHeader title="My collection" totals={totals} summaryError={summary.error} />
+
+      {/* Header and add panel share one Stack child. The panel is animated inside
+          it, so no outer spacing margin disappears when the collapse unmounts. */}
+      <Box>
+        <CollectionHeader
+          title="My collection"
+          totals={totals}
+          summaryError={summary.error}
+          showTotals={false}
+          addOpen={addOpen}
+          onAddCard={() => (addOpen ? closeAdd() : setAddOpen(true))}
+        />
+
+        <Collapse in={addOpen} unmountOnExit onExited={() => setDraftCard(undefined)}>
+          <Box sx={{ pt: 4 }}>
+            <Stack spacing={2} id="add-card-section">
+              <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography
+                      variant="overline"
+                      sx={{ color: palette.goldLight, letterSpacing: '0.14em' }}
+                    >
+                      Add a card
+                    </Typography>
+                    <IconButton size="small" onClick={closeAdd} aria-label="Close add card">
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                  <CardSearchField
+                    onSelect={(card) => {
+                      setDraftCard(card);
+                      setPanelClosing(false);
+                    }}
+                    showSet={false}
+                    focusSignal={addFocus}
+                  />
+                </Stack>
+              </Paper>
+
+              {draftCard && (
+                <Collapse
+                  in={!panelClosing}
+                  timeout={260}
+                  unmountOnExit
+                  onExited={handlePanelClosed}
+                >
+                  <Fade in={!panelClosing} timeout={260}>
+                    <Box>
+                      <AddCardPanel
+                        // Remounts on a different card so the previous choices do not carry over.
+                        key={draftCard.oracleId}
+                        card={draftCard}
+                        onAdd={(input) =>
+                          addItem.mutate(input, {
+                            // Keep the panel open on failure so the owner's choices survive.
+                            onSuccess: () => setPanelClosing(true),
+                          })
+                        }
+                        onCancel={() => setDraftCard(undefined)}
+                        pending={addItem.isPending}
+                        error={addItem.error?.message}
+                      />
+                    </Box>
+                  </Fade>
+                </Collapse>
+              )}
+            </Stack>
+          </Box>
+        </Collapse>
+      </Box>
+
+      {addOpen && <Divider />}
+
+      {me.data && (
+        <TradeBinderPreview
+          variant="owner"
+          username={me.data.username}
+          visibility={me.data.tradeBinderVisibility}
+          cardCount={totals?.forTradeCount ?? 0}
+          value={totals?.forTradeValue ?? '0.00'}
+          onTheTable={totals?.onTheTable ?? 0}
+        />
+      )}
+
+      <CollectionOverview enabled={isAuthenticated} totals={totals} />
+
+      <Box sx={{ display: 'flex', justifyContent: { xs: 'stretch', sm: 'flex-end' } }}>
+        <Button
+          component={RouterLink}
+          to="/collection/cards"
+          variant="outlined"
+          endIcon={<ArrowForwardIcon />}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
+        >
+          View all cards
+        </Button>
+      </Box>
 
       <MostExpensiveCards enabled={isAuthenticated} />
 
-      {me.data && <TradeBinderSettings me={me.data} forTradeCount={totals?.forTradeCount ?? 0} />}
-
-      <Stack spacing={2}>
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h3" sx={{ mb: 2 }}>
-            Add a card
-          </Typography>
-          <CardSearchField onSelect={setDraftCard} showSet={false} />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Pick a card, choose its set, then fill in the details. Adding a card you already have
-            raises its count instead of making a second entry.
-          </Typography>
-        </Paper>
-
-        {draftCard && (
-          <AddCardPanel
-            // Remounts on a different card so the previous choices do not carry over.
-            key={draftCard.oracleId}
-            card={draftCard}
-            onAdd={(input) =>
-              addItem.mutate(input, {
-                // Keep the panel open on failure so the owner's choices survive.
-                onSuccess: () => setDraftCard(undefined),
-              })
-            }
-            onCancel={() => setDraftCard(undefined)}
-            pending={addItem.isPending}
-            error={addItem.error?.message}
-          />
-        )}
-      </Stack>
-
-      <GroupsSection />
+      <TopMovers enabled={isAuthenticated} />
 
       <Divider />
 
-      <Stack spacing={2}>
-        <Typography variant="h2">All cards</Typography>
-        <BinderSearchFields value={search} onChange={setSearch} canUseWantList={false} />
-      </Stack>
-
-      {itemsQuery.isLoading && <CircularProgress />}
-      {itemsQuery.isFetching && !itemsQuery.isFetchingNextPage && itemsQuery.isPlaceholderData && (
-        <Typography color="text.secondary">Updating the list.</Typography>
-      )}
-      {itemsQuery.error && <Alert severity="error">{itemsQuery.error.message}</Alert>}
-      {itemsQuery.isSuccess && !itemsQuery.isPlaceholderData && items.length === 0 && (
-        <Alert severity="info">
-          {binderSearchIsActive(search)
-            ? 'No cards match this search.'
-            : 'Your collection is empty. Add a card above.'}
-        </Alert>
-      )}
-
-      <CardGrid>
-        {items.map((item) => (
-          <CollectionItemTile
-            key={item.id}
-            item={item}
-            onUpdate={handleUpdate}
-            onRemove={handleRemove}
-            saving={updateItem.isPending || removeItem.isPending}
-            error={updateItem.error?.message ?? removeItem.error?.message}
-          />
-        ))}
-      </CardGrid>
-
-      {itemsQuery.hasNextPage && (
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Button
-            variant="outlined"
-            onClick={() => void itemsQuery.fetchNextPage()}
-            disabled={itemsQuery.isFetchingNextPage}
-          >
-            {itemsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </Button>
-        </Box>
-      )}
+      <GroupsSection />
     </Stack>
   );
 }
@@ -192,6 +223,7 @@ export function CollectionPage() {
 function GroupsSection() {
   const { data, isLoading, error } = useGroups(true);
   const createGroup = useCreateGroup();
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -201,9 +233,10 @@ function GroupsSection() {
     createGroup.mutate(
       { name: trimmed },
       {
-        onSuccess: () => {
+        onSuccess: (group) => {
           setName('');
           setCreating(false);
+          navigate(`/groups/${group.id}`);
         },
       },
     );
@@ -211,44 +244,48 @@ function GroupsSection() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={1} alignItems="center">
-        <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-          Groups
-        </Typography>
-        <PlusMinusButton
-          open={creating}
-          label={creating ? 'Close new group' : 'New group'}
-          onClick={() => setCreating((open) => !open)}
-        />
-      </Stack>
+      <Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            Groups
+          </Typography>
+          <PlusMinusButton
+            open={creating}
+            label={creating ? 'Close new group' : 'New group'}
+            onClick={() => setCreating((open) => !open)}
+          />
+        </Stack>
 
-      <Collapse in={creating} unmountOnExit>
-        <Paper sx={{ p: 3 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Group name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && handleCreate()}
-              fullWidth
-              placeholder="Modern staples"
-            />
-            <Button
-              variant="contained"
-              onClick={handleCreate}
-              disabled={!name.trim() || createGroup.isPending}
-              sx={{ minWidth: 140 }}
-            >
-              Create
-            </Button>
-          </Stack>
-          {createGroup.error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {createGroup.error.message}
-            </Alert>
-          )}
-        </Paper>
-      </Collapse>
+        <Collapse in={creating} unmountOnExit>
+          <Box sx={{ pt: 2 }}>
+            <Paper sx={{ p: 3 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="Group name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && handleCreate()}
+                  fullWidth
+                  placeholder="Modern staples"
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleCreate}
+                  disabled={!name.trim() || createGroup.isPending}
+                  sx={{ minWidth: 140 }}
+                >
+                  Create
+                </Button>
+              </Stack>
+              {createGroup.error && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {createGroup.error.message}
+                </Alert>
+              )}
+            </Paper>
+          </Box>
+        </Collapse>
+      </Box>
 
       {isLoading && <CircularProgress />}
       {error && <Alert severity="error">{error.message}</Alert>}
@@ -271,8 +308,16 @@ function GroupsSection() {
               p: 2.5,
               display: 'block',
               minWidth: 0,
-              ...clickableSurfaceSx,
-              borderColor: palette.steelBorder,
+              cursor: 'pointer',
+              textDecoration: 'none',
+              transition:
+                'background-color 120ms ease, border-color 120ms ease, transform 120ms ease',
+              '&:hover, &:focus-visible': {
+                backgroundColor: palette.goldTint,
+                borderColor: palette.goldLight,
+                transform: 'translateY(-2px)',
+              },
+              '&:focus-visible': { outline: `2px solid ${palette.gold}`, outlineOffset: -2 },
             }}
           >
             <Stack
@@ -286,7 +331,21 @@ function GroupsSection() {
               <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 {group.name}
               </Typography>
-              <Chip label={`${group.itemCount ?? 0} cards`} size="small" variant="outlined" />
+              <Stack
+                direction="row"
+                spacing={0.5}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ justifyContent: 'flex-end' }}
+              >
+                <Chip label={`${group.itemCount ?? 0} cards`} size="small" variant="outlined" />
+                <Chip
+                  label={money.format(Number(group.value ?? 0))}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                />
+              </Stack>
             </Stack>
             {group.description && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

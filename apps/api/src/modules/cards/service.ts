@@ -19,6 +19,7 @@ import {
   cardLanguageOrEnglish,
   cardLanguageSchema,
   marketPrices,
+  priceRangeDays,
 } from '@opulent/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
@@ -446,14 +447,6 @@ function decodeOffset(cursor?: string): number {
   return offset;
 }
 
-/** Days back for each chart window. */
-const PRICE_RANGE_DAYS: Record<PriceRange, number> = {
-  '1w': 7,
-  '1m': 30,
-  '6m': 182,
-  '1y': 365,
-};
-
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -473,7 +466,7 @@ export async function getCardPriceSeries(
     Date.UTC(
       today.getUTCFullYear(),
       today.getUTCMonth(),
-      today.getUTCDate() - PRICE_RANGE_DAYS[range],
+      today.getUTCDate() - priceRangeDays[range],
     ),
   );
   const points = await cardPriceSeries(db, scryfallId, isoDay(from), isoDay(today));

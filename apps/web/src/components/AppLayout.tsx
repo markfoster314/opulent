@@ -288,9 +288,7 @@ function BarActions({
             component={RouterLink}
             to="/collection"
             color={
-              (pathname.startsWith('/collection') &&
-                !pathname.startsWith('/collectionReference')) ||
-              pathname.startsWith('/groups/')
+              pathname.startsWith('/collection') || pathname.startsWith('/groups/')
                 ? 'primary'
                 : 'inherit'
             }
@@ -298,15 +296,6 @@ function BarActions({
             sx={itemSx}
           >
             My collection
-          </Button>
-          <Button
-            component={RouterLink}
-            to="/collectionReference"
-            color={pathname.startsWith('/collectionReference') ? 'primary' : 'inherit'}
-            fullWidth={stacked}
-            sx={itemSx}
-          >
-            Old My collection
           </Button>
           <Button
             component={RouterLink}

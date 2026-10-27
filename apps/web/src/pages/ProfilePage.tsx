@@ -40,6 +40,7 @@ import {
   useUsernameAvailability,
 } from '../api/queries';
 import { CitySearchField } from '../components/CitySearchField';
+import { ProfileTradeBinder } from '../components/ProfileTradeBinder';
 import { useDebounced } from '../hooks/useDebounced';
 import { clickableSurfaceSx, palette } from '../theme';
 
@@ -198,22 +199,12 @@ export function ProfilePage() {
       )}
 
       {page.tradeBinderCount !== undefined && (
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={1}>
-            <Typography variant="h2">Trade binder</Typography>
-            <Typography color="text.secondary">
-              {page.tradeBinderCount} card{page.tradeBinderCount === 1 ? '' : 's'} marked for trade.
-            </Typography>
-            <Button
-              component={RouterLink}
-              to={`/u/${page.username}/trade-binder`}
-              variant="outlined"
-              sx={{ alignSelf: 'flex-start' }}
-            >
-              Open the trade binder
-            </Button>
-          </Stack>
-        </Paper>
+        <ProfileTradeBinder
+          username={page.username}
+          ownPage={ownPage}
+          isAuthenticated={isAuthenticated}
+          visibility={me.data?.tradeBinderVisibility}
+        />
       )}
       {canSeeLists && (
         <ProfileLinks

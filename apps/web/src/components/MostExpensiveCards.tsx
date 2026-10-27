@@ -34,12 +34,7 @@ export function MostExpensiveCards({ enabled }: { enabled: boolean }) {
 
   return (
     <Stack spacing={2}>
-      <Stack spacing={0.5}>
-        <Typography variant="h2">Most expensive cards</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Ranked by the price of one copy. The weekly figure follows the same finish.
-        </Typography>
-      </Stack>
+      <Typography variant="h2">Most expensive cards</Typography>
 
       {isLoading && <CircularProgress />}
       {error && <Alert severity="error">{error.message}</Alert>}
@@ -59,7 +54,7 @@ export function MostExpensiveCards({ enabled }: { enabled: boolean }) {
             <CollectionCardTable
               key={index}
               items={rows}
-              onRowClick={(item) => navigate(`/collection/cards#${item.id}`)}
+              onRowClick={(item) => navigate('/collection/cards', { state: { cardId: item.id } })}
             />
           ),
         )}
@@ -68,7 +63,7 @@ export function MostExpensiveCards({ enabled }: { enabled: boolean }) {
       {items.length > 0 && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button component={RouterLink} to="/collection/cards" variant="text" color="primary">
-            View all cards
+            View all
           </Button>
         </Box>
       )}

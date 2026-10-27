@@ -49,6 +49,13 @@ export function createApp() {
     await next();
   });
 
+  // Personal data must never sit in a browser or intermediary cache. Set before
+  // the route runs, so public card routes can replace it on the way out.
+  app.use('/v1/*', async (c, next) => {
+    c.header('Cache-Control', 'private, no-store');
+    await next();
+  });
+
   app.route('/health', healthRoutes);
   app.route('/v1/users', userRoutes);
   app.route('/v1/places', placeRoutes);

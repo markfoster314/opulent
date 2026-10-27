@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { askingPriceForFinish, formatUsd, priceForFinish } from '@opulent/shared';
+import type { PriceRange } from '@opulent/shared';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../api/queries';
 import { palette } from '../theme';
 import { CollectionItemDialog } from './CollectionItemDialog';
+import { FoilSheen } from './FoilSheen';
 import { PriceHistoryChart } from './PriceHistoryChart';
 
 const priceKindLabels = {
@@ -33,7 +35,14 @@ const priceKindLabels = {
  * The edit button opens the same dialog the collection grid uses, so the two
  * places cannot drift apart.
  */
-export function CollectionCardDetail({ itemId }: { itemId: string }) {
+export function CollectionCardDetail({
+  itemId,
+  defaultRange,
+}: {
+  itemId: string;
+  /** The window chosen on the collection, used when a chart first opens. */
+  defaultRange?: PriceRange;
+}) {
   const query = useCollectionItem(itemId);
   const updateItem = useUpdateCollectionItem();
   const removeItem = useRemoveCollectionItem();
@@ -74,16 +83,23 @@ export function CollectionCardDetail({ itemId }: { itemId: string }) {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5}>
           {image && (
             <Box
-              component="img"
-              src={image}
-              alt={card?.name ?? ''}
               sx={{
+                position: 'relative',
                 width: { xs: 150, md: 200 },
                 alignSelf: { xs: 'center', md: 'flex-start' },
                 flexShrink: 0,
                 borderRadius: 1,
+                overflow: 'hidden',
               }}
-            />
+            >
+              <Box
+                component="img"
+                src={image}
+                alt={card?.name ?? ''}
+                sx={{ width: '100%', display: 'block' }}
+              />
+              {item.finish === 'foil' && <FoilSheen />}
+            </Box>
           )}
 
           <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
@@ -189,7 +205,11 @@ export function CollectionCardDetail({ itemId }: { itemId: string }) {
           </Stack>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <PriceHistoryChart scryfallId={item.scryfallId} finish={item.finish} />
+            <PriceHistoryChart
+              scryfallId={item.scryfallId}
+              finish={item.finish}
+              defaultRange={defaultRange}
+            />
           </Box>
         </Stack>
       </Stack>

@@ -1,3 +1,4 @@
+import AddIcon from '@mui/icons-material/Add';
 import { Alert, Button, Chip, Stack, Typography } from '@mui/material';
 import type { CollectionSummary } from '@opulent/shared';
 import { Link as RouterLink } from 'react-router-dom';
@@ -28,10 +29,18 @@ export function CollectionHeader({
   title,
   totals,
   summaryError,
+  showTotals = true,
+  onAddCard,
+  addOpen,
 }: {
   title: string;
   totals: CollectionSummary | undefined;
   summaryError: Error | null;
+  /** The dashboard shows the totals in its overview instead. */
+  showTotals?: boolean;
+  /** Only the collection dashboard offers the add panel. */
+  onAddCard?: () => void;
+  addOpen?: boolean;
 }) {
   const exportCsv = useExportCollection();
 
@@ -45,6 +54,18 @@ export function CollectionHeader({
       >
         <Typography variant="h1">{title}</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
+          {onAddCard && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={onAddCard}
+              aria-expanded={addOpen}
+              aria-controls="add-card-section"
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Add a card
+            </Button>
+          )}
           <Button
             component={RouterLink}
             to="/collection/import"
@@ -65,10 +86,10 @@ export function CollectionHeader({
         </Stack>
       </Stack>
       {exportCsv.error && <Alert severity="error">{exportCsv.error.message}</Alert>}
-      {totals && (
+      {showTotals && totals && (
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
-          <Chip label={`${money.format(Number(totals.marketValue))} market value`} />
+          <Chip label={`${money.format(Number(totals.marketValue))} collection value`} />
           <Chip
             color="primary"
             variant="outlined"

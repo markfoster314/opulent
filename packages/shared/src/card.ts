@@ -180,6 +180,14 @@ export function formatUsd(value: string | null | undefined): string | null {
 export const priceRangeSchema = z.enum(['1w', '1m', '6m', '1y']);
 export type PriceRange = z.infer<typeof priceRangeSchema>;
 
+/** Days back for each chart window. One source for the API and the client. */
+export const priceRangeDays: Record<PriceRange, number> = {
+  '1w': 7,
+  '1m': 30,
+  '6m': 182,
+  '1y': 365,
+};
+
 /** One day of prices. History carries the last known price forward. */
 export const cardPricePointSchema = z.object({
   recordedOn: z.string(),

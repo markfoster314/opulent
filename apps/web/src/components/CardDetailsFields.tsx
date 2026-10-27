@@ -1,6 +1,7 @@
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
+  Box,
   Button,
   Checkbox,
   FormControl,
@@ -22,6 +23,7 @@ import type {
   ItemPrice,
 } from '@opulent/shared';
 import {
+  NOTES_MAX_LENGTH,
   cardConditionLabels,
   cardConditionSchema,
   cardFinishLabels,
@@ -57,6 +59,8 @@ export interface CardDetails {
   priceKind: ItemPrice['kind'];
   pricePercent: string;
   priceAmount: string;
+  /** Private groups the new stack should join. */
+  groupIds: string[];
 }
 
 interface CardDetailsFieldsProps {
@@ -84,6 +88,11 @@ interface CardDetailsFieldsProps {
    * landing page, where the form stands between a card and a sign-up.
    */
   foldAdvanced?: boolean;
+  /**
+   * Two columns on a wide dialog. The form still stacks on a phone, and the
+   * default stays one column for the narrow add panel.
+   */
+  columns?: 1 | 2;
 }
 
 const MIN_QUANTITY = 1;
@@ -141,6 +150,7 @@ export function CardDetailsFields({
   prices,
   stackNote,
   foldAdvanced = false,
+  columns = 1,
 }: CardDetailsFieldsProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const finishes = finishOptions.length > 0 ? finishOptions : cardFinishSchema.options;
@@ -148,6 +158,7 @@ export function CardDetailsFields({
   const languages = languageOptions.length > 0 ? languageOptions : [value.language];
   const onlyLanguage = languagesReady && languages.length === 1;
   const quantityError = isQuantityInvalid(value.quantity);
+  const notesTooLong = value.notes.length > NOTES_MAX_LENGTH;
   const marketLabel = formatUsd(priceForFinish(prices, value.finish));
 
   /**
@@ -166,15 +177,15 @@ export function CardDetailsFields({
     setAdvancedOpen(false);
   }
 
-  return (
-    <Stack spacing={3}>
+  const basics = (
+    <>
       <TextField
         label="How many"
         type="number"
         value={value.quantity}
         onChange={(event) => onChange({ quantity: event.target.value })}
         error={quantityError}
-        helperText={quantityError ? `Pick a whole number from 1 to ${MAX_QUANTITY}` : ' '}
+        helperText={quantityError ? `Pick a whole number from 1 to ${MAX_QUANTITY}` : undefined}
         slotProps={{ htmlInput: { min: MIN_QUANTITY, max: MAX_QUANTITY } }}
         fullWidth
       />
@@ -194,7 +205,6 @@ export function CardDetailsFields({
             </MenuItem>
           ))}
         </Select>
-        {onlyFinish && <FormHelperText>This printing only came in one finish.</FormHelperText>}
       </FormControl>
 
       <FormControl fullWidth>
@@ -243,10 +253,9 @@ export function CardDetailsFields({
             </MenuItem>
           ))}
         </Select>
-        {onlyLanguage && <FormHelperText>This printing only came in one language.</FormHelperText>}
       </FormControl>
 
-      <FormGroup sx={{ flexDirection: { sm: 'row' }, columnGap: 2 }}>
+      <FormGroup sx={{ flexDirection: { sm: 'row' }, columnGap: 2, flexWrap: 'wrap', rowGap: 0.5 }}>
         <FormControlLabel
           control={
             <Checkbox
@@ -305,7 +314,11 @@ export function CardDetailsFields({
           label="Artist proof"
         />
       </FormGroup>
+    </>
+  );
 
+  const details = (
+    <>
       {foldAdvanced && (
         <Button
           variant="text"
@@ -326,7 +339,7 @@ export function CardDetailsFields({
       )}
 
       {(!foldAdvanced || advancedOpen) && (
-        <Stack spacing={3} id="card-advanced-fields">
+        <Stack spacing={2} id="card-advanced-fields">
           <FormControl fullWidth>
             <InputLabel id="price-kind-label">Price</InputLabel>
             <Select
@@ -348,16 +361,6 @@ export function CardDetailsFields({
               <MenuItem value="percent">Percent of market</MenuItem>
               <MenuItem value="custom">Custom amount</MenuItem>
             </Select>
-            {value.artistProof && value.priceKind === 'custom' && (
-              <FormHelperText>Set your own amount for this artist proof.</FormHelperText>
-            )}
-            {value.priceKind === 'market' && (
-              <FormHelperText>
-                {marketLabel
-                  ? 'Uses the market price stored for this finish.'
-                  : 'No market price is stored for this finish.'}
-              </FormHelperText>
-            )}
           </FormControl>
 
           {value.priceKind === 'percent' && (
@@ -411,6 +414,12 @@ export function CardDetailsFields({
             minRows={2}
             fullWidth
             placeholder="Small crease on the back, otherwise clean."
+            error={notesTooLong}
+            helperText={
+              notesTooLong
+                ? `Max ${NOTES_MAX_LENGTH} characters. Remove ${value.notes.length - NOTES_MAX_LENGTH} more.`
+                : `Max ${NOTES_MAX_LENGTH} characters · ${NOTES_MAX_LENGTH - value.notes.length} left.`
+            }
           />
         </Stack>
       )}
@@ -425,11 +434,30 @@ export function CardDetailsFields({
           }
           label="Available for trade"
         />
-        <FormHelperText>
-          Turn this off to keep a card in the binder without offering it. It stops showing up in
-          other people&apos;s matches.
-        </FormHelperText>
       </Stack>
+    </>
+  );
+
+  if (columns === 2) {
+    return (
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+          alignItems: 'start',
+        }}
+      >
+        <Stack spacing={2}>{basics}</Stack>
+        <Stack spacing={2}>{details}</Stack>
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      {basics}
+      {details}
     </Stack>
   );
 }

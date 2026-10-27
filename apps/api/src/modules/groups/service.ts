@@ -11,6 +11,7 @@ import type {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 import { listItemsInGroup } from '../collection/service';
+import { getGroupValues } from '../collection/value';
 
 type GroupItemQuery = Partial<CollectionItemQuery> & { limit: number };
 
@@ -50,7 +51,11 @@ export async function listGroupsForOwner(db: Database, userId: string): Promise<
     .groupBy(cardGroups.id)
     .orderBy(asc(cardGroups.name));
 
-  return rows.map((row) => toCardGroup(row, Number(row.itemCount)));
+  const values = await getGroupValues(db, userId);
+  return rows.map((row) => ({
+    ...toCardGroup(row, Number(row.itemCount)),
+    value: values.get(row.id) ?? '0.00',
+  }));
 }
 
 /** Groups are private, so a group that is not yours reports "not found". */
@@ -73,7 +78,11 @@ export async function getGroupForOwner(
     .innerJoin(collectionItems, eq(collectionItems.id, groupMemberships.itemId))
     .where(eq(groupMemberships.groupId, groupId));
 
-  return toCardGroup(group, Number(counted[0]?.itemCount ?? 0));
+  const values = await getGroupValues(db, userId);
+  return {
+    ...toCardGroup(group, Number(counted[0]?.itemCount ?? 0)),
+    value: values.get(groupId) ?? '0.00',
+  };
 }
 
 /** Two groups of one person cannot share a name, ignoring case. */

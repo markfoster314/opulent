@@ -10,6 +10,9 @@ import type {
   CollectionImportInput,
   CollectionImportResult,
   CollectionSummary,
+  CollectionValueBreakdown,
+  CollectionValueBreakdownBy,
+  CollectionValueHistory,
   MatchOwner,
   TradeBinder,
   CreateGenericWantInput,
@@ -221,7 +224,9 @@ const BINDER_PAGE_SIZE = 24;
 function useDebouncedSearch(search: BinderSearch): BinderSearch {
   const q = useDebounced(search.q);
   const set = useDebounced(search.set);
-  return { ...search, q, set };
+  const type = useDebounced(search.type);
+  const artist = useDebounced(search.artist);
+  return { ...search, q, set, type, artist };
 }
 
 // --- The signed-in person's collection: every stack they own ---
@@ -242,6 +247,48 @@ export function useCollectionHighlights(enabled: boolean, limit = 10) {
     queryKey: [...queryKeys.collection, 'highlights', limit] as const,
     queryFn: () =>
       api<{ items: CollectionHighlight[] }>(`/v1/collection/highlights?limit=${limit}`),
+    enabled,
+  });
+}
+
+/** The whole collection's asking value, one point per day. */
+export function useCollectionValueHistory(enabled: boolean, range: PriceRange) {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...queryKeys.collection, 'value-history', range] as const,
+    queryFn: () => api<CollectionValueHistory>(`/v1/collection/value-history?range=${range}`),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** The current asking value, split by one card factor. */
+export function useCollectionValueBreakdown(enabled: boolean, by: CollectionValueBreakdownBy) {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...queryKeys.collection, 'value-breakdown', by] as const,
+    queryFn: () => api<CollectionValueBreakdown>(`/v1/collection/value-breakdown?by=${by}`),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** Biggest gainers and losers for the dashboard. */
+export function useCollectionMovers(
+  enabled: boolean,
+  range: PriceRange,
+  changeMode: 'amount' | 'percent',
+) {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...queryKeys.collection, 'movers', range, changeMode] as const,
+    queryFn: () =>
+      api<{ gainers: CollectionHighlight[]; losers: CollectionHighlight[] }>(
+        `/v1/collection/movers?range=${range}&changeBy=${changeMode}&limit=5`,
+      ),
+    // The old rows stay on screen while the next window loads, so the section
+    // never collapses between fetches.
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
@@ -267,15 +314,17 @@ export function useCardPriceSeries(scryfallId: string | undefined, range: PriceR
   });
 }
 
-export function useCollectionCardsByValue(enabled: boolean) {
+export function useCollectionCardsByValue(
+  enabled: boolean,
+  search: BinderSearch = emptyBinderSearch,
+) {
   const api = useApi();
+  const filters = useDebouncedSearch(search);
   return useInfiniteQuery({
-    queryKey: [...queryKeys.collection, 'cardsByValue'] as const,
+    queryKey: [...queryKeys.collection, 'cardsByValue', filters] as const,
     queryFn: ({ pageParam }) =>
       api<Page<CollectionHighlight>>(
-        `/v1/collection/cards?limit=50${
-          pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''
-        }`,
+        `/v1/collection/cards?${binderSearchParams(filters, pageParam, 50).toString()}`,
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -323,6 +372,56 @@ export function useUpdateCollectionItem() {
     mutationFn: ({ itemId, input }: { itemId: string; input: UpdateCollectionItemInput }) =>
       api<CollectionItem>(`/v1/collection/items/${itemId}`, { method: 'PATCH', body: input }),
     onSuccess: () => refreshStacks(queryClient),
+  });
+}
+
+interface CardListCache {
+  pages: Page<CollectionHighlight>[];
+  pageParams: unknown[];
+}
+
+/**
+ * Flips one card's trade flag without refetching the list.
+ *
+ * The PATCH returns the updated row, so it is written straight into every cached
+ * card list. Only the summary is refetched, because its trade count and value
+ * change. Groups are untouched: a trade flag never changes a group's copies.
+ */
+export function useSetTradeFlag() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, forTrade }: { itemId: string; forTrade: boolean }) =>
+      api<CollectionItem>(`/v1/collection/items/${itemId}`, {
+        method: 'PATCH',
+        body: { forTrade },
+      }),
+    onSuccess: (item) => {
+      queryClient.setQueriesData<CardListCache>(
+        { queryKey: [...queryKeys.collection, 'cardsByValue'] },
+        (data) =>
+          data
+            ? {
+                ...data,
+                pages: data.pages.map((page) => ({
+                  ...page,
+                  items: page.items.map((row) =>
+                    row.id === item.id ? { ...row, forTrade: item.forTrade } : row,
+                  ),
+                })),
+              }
+            : data,
+      );
+
+      const detailKey = [...queryKeys.collection, 'item', item.id] as const;
+      if (queryClient.getQueryData(detailKey)) {
+        queryClient.setQueryData(detailKey, item);
+      }
+
+      // Other collection screens refetch when they are next opened, not now.
+      queryClient.invalidateQueries({ queryKey: queryKeys.collection, refetchType: 'none' });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collectionSummary });
+    },
   });
 }
 
@@ -557,18 +656,18 @@ export function useCard(scryfallId: string | undefined) {
 
 export function useCardSearch(term: string) {
   const api = useApi();
+  // One cache entry per meaningful term: case and extra spaces do not split it.
+  const query = term.trim().replace(/\s+/g, ' ').toLowerCase();
   return useQuery({
-    queryKey: queryKeys.cardSearch(term),
+    queryKey: queryKeys.cardSearch(query),
     queryFn: () =>
-      api<{ items: Card[] }>(`/v1/cards/search?q=${encodeURIComponent(term)}&uniqueByOracle=true`),
+      api<{ items: Card[] }>(`/v1/cards/search?q=${encodeURIComponent(query)}&uniqueByOracle=true`),
     // Two characters is the shortest term worth a round trip.
-    enabled: term.trim().length >= 2,
+    enabled: query.length >= 2,
     staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
-
-/** Enough tiles to fill the picker a few rows deep without a slow first paint. */
-const PRINTINGS_PAGE_SIZE = 24;
 
 /** Every set this card was printed in, for the set dropdown. */
 export function useCardSets(oracleId: string | undefined) {
@@ -588,21 +687,33 @@ export function useCardSets(oracleId: string | undefined) {
  * sent to the server rather than filtered here, because only a fraction of the
  * printings have been fetched at any moment.
  */
-export function useCardPrintings(oracleId: string | undefined, setFilter = '') {
+/**
+ * One page of a card's printings, for the printing picker.
+ *
+ * `setFilter` matters for cards like Plains, which has over 900 printings. It is
+ * sent to the server rather than filtered here, because only one page is held at
+ * a time. The page size is chosen so the grid always shows two rows.
+ */
+export function useCardPrintings(
+  oracleId: string | undefined,
+  setFilter = '',
+  limit = 8,
+  cursor: string | null = null,
+) {
   const api = useApi();
   const term = setFilter.trim();
-  return useInfiniteQuery({
-    queryKey: queryKeys.cardPrintings(oracleId ?? 'none', term),
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: String(PRINTINGS_PAGE_SIZE) });
+  return useQuery({
+    queryKey: [...queryKeys.cardPrintings(oracleId ?? 'none', term), 'page', limit, cursor ?? ''],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: String(limit) });
       if (term) params.set('q', term);
-      if (pageParam) params.set('cursor', pageParam);
+      if (cursor) params.set('cursor', cursor);
       return api<Page<Card>>(`/v1/cards/oracle/${oracleId}/printings?${params.toString()}`);
     },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(oracleId),
     staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

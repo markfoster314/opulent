@@ -1,10 +1,21 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Alert, Box, Button, CircularProgress, Divider, Stack, Typography } from '@mui/material';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Divider,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
 import type { CollectionItem } from '@opulent/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom';
 import {
   flattenPages,
+  useMe,
   useProfile,
   useTradeBinder,
   useTradeBinderItems,
@@ -15,7 +26,9 @@ import { BinderCardDialog } from '../components/BinderCardDialog';
 import { BinderSearchFields } from '../components/BinderSearchFields';
 import { CardGrid } from '../components/CardGrid';
 import { collectionTileCaption, collectionTilePrice, CardTile } from '../components/CardTile';
+import { TradeBinderSettings } from '../components/TradeBinderSettings';
 import { TradeMatchesPanel } from '../components/TradeMatchesPanel';
+import { palette } from '../theme';
 
 /**
  * Everything one person has marked for trade, in one place.
@@ -32,13 +45,21 @@ export function TradeBinderPage() {
     ...emptyBinderSearch,
     onWantList: searchParams.get('want') === '1',
   }));
+  const [preview, setPreview] = useState(false);
+
+  // A new binder always opens as the owner, never mid-preview.
+  useEffect(() => {
+    setPreview(false);
+  }, [handle]);
 
   // Unlisted trade binders are reachable only with ?t=<share token>.
   const shareToken = searchParams.get('t') ?? undefined;
 
   const binderQuery = useTradeBinder(handle, shareToken);
   const profile = useProfile(isAuthenticated ? handle : undefined);
+  const me = useMe(isAuthenticated);
   const ownBinder = profile.data?.isOwner === true;
+  const viewingAsVisitor = ownBinder && preview;
   const wantListReady = Boolean(isAuthenticated && profile.data && !ownBinder);
   const itemSearch = { ...search, onWantList: wantListReady && search.onWantList };
 
@@ -59,6 +80,7 @@ export function TradeBinderPage() {
   const matches = matchesQuery.data?.items ?? [];
   const canTrade = Boolean(isAuthenticated && profile.data && !ownBinder && matches.length > 0);
   const canAddCard = Boolean(handle) && (!isAuthenticated || (profile.isSuccess && !ownBinder));
+  const canOpenCard = canAddCard || viewingAsVisitor;
   const count = binderQuery.data?.cardCount ?? 0;
 
   return (
@@ -72,7 +94,7 @@ export function TradeBinderPage() {
           <Box component={RouterLink} to={`/u/${handle}`} sx={{ color: 'primary.main' }}>
             Profile
           </Box>
-          {ownBinder && (
+          {ownBinder && !viewingAsVisitor && (
             <>
               {' · '}
               <Box component={RouterLink} to="/collection" sx={{ color: 'primary.main' }}>
@@ -82,6 +104,58 @@ export function TradeBinderPage() {
           )}
         </Typography>
       </Stack>
+
+      {ownBinder && !viewingAsVisitor && (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          justifyContent="space-between"
+        >
+          <Typography variant="body2" color="text.secondary">
+            Viewing as owner
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<VisibilityOutlinedIcon />}
+            onClick={() => setPreview(true)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            View as visitor
+          </Button>
+        </Stack>
+      )}
+
+      {ownBinder && !viewingAsVisitor && me.data && <TradeBinderSettings me={me.data} />}
+
+      {viewingAsVisitor && (
+        <Paper
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderColor: palette.goldBorder,
+            background: palette.goldTint,
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            justifyContent="space-between"
+          >
+            <Typography variant="body2">Previewing as a visitor</Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setPreview(false)}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Exit preview
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       {!isAuthenticated && (
         <Alert severity="info">
@@ -102,7 +176,7 @@ export function TradeBinderPage() {
         <Alert severity="info">No overlap with your want list yet.</Alert>
       )}
 
-      {canAddCard && (
+      {canAddCard && !viewingAsVisitor && (
         <Alert severity="info">Click a card to see its details and add it to a trade.</Alert>
       )}
 
@@ -142,7 +216,7 @@ export function TradeBinderPage() {
               photoUrl={item.photoUrl}
               caption={collectionTileCaption(item)}
               foil={item.finish === 'foil'}
-              onClick={canAddCard ? () => setSelected(item) : undefined}
+              onClick={canOpenCard ? () => setSelected(item) : undefined}
             />
           ) : null,
         )}
@@ -163,7 +237,7 @@ export function TradeBinderPage() {
       <BinderCardDialog
         key={selected?.id ?? 'closed'}
         item={selected}
-        ownerUsername={canAddCard ? handle : undefined}
+        ownerUsername={canAddCard && !viewingAsVisitor ? handle : undefined}
         open={selected !== null}
         onClose={() => setSelected(null)}
       />

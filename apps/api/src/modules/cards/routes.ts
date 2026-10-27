@@ -22,6 +22,13 @@ import {
 
 export const cardRoutes = new Hono<AppEnv>();
 
+// Card data comes from the nightly mirror, so a short shared cache is safe and
+// saves a database read on repeat searches.
+cardRoutes.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+});
+
 const uuidParam = z.object({ id: z.string().uuid() });
 
 /**

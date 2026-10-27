@@ -8,6 +8,7 @@ export {
   cardPriceHistory,
   cards,
   collectionItems,
+  collectionValueSnapshots,
   friendships,
   genericWants,
   groupMemberships,

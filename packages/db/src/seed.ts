@@ -8,6 +8,7 @@ import { ensurePricePartitions } from './price-partitions';
 import {
   cardGroups,
   collectionItems,
+  collectionValueSnapshots,
   cardPriceHistory,
   cards,
   friendships,
@@ -36,6 +37,9 @@ import type { NewCardPriceHistoryRow } from './schema';
 
 /** Each group and each want list gets this many cards. */
 const CARDS_PER_COLLECTION = 100;
+
+/** Days of frozen collection values to seed, ending yesterday. */
+const SNAPSHOT_DAYS = 120;
 
 /** Cards many people both own and want. The rest of each list is unique. */
 const SHARED_POOL_SIZE = 240;
@@ -297,6 +301,7 @@ export async function runSeed() {
     // The seed owns the whole collection of these ten users, groups included.
     await db.delete(groupMemberships).where(inArray(groupMemberships.userId, ids));
     await db.delete(cardGroups).where(inArray(cardGroups.userId, ids));
+    await db.delete(collectionValueSnapshots).where(inArray(collectionValueSnapshots.userId, ids));
     await db.delete(collectionItems).where(inArray(collectionItems.userId, ids));
     await db
       .delete(wantLists)
@@ -460,6 +465,7 @@ export async function runSeed() {
     }
 
     const markPriceRows = await seedMarkPriceHistory(db, requiredId(userIds, 'mark'));
+    const snapshotRows = await seedCollectionSnapshots(db, ids);
 
     const friendPairs: [string, string][] = [
       ['mark', 'ava_lane'],
@@ -514,6 +520,7 @@ export async function runSeed() {
     console.log(`${tradeCount} trades between these users.`);
     console.log(`${priceRows.toLocaleString()} price change points for the seeded cards.`);
     console.log(`${markPriceRows.toLocaleString()} price points across the year for Mark's cards.`);
+    console.log(`${snapshotRows.toLocaleString()} collection value snapshots.`);
   } finally {
     await client.end();
   }
@@ -637,6 +644,109 @@ function priceAt(value: string | null | undefined, factor: number): string | nul
  * price, so the line ends where the collection page says it does and the nightly
  * job has nothing to correct.
  */
+/**
+ * Seed a frozen value for each of the last SNAPSHOT_DAYS, ending yesterday.
+ *
+ * The shape is a gentle upward trend with a small sine wiggle, so dev charts
+ * have movement without inventing per-card history. Today stays live.
+ */
+async function seedCollectionSnapshots(
+  db: ReturnType<typeof drizzle>,
+  userIds: string[],
+): Promise<number> {
+  const current = await currentCollectionValues(db, userIds);
+  if (current.length === 0) return 0;
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const rows: { userId: string; day: string; value: string }[] = [];
+
+  for (const { userId, value } of current) {
+    for (let offset = SNAPSHOT_DAYS; offset >= 1; offset--) {
+      const day = new Date(today);
+      day.setUTCDate(day.getUTCDate() - offset);
+      const step = SNAPSHOT_DAYS - offset;
+      const trend = 0.85 + 0.15 * (step / (SNAPSHOT_DAYS - 1));
+      const wiggle = 1 + 0.02 * Math.sin(step / 11);
+      rows.push({
+        userId,
+        day: day.toISOString().slice(0, 10),
+        value: (value * trend * wiggle).toFixed(2),
+      });
+    }
+  }
+
+  for (let index = 0; index < rows.length; index += 500) {
+    await db
+      .insert(collectionValueSnapshots)
+      .values(rows.slice(index, index + 500))
+      .onConflictDoNothing();
+  }
+
+  return rows.length;
+}
+
+/** Each seeded user's current asking value, with the same rules the app uses. */
+async function currentCollectionValues(
+  db: ReturnType<typeof drizzle>,
+  userIds: string[],
+): Promise<{ userId: string; value: number }[]> {
+  const idList = sql.join(
+    userIds.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+  const rows = (await db.execute(sql`
+    WITH priced AS (
+      SELECT
+        ci.user_id AS "userId",
+        ci.quantity,
+        ci.price_kind,
+        ci.price_percent,
+        ci.price_amount,
+        COALESCE(
+          CASE ci.finish::text
+            WHEN 'foil' THEN NULLIF(c.prices->>'usd_foil', '')::numeric
+            WHEN 'etched' THEN NULLIF(c.prices->>'usd_etched', '')::numeric
+            ELSE NULLIF(c.prices->>'usd', '')::numeric
+          END,
+          CASE ci.finish::text
+            WHEN 'foil' THEN NULLIF(e.prices->>'usd_foil', '')::numeric
+            WHEN 'etched' THEN NULLIF(e.prices->>'usd_etched', '')::numeric
+            ELSE NULLIF(e.prices->>'usd', '')::numeric
+          END
+        ) AS market
+      FROM collection_items ci
+      INNER JOIN cards c ON c.scryfall_id = ci.scryfall_id
+      LEFT JOIN cards e
+        ON e.set_code = c.set_code
+        AND e.collector_number = c.collector_number
+        AND e.lang = 'en'
+        AND jsonb_exists(e.raw->'games', 'paper')
+        AND e.layout IS DISTINCT FROM 'art_series'
+      WHERE ci.user_id IN (${idList})
+    )
+    SELECT
+      "userId",
+      ROUND(
+        COALESCE(
+          SUM(
+            CASE price_kind::text
+              WHEN 'custom' THEN COALESCE(NULLIF(price_amount, '')::numeric, 0)
+              WHEN 'percent' THEN ROUND(market * price_percent / 100.0, 2)
+              ELSE market
+            END * quantity
+          ),
+          0
+        ),
+        2
+      )::text AS value
+    FROM priced
+    GROUP BY "userId"
+  `)) as unknown as { userId: string; value: string }[];
+
+  return rows.map((row) => ({ userId: row.userId, value: Number(row.value) }));
+}
+
 async function seedMarkPriceHistory(
   db: ReturnType<typeof drizzle>,
   markUserId: string,

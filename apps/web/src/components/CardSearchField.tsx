@@ -1,6 +1,6 @@
 import { Autocomplete, Box, CircularProgress, TextField, Typography } from '@mui/material';
 import type { Card } from '@opulent/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCardSearch } from '../api/queries';
 import { useDebounced } from '../hooks/useDebounced';
 
@@ -10,6 +10,8 @@ interface CardSearchFieldProps {
   disabled?: boolean;
   /** The binder search lists the name only. The want list still shows the set. */
   showSet?: boolean;
+  /** Bump this number to focus the input, for "add another". */
+  focusSignal?: number;
 }
 
 export function CardSearchField({
@@ -17,13 +19,27 @@ export function CardSearchField({
   onSelect,
   disabled,
   showSet = true,
+  focusSignal,
 }: CardSearchFieldProps) {
   const [input, setInput] = useState('');
   const term = useDebounced(input);
   const { data, isFetching } = useCardSearch(term);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!focusSignal) return;
+    // Wait for the collapsed add panel to leave the layout before focusing.
+    const timer = window.setTimeout(() => {
+      const input = inputRef.current ?? rootRef.current?.querySelector<HTMLInputElement>('input');
+      input?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusSignal]);
 
   return (
     <Autocomplete<Card>
+      ref={rootRef}
       options={data?.items ?? []}
       getOptionLabel={(card) => card.name}
       filterOptions={(options) => options}
@@ -54,6 +70,7 @@ export function CardSearchField({
       renderInput={(params) => (
         <TextField
           {...params}
+          inputRef={inputRef}
           label={label}
           placeholder="Lightning Bolt"
           slotProps={{

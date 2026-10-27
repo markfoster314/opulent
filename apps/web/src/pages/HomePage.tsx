@@ -126,7 +126,7 @@ function SignedInHome() {
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
             <Chip color="primary" variant="outlined" label={`${totals.forTradeCount} for trade`} />
-            <Chip label={`${money.format(Number(totals.marketValue))} market value`} />
+            <Chip label={`${money.format(Number(totals.marketValue))} collection value`} />
           </Stack>
         )}
         <Stack

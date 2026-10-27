@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  date,
   foreignKey,
   index,
   integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -163,6 +165,29 @@ export const groupMemberships = pgTable(
 export type CardGroupRow = typeof cardGroups.$inferSelect;
 export type NewCardGroupRow = typeof cardGroups.$inferInsert;
 export type CollectionItemRow = typeof collectionItems.$inferSelect;
+
+/**
+ * One frozen collection value per person per day.
+ *
+ * The value history reads these for past days instead of re-pricing today's
+ * holdings across the whole window. Today is still computed live.
+ */
+export const collectionValueSnapshots = pgTable(
+  'collection_value_snapshots',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    value: numeric('value', { precision: 14, scale: 2 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.day] }),
+    index('collection_value_snapshots_user_day_idx').on(table.userId, table.day),
+  ],
+);
+
+export type CollectionValueSnapshotRow = typeof collectionValueSnapshots.$inferSelect;
 export type NewCollectionItemRow = typeof collectionItems.$inferInsert;
 export type GroupMembershipRow = typeof groupMemberships.$inferSelect;
 export type NewGroupMembershipRow = typeof groupMemberships.$inferInsert;

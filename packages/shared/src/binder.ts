@@ -6,7 +6,13 @@ import {
   cardLanguageSchema,
   type CardFinish,
 } from './enums';
-import { cardSchema, priceForFinish, printingIdSchema, type CardPrices } from './card';
+import {
+  cardSchema,
+  priceForFinish,
+  priceRangeSchema,
+  printingIdSchema,
+  type CardPrices,
+} from './card';
 import { paginationQuerySchema } from './pagination';
 
 /** Lowercase letters, numbers and single hyphens. Used in share URLs. */
@@ -30,6 +36,8 @@ export const cardGroupSchema = z.object({
   description: z.string().nullable(),
   /** Copies in the group. Present when the caller asked for it. */
   itemCount: z.number().int().nonnegative().optional(),
+  /** Total asking value of the copies. Present when the caller asked for it. */
+  value: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -158,6 +166,9 @@ export const collectionItemSchema = z.object({
 });
 export type CollectionItem = z.infer<typeof collectionItemSchema>;
 
+/** The longest note a stack can carry. The form shows this and blocks a longer one. */
+export const NOTES_MAX_LENGTH = 280;
+
 export const addCollectionItemSchema = z.object({
   scryfallId: printingIdSchema,
   quantity: z.number().int().positive().max(999).default(1),
@@ -169,17 +180,19 @@ export const addCollectionItemSchema = z.object({
   misprint: z.boolean().default(false),
   miscut: z.boolean().default(false),
   artistProof: z.boolean().default(false),
-  notes: z.string().max(280).optional(),
+  notes: z.string().max(NOTES_MAX_LENGTH).optional(),
   photoUrl: photoLinkSchema.nullable().optional(),
   /** A personal collection starts private; the owner marks cards for trade. */
   forTrade: z.boolean().default(false),
   price: itemPriceSchema.default({ kind: 'market' }),
+  /** Optional private groups the new stack should join. */
+  groupIds: z.array(z.string().uuid()).max(50).optional(),
 });
 export type AddCollectionItemInput = z.infer<typeof addCollectionItemSchema>;
 
 export const updateCollectionItemSchema = addCollectionItemSchema
   .partial()
-  .omit({ scryfallId: true });
+  .omit({ scryfallId: true, groupIds: true });
 export type UpdateCollectionItemInput = z.infer<typeof updateCollectionItemSchema>;
 
 /** The numbers at the top of the collection page. */
@@ -192,6 +205,8 @@ export const collectionSummarySchema = z.object({
   marketValue: z.string(),
   /** Market value of the copies marked for trade. */
   forTradeValue: z.string(),
+  /** Your copies in live trades right now. */
+  onTheTable: z.number().int().nonnegative(),
 });
 export type CollectionSummary = z.infer<typeof collectionSummarySchema>;
 
@@ -203,11 +218,15 @@ export const collectionHighlightSchema = z.object({
   setCode: z.string(),
   finish: cardFinishSchema,
   quantity: z.number().int().positive(),
+  /** True when the card is offered in the trade binder. */
+  forTrade: z.boolean(),
   imageUrl: z.string().nullable(),
   /** Asking price for one copy, in dollars. Null when no price is known. */
   price: z.string().nullable(),
-  /** Dollars gained or lost in the past week. Null means no change, or nothing to compare. */
-  weekChange: z.string().nullable(),
+  /** Dollars gained or lost over the selected window. Null means no change, or nothing to compare. */
+  change: z.string().nullable(),
+  /** The same move as a percent of the starting price. */
+  changePercent: z.string().nullable(),
 });
 export type CollectionHighlight = z.infer<typeof collectionHighlightSchema>;
 
@@ -308,6 +327,12 @@ export const collectionItemQuerySchema = paginationQuerySchema.extend({
   condition: z.preprocess(blankToUndefined, cardConditionSchema.optional()),
   language: z.preprocess(blankToUndefined, cardLanguageSchema.optional()),
   rarity: z.preprocess(blankToUndefined, cardRaritySchema.optional()),
+  /** Matched against the type line. */
+  type: z.preprocess(blankToUndefined, z.string().max(80).optional()),
+  /** Matched against the illustrator. */
+  artist: z.preprocess(blankToUndefined, z.string().max(120).optional()),
+  /** Only cards carrying this group label. */
+  groupId: z.preprocess(blankToUndefined, z.string().uuid().optional()),
   forTrade: queryFlag(),
   signed: queryFlag(),
   altered: queryFlag(),
@@ -317,3 +342,78 @@ export const collectionItemQuerySchema = paginationQuerySchema.extend({
   onWantList: queryFlag(),
 });
 export type CollectionItemQuery = z.infer<typeof collectionItemQuerySchema>;
+
+/** How the full card list is ordered. */
+export const collectionSortSchema = z.enum(['name', 'price', 'change']);
+export type CollectionSort = z.infer<typeof collectionSortSchema>;
+
+export const sortDirectionSchema = z.enum(['asc', 'desc']);
+export type SortDirection = z.infer<typeof sortDirectionSchema>;
+
+/**
+ * The full card list: the same filters, plus ordering and the window used for
+ * the change column.
+ */
+export const collectionCardsQuerySchema = collectionItemQuerySchema.extend({
+  sort: collectionSortSchema.default('price'),
+  dir: sortDirectionSchema.default('desc'),
+  range: priceRangeSchema.default('1w'),
+  /** Which change the "change" sort uses. Display is chosen by the client. */
+  changeBy: z.enum(['amount', 'percent']).default('amount'),
+});
+export type CollectionCardsQuery = z.infer<typeof collectionCardsQuerySchema>;
+
+/** The dashboard movers: a few gainers and a few losers for one window. */
+export const collectionMoversQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(20).default(5),
+  range: priceRangeSchema.default('1w'),
+  changeBy: z.enum(['amount', 'percent']).default('amount'),
+});
+export type CollectionMoversQuery = z.infer<typeof collectionMoversQuerySchema>;
+
+/** One day of the whole collection's asking value. */
+export const collectionValuePointSchema = z.object({
+  date: z.string(),
+  value: z.number().nonnegative(),
+});
+export type CollectionValuePoint = z.infer<typeof collectionValuePointSchema>;
+
+export const collectionValueHistorySchema = z.object({
+  range: priceRangeSchema,
+  points: z.array(collectionValuePointSchema),
+});
+export type CollectionValueHistory = z.infer<typeof collectionValueHistorySchema>;
+
+export const collectionValueHistoryQuerySchema = z.object({
+  range: priceRangeSchema.default('1m'),
+});
+
+/** The factors the value pie can split by. */
+export const collectionValueBreakdownBySchema = z.enum([
+  'set',
+  'rarity',
+  'finish',
+  'condition',
+  'language',
+  'marks',
+  'trade',
+]);
+export type CollectionValueBreakdownBy = z.infer<typeof collectionValueBreakdownBySchema>;
+
+export const collectionValueBreakdownQuerySchema = z.object({
+  by: collectionValueBreakdownBySchema.default('set'),
+});
+
+export const collectionValueBucketSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.number().nonnegative(),
+});
+export type CollectionValueBucket = z.infer<typeof collectionValueBucketSchema>;
+
+export const collectionValueBreakdownSchema = z.object({
+  by: collectionValueBreakdownBySchema,
+  total: z.number().nonnegative(),
+  buckets: z.array(collectionValueBucketSchema),
+});
+export type CollectionValueBreakdown = z.infer<typeof collectionValueBreakdownSchema>;

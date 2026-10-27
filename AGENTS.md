@@ -17,6 +17,15 @@ When you change a screen, start from the phone and then add space for a wider wi
 - Touch targets stay easy to tap. Do not shrink a button just so a row fits.
 - Write the layout for a phone and for a wider window. Do not open a browser to check the screen. The owner does that check.
 
+# UI copy
+
+Do not add helper sentences under a section title. The purpose of a section must be clear from its title, its controls, and its data.
+
+- No subtitles such as "Ranked by the price of one copy" or "The biggest gains and drops in the chosen window."
+- A short control label ("Window", "Split by") is fine. A sentence about what the section does is not.
+- If data needs context, put it in the data, a tooltip, or a label. Do not write a paragraph.
+- When you touch a section, remove this kind of helper text.
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know
