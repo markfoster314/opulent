@@ -1,17 +1,23 @@
 import type { Database, TradeRow } from '@opulent/db';
-import { binderItems, binders, cards, tradeItems, trades, users } from '@opulent/db';
+import { collectionItems, cards, tradeItems, trades, users } from '@opulent/db';
 import type {
+  CardFinish,
   CardImageUris,
+  CardPrices,
   CreateTradeInput,
   TradeCard,
   TradeChoice,
+  TradeChoices,
   TradeDetail,
   TradeLinesInput,
   TradeSummary,
 } from '@opulent/shared';
+import { CARD_GAME, marketPrices, priceForFinish } from '@opulent/shared';
 import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { ApiError } from '../../lib/http';
 import { getUserByUsername } from '../users/service';
+import { notifyTurn } from './notify';
 
 type Line = { scryfallId: string; quantity: number };
 type Side = 'offered' | 'requested';
@@ -67,25 +73,50 @@ export async function getTrade(
   return toDetail(db, trade, userId);
 }
 
+/** Their for-trade stock fills "You get". Your own fills "You give". */
 export async function listChoices(
   db: Database,
   userId: string,
   tradeId: string,
-): Promise<TradeChoice[]> {
+): Promise<TradeChoices> {
   const trade = await requireTrade(db, tradeId, userId);
+  const [items, mine] = await Promise.all([
+    stockChoices(db, partnerId(trade, userId)),
+    stockChoices(db, userId),
+  ]);
+  return { items, mine };
+}
+
+async function stockChoices(db: Database, ownerId: string): Promise<TradeChoice[]> {
   const rows = await db
     .select({
       scryfallId: cards.scryfallId,
       name: cards.name,
       setCode: cards.setCode,
       imageUris: cards.imageUris,
-      available: sql<number>`sum(${binderItems.quantity})::int`,
+      prices: cards.prices,
+      englishPrices: englishCards.prices,
+      available: sql<number>`sum(${collectionItems.quantity})::int`,
+      finish: dominantFinish,
     })
-    .from(binderItems)
-    .innerJoin(binders, eq(binders.id, binderItems.binderId))
-    .innerJoin(cards, eq(cards.scryfallId, binderItems.scryfallId))
-    .where(and(eq(binders.userId, partnerId(trade, userId)), eq(binderItems.forTrade, true)))
-    .groupBy(cards.scryfallId, cards.name, cards.setCode, cards.imageUris)
+    .from(collectionItems)
+    .innerJoin(cards, eq(cards.scryfallId, collectionItems.scryfallId))
+    .leftJoin(englishCards, englishPrintingJoin())
+    .where(
+      and(
+        eq(collectionItems.userId, ownerId),
+        eq(collectionItems.forTrade, true),
+        eq(cards.game, CARD_GAME),
+      ),
+    )
+    .groupBy(
+      cards.scryfallId,
+      cards.name,
+      cards.setCode,
+      cards.imageUris,
+      cards.prices,
+      englishCards.prices,
+    )
     .orderBy(asc(cards.name));
 
   return rows
@@ -96,7 +127,27 @@ export async function listChoices(
       setCode: row.setCode,
       availableQuantity: Number(row.available),
       imageUris: readImage(row.imageUris),
+      marketPrice: priceForFinish(
+        marketPrices(row.prices as CardPrices | null, row.englishPrices as CardPrices | null),
+        row.finish,
+      ),
     }));
+}
+
+/** The finish this person holds the most copies of, for pricing one printing. */
+const dominantFinish = sql<CardFinish>`mode() WITHIN GROUP (ORDER BY ${collectionItems.finish})`;
+
+const englishCards = alias(cards, 'english_card');
+
+/** Scryfall prices the English printing. A foreign row of the same set and number borrows it. */
+function englishPrintingJoin() {
+  return and(
+    eq(englishCards.setCode, cards.setCode),
+    eq(englishCards.collectorNumber, cards.collectorNumber),
+    eq(englishCards.lang, 'en'),
+    sql`jsonb_exists(${englishCards.raw}->'games', 'paper')`,
+    sql`${englishCards.layout} IS DISTINCT FROM 'art_series'`,
+  );
 }
 
 /** Starts a trade, or adds these cards to the open trade these two people already have. */
@@ -110,14 +161,22 @@ export async function openTrade(
   if (partner.id === userId) throw ApiError.badRequest('You cannot trade with yourself.');
 
   const incoming = normalize(input.items);
+  const giving = input.give === undefined ? undefined : normalize(input.give);
   const pair = await pairTrades(db, userId, partner.id);
   const draft = pair.find((row) => row.status === 'draft' && row.proposerId === userId);
   const open = pair.find((row) => live.has(row.status));
+
+  // A closed trade binder cannot receive a brand-new request. A trade that is
+  // already under way keeps going.
+  if (!open && !draft && partner.tradeBinderVisibility === 'private') {
+    throw ApiError.notFound('Trade binder not found');
+  }
 
   if (!open && draft) {
     const merged = mergeMax(await loadSide(db, draft.id, 'requested'), incoming);
     await assertStock(db, partner.id, merged);
     await replaceSide(db, draft.id, 'requested', merged);
+    await mergeGiveSide(db, draft.id, 'offered', userId, giving);
     const updated = await saveTrade(db, draft.id, {
       status: 'draft',
       turnUserId: userId,
@@ -129,6 +188,7 @@ export async function openTrade(
 
   if (!open) {
     await assertStock(db, partner.id, incoming);
+    if (giving) await assertStock(db, userId, giving);
     const [created] = await db
       .insert(trades)
       .values({
@@ -140,6 +200,7 @@ export async function openTrade(
       .returning();
     if (!created) throw ApiError.badRequest('Could not open the trade.');
     await replaceSide(db, created.id, 'requested', incoming);
+    if (giving) await replaceSide(db, created.id, 'offered', giving);
     return toDetail(db, created, userId);
   }
 
@@ -148,12 +209,14 @@ export async function openTrade(
   const merged = mergeMax(await loadSide(db, open.id, side), incoming);
   await assertStock(db, giver, merged);
   await replaceSide(db, open.id, side, merged);
+  await mergeGiveSide(db, open.id, otherSide(side), userId, giving);
   const updated = await saveTrade(db, open.id, {
     proposerFinalizedAt: null,
     receiverFinalizedAt: null,
     status: open.proposerId === userId ? 'proposed' : 'countered',
     turnUserId: partnerId(open, userId),
   });
+  notifyTurn(db, updated, userId);
   return toDetail(db, updated, userId);
 }
 
@@ -210,8 +273,16 @@ async function moveTrade(
   const side = receiveSide(trade, userId);
   const items = normalize(input.items);
   await assertStock(db, partnerId(trade, userId), items);
-  const changed = signature(await loadSide(db, trade.id, side)) !== signature(items);
+  let changed = signature(await loadSide(db, trade.id, side)) !== signature(items);
   await replaceSide(db, trade.id, side, items);
+
+  if (input.give !== undefined) {
+    const giving = normalize(input.give);
+    await assertStock(db, userId, giving);
+    const giveSide = otherSide(side);
+    changed ||= signature(await loadSide(db, trade.id, giveSide)) !== signature(giving);
+    await replaceSide(db, trade.id, giveSide, giving);
+  }
 
   let proposerFinalizedAt = changed ? null : trade.proposerFinalizedAt;
   let receiverFinalizedAt = changed ? null : trade.receiverFinalizedAt;
@@ -238,6 +309,7 @@ async function moveTrade(
           : 'countered',
     turnUserId: both ? trade.turnUserId : partnerId(trade, userId),
   });
+  notifyTurn(db, updated, userId);
   return toDetail(db, updated, userId);
 }
 
@@ -256,21 +328,27 @@ async function proposeDraft(
     throw ApiError.badRequest('Propose this trade before you finalize it.');
   }
   const items = normalize(input.items);
-  if (items.length === 0) throw ApiError.badRequest('Add a card before you propose.');
+  const giving = input.give === undefined ? undefined : normalize(input.give);
+  if (items.length === 0 && (giving?.length ?? 0) === 0) {
+    throw ApiError.badRequest('Add a card before you propose.');
+  }
   const partner = partnerId(trade, userId);
   await assertStock(db, partner, items);
+  if (giving) await assertStock(db, userId, giving);
 
   const liveTrade = (await pairTrades(db, userId, partner)).find(
     (row) => row.id !== trade.id && live.has(row.status),
   );
   if (!liveTrade) {
     await replaceSide(db, trade.id, 'requested', items);
+    if (giving) await replaceSide(db, trade.id, 'offered', giving);
     const updated = await saveTrade(db, trade.id, {
       status: 'proposed',
       turnUserId: partner,
       proposerFinalizedAt: null,
       receiverFinalizedAt: null,
     });
+    notifyTurn(db, updated, userId);
     return toDetail(db, updated, userId);
   }
 
@@ -278,6 +356,7 @@ async function proposeDraft(
   const merged = mergeMax(await loadSide(db, liveTrade.id, side), items);
   await assertStock(db, partnerId(liveTrade, userId), merged);
   await replaceSide(db, liveTrade.id, side, merged);
+  await mergeGiveSide(db, liveTrade.id, otherSide(side), userId, giving);
   await db.delete(trades).where(eq(trades.id, trade.id));
   const updated = await saveTrade(db, liveTrade.id, {
     proposerFinalizedAt: null,
@@ -285,6 +364,7 @@ async function proposeDraft(
     status: liveTrade.proposerId === userId ? 'proposed' : 'countered',
     turnUserId: partnerId(liveTrade, userId),
   });
+  notifyTurn(db, updated, userId);
   return toDetail(db, updated, userId);
 }
 
@@ -319,6 +399,20 @@ async function loadSide(db: Database, tradeId: string, side: Side): Promise<Line
     .from(tradeItems)
     .where(and(eq(tradeItems.tradeId, tradeId), eq(tradeItems.side, side)));
   return rows;
+}
+
+/** Folds offered cards into the give side, keeping the larger count per printing. */
+async function mergeGiveSide(
+  db: Database,
+  tradeId: string,
+  side: Side,
+  giverId: string,
+  giving: Line[] | undefined,
+): Promise<void> {
+  if (!giving || giving.length === 0) return;
+  const merged = mergeMax(await loadSide(db, tradeId, side), giving);
+  await assertStock(db, giverId, merged);
+  await replaceSide(db, tradeId, side, merged);
 }
 
 async function replaceSide(
@@ -373,24 +467,36 @@ async function availableCopies(
   ownerId: string,
   scryfallIds: string[],
 ): Promise<Map<string, number>> {
+  const stock = await stockByPrinting(db, ownerId, scryfallIds);
+  return new Map([...stock].map(([scryfallId, row]) => [scryfallId, row.available]));
+}
+
+/** Copies for trade per printing, with the finish most of them carry. */
+async function stockByPrinting(
+  db: Database,
+  ownerId: string,
+  scryfallIds: string[],
+): Promise<Map<string, { available: number; finish: CardFinish }>> {
   const unique = [...new Set(scryfallIds)];
   if (unique.length === 0) return new Map();
   const rows = await db
     .select({
-      scryfallId: binderItems.scryfallId,
-      available: sql<number>`sum(${binderItems.quantity})::int`,
+      scryfallId: collectionItems.scryfallId,
+      available: sql<number>`sum(${collectionItems.quantity})::int`,
+      finish: dominantFinish,
     })
-    .from(binderItems)
-    .innerJoin(binders, eq(binders.id, binderItems.binderId))
+    .from(collectionItems)
     .where(
       and(
-        eq(binders.userId, ownerId),
-        eq(binderItems.forTrade, true),
-        inArray(binderItems.scryfallId, unique),
+        eq(collectionItems.userId, ownerId),
+        eq(collectionItems.forTrade, true),
+        inArray(collectionItems.scryfallId, unique),
       ),
     )
-    .groupBy(binderItems.scryfallId);
-  return new Map(rows.map((row) => [row.scryfallId, Number(row.available)]));
+    .groupBy(collectionItems.scryfallId);
+  return new Map(
+    rows.map((row) => [row.scryfallId, { available: Number(row.available), finish: row.finish }]),
+  );
 }
 
 async function toDetail(db: Database, trade: TradeRow, userId: string): Promise<TradeDetail> {
@@ -403,16 +509,19 @@ async function toDetail(db: Database, trade: TradeRow, userId: string): Promise<
       name: cards.name,
       setCode: cards.setCode,
       imageUris: cards.imageUris,
+      prices: cards.prices,
+      englishPrices: englishCards.prices,
     })
     .from(tradeItems)
     .innerJoin(cards, eq(cards.scryfallId, tradeItems.scryfallId))
+    .leftJoin(englishCards, englishPrintingJoin())
     .where(eq(tradeItems.tradeId, trade.id))
     .orderBy(asc(cards.name));
 
-  const stock = await availableCopies(db, partnerId(trade, userId), [
+  const stock = await stockByPrinting(db, partnerId(trade, userId), [
     ...rows.filter((row) => row.side === receive).map((row) => row.scryfallId),
   ]);
-  const ownStock = await availableCopies(
+  const ownStock = await stockByPrinting(
     db,
     userId,
     rows.filter((row) => row.side !== receive).map((row) => row.scryfallId),
@@ -421,16 +530,18 @@ async function toDetail(db: Database, trade: TradeRow, userId: string): Promise<
   const youReceive: TradeCard[] = [];
   const youGive: TradeCard[] = [];
   for (const row of rows) {
+    const held = row.side === receive ? stock.get(row.scryfallId) : ownStock.get(row.scryfallId);
     const card: TradeCard = {
       scryfallId: row.scryfallId,
       quantity: row.quantity,
       name: row.name,
       setCode: row.setCode,
       imageUris: readImage(row.imageUris),
-      availableQuantity:
-        row.side === receive
-          ? (stock.get(row.scryfallId) ?? row.quantity)
-          : (ownStock.get(row.scryfallId) ?? row.quantity),
+      availableQuantity: held?.available ?? row.quantity,
+      marketPrice: priceForFinish(
+        marketPrices(row.prices as CardPrices | null, row.englishPrices as CardPrices | null),
+        held?.finish ?? 'nonfoil',
+      ),
     };
     if (row.side === receive) youReceive.push(card);
     else youGive.push(card);

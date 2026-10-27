@@ -7,8 +7,10 @@ import { secureHeaders } from 'hono/secure-headers';
 import { getEnv } from './env';
 import type { AppEnv } from './lib/context';
 import { onError, onNotFound } from './middleware/error';
-import { binderRoutes } from './modules/binders/routes';
 import { cardRoutes } from './modules/cards/routes';
+import { groupRoutes } from './modules/groups/routes';
+import { collectionRoutes } from './modules/collection/routes';
+import { matchRoutes } from './modules/matches/routes';
 import { healthRoutes } from './modules/health/routes';
 import { placeRoutes } from './modules/places/routes';
 import { tradeRoutes } from './modules/trades/routes';
@@ -51,7 +53,9 @@ export function createApp() {
   app.route('/v1/users', userRoutes);
   app.route('/v1/places', placeRoutes);
   app.route('/v1/cards', cardRoutes);
-  app.route('/v1/binders', binderRoutes);
+  app.route('/v1/collection', collectionRoutes);
+  app.route('/v1/matches', matchRoutes);
+  app.route('/v1/groups', groupRoutes);
   app.route('/v1/wants', wantRoutes);
   app.route('/v1/trades', tradeRoutes);
 

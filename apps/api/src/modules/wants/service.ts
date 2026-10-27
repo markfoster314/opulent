@@ -13,7 +13,7 @@ import type {
   WantList,
   WantPriority,
 } from '@opulent/shared';
-import { genericWantMatchKey, wantScopeError } from '@opulent/shared';
+import { CARD_GAME, genericWantMatchKey, wantScopeError } from '@opulent/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
 
@@ -132,6 +132,7 @@ async function cardFaces(
       ${cards.imageUris} AS "imageUris"
     FROM ${cards}
     WHERE ${cards.oracleId} IN (${oracleIdList(unique)})
+      AND ${cards.game} = ${CARD_GAME}
       AND ${cards.imageUris} IS NOT NULL
       AND ${cards.layout} IS DISTINCT FROM 'art_series'
     ORDER BY
@@ -156,6 +157,7 @@ async function cardFaces(
       ${cards.name} AS name
     FROM ${cards}
     WHERE ${cards.oracleId} IN (${oracleIdList(missing)})
+      AND ${cards.game} = ${CARD_GAME}
     ORDER BY
       ${cards.oracleId},
       (${cards.lang} = 'en') DESC,
@@ -418,7 +420,7 @@ export async function addWantItem(
   const known = await db
     .select({ oracleId: cards.oracleId })
     .from(cards)
-    .where(eq(cards.oracleId, input.oracleId))
+    .where(and(eq(cards.oracleId, input.oracleId), eq(cards.game, CARD_GAME)))
     .limit(1);
   if (known.length === 0) {
     throw ApiError.badRequest('Unknown card. The local Scryfall mirror may be out of date.');
@@ -522,10 +524,11 @@ async function namesForSets(
       ${cards.setCode} AS "setCode",
       max(${cards.setName}) AS "setName"
     FROM ${cards}
-    WHERE ${cards.setCode} IN (${sql.join(
-      unique.map((code) => sql`${code}`),
-      sql`, `,
-    )})
+    WHERE ${cards.game} = ${CARD_GAME}
+      AND ${cards.setCode} IN (${sql.join(
+        unique.map((code) => sql`${code}`),
+        sql`, `,
+      )})
     GROUP BY ${cards.setCode}
   `)) as unknown as { setCode: string; setName: string | null }[];
 

@@ -9,6 +9,11 @@ const envSchema = z.object({
   AUTH0_AUDIENCE: z.string().min(1),
   /** Comma-separated list of allowed browser origins. */
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  /** Optional. Set both to send "your turn" trade emails through Resend. */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1).optional(),
+  /** Where links in emails point. The first CORS origin is used when unset. */
+  WEB_ORIGIN: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema> & { corsOrigins: string[] };

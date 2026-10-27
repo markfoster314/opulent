@@ -1,46 +1,9 @@
 import type { Database, NewCardRow } from '@opulent/db';
 import { cards } from '@opulent/db';
-import type { CardImageUris, CardPrices } from '@opulent/shared';
 import { sql } from 'drizzle-orm';
-import type { ScryfallCard } from './scryfall';
+import type { CatalogSource } from './catalog';
 
 const BATCH_SIZE = 500;
-
-/**
- * Double-faced cards carry no top-level `image_uris`; the art lives on each
- * face. Fall back to the front face so every card has a picture.
- */
-function pickImageUris(card: ScryfallCard): CardImageUris | null {
-  const source = card.image_uris ?? card.card_faces?.[0]?.image_uris;
-  return (source as CardImageUris | undefined) ?? null;
-}
-
-export function toCardRow(card: ScryfallCard): NewCardRow | null {
-  // A handful of Scryfall objects (tokens, art series oddities) have no
-  // oracle_id. Want lists are keyed on oracle_id, so such rows are unusable.
-  if (!card.oracle_id) return null;
-
-  return {
-    scryfallId: card.id,
-    oracleId: card.oracle_id,
-    name: card.name,
-    setCode: card.set,
-    setName: card.set_name ?? null,
-    collectorNumber: card.collector_number,
-    rarity: card.rarity ?? null,
-    lang: card.lang ?? 'en',
-    layout: card.layout ?? null,
-    typeLine: card.type_line ?? card.card_faces?.[0]?.type_line ?? null,
-    manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? null,
-    finishes: card.finishes ?? [],
-    imageUris: pickImageUris(card),
-    prices: (card.prices as CardPrices | undefined) ?? null,
-    scryfallUri: card.scryfall_uri ?? null,
-    releasedAt: card.released_at ?? null,
-    raw: card,
-    syncedAt: new Date(),
-  };
-}
 
 /**
  * Upserts a batch. Existing rows are refreshed rather than skipped, because
@@ -56,6 +19,7 @@ async function writeBatch(db: Database, batch: NewCardRow[]): Promise<void> {
       target: cards.scryfallId,
       set: {
         oracleId: sql`excluded.oracle_id`,
+        game: sql`excluded.game`,
         name: sql`excluded.name`,
         setCode: sql`excluded.set_code`,
         setName: sql`excluded.set_name`,
@@ -82,20 +46,24 @@ export interface ImportStats {
   skipped: number;
 }
 
-export async function importCards(
+/** Streams one catalog into the cards table. Works the same for any source. */
+export async function importCatalog<Item>(
   db: Database,
-  source: AsyncIterable<ScryfallCard>,
+  source: CatalogSource<Item>,
 ): Promise<ImportStats> {
   const stats: ImportStats = { read: 0, written: 0, skipped: 0 };
   let batch: NewCardRow[] = [];
 
-  for await (const card of source) {
+  for await (const item of source.list()) {
     stats.read += 1;
 
-    const row = toCardRow(card);
+    const row = source.toRow(item);
     if (!row) {
       stats.skipped += 1;
       continue;
+    }
+    if (row.game !== source.game) {
+      throw new Error(`${source.name} produced a row for game "${row.game}"`);
     }
 
     batch.push(row);

@@ -7,7 +7,7 @@ import {
   DialogTitle,
   Stack,
 } from '@mui/material';
-import type { BinderItem, UpdateBinderItemInput } from '@opulent/shared';
+import type { CollectionItem, UpdateCollectionItemInput } from '@opulent/shared';
 import { cardLanguageOrEnglish, parsePhotoLink } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { useCardLanguages } from '../api/queries';
@@ -21,17 +21,17 @@ import {
   priceFromDetails,
 } from './CardDetailsFields';
 
-interface BinderItemDialogProps {
-  item: BinderItem;
+interface CollectionItemDialogProps {
+  item: CollectionItem;
   open: boolean;
   onClose: () => void;
-  onSave: (input: UpdateBinderItemInput) => void;
+  onSave: (input: UpdateCollectionItemInput) => void;
   onDelete: () => void;
   saving: boolean;
   error?: string | undefined;
 }
 
-function detailsFromItem(item: BinderItem): CardDetails {
+function detailsFromItem(item: CollectionItem): CardDetails {
   return {
     quantity: String(item.quantity),
     finish: item.finish,
@@ -51,7 +51,7 @@ function detailsFromItem(item: BinderItem): CardDetails {
   };
 }
 
-export function BinderItemDialog({
+export function CollectionItemDialog({
   item,
   open,
   onClose,
@@ -59,7 +59,7 @@ export function BinderItemDialog({
   onDelete,
   saving,
   error,
-}: BinderItemDialogProps) {
+}: CollectionItemDialogProps) {
   const [details, setDetails] = useState<CardDetails>(() => detailsFromItem(item));
   const languagesQuery = useCardLanguages(open ? item.scryfallId : undefined);
   const printedLanguages = languagesQuery.data?.items.map((card) =>

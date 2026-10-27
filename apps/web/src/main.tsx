@@ -40,7 +40,8 @@ createRoot(container).render(
       <ApiProvider>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider theme={theme}>
-            <CssBaseline />
+            {/* Follows theme.palette.mode, so dark widgets stay honest if the mode changes. */}
+            <CssBaseline enableColorScheme />
             <BrowserRouter>
               <App />
             </BrowserRouter>

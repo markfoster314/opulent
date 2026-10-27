@@ -1,16 +1,17 @@
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RemoveIcon from '@mui/icons-material/Remove';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
-import { IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import type { BinderItem, UpdateBinderItemInput } from '@opulent/shared';
+import { Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import type { CollectionItem, UpdateCollectionItemInput } from '@opulent/shared';
 import { useEffect, useRef, useState } from 'react';
-import { BinderItemDialog } from './BinderItemDialog';
-import { binderTileCaption, binderTilePrice, CardTile } from './CardTile';
+import { CollectionItemDialog } from './CollectionItemDialog';
+import { collectionTileCaption, collectionTilePrice, CardTile } from './CardTile';
 
-interface BinderItemTileProps {
-  item: BinderItem;
-  onUpdate: (itemId: string, input: UpdateBinderItemInput) => void;
+interface CollectionItemTileProps {
+  item: CollectionItem;
+  onUpdate: (itemId: string, input: UpdateCollectionItemInput) => void;
   onRemove: (itemId: string) => void;
   saving: boolean;
   error?: string | undefined;
@@ -19,7 +20,13 @@ interface BinderItemTileProps {
 /** How long to wait after the last click before sending the new quantity. */
 const QUANTITY_DEBOUNCE_MS = 500;
 
-export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: BinderItemTileProps) {
+export function CollectionItemTile({
+  item,
+  onUpdate,
+  onRemove,
+  saving,
+  error,
+}: CollectionItemTileProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftQuantity, setDraftQuantity] = useState(item.quantity);
 
@@ -51,14 +58,14 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
 
   if (!item.card) return null;
 
-  const caption = binderTileCaption(item);
+  const caption = collectionTileCaption(item);
 
   return (
     <Stack spacing={0.5} sx={{ height: '100%' }}>
       <CardTile
         card={item.card}
         quantity={draftQuantity}
-        price={binderTilePrice(item)}
+        price={collectionTilePrice(item)}
         notes={item.notes?.trim() ? item.notes : null}
         signed={item.signed}
         altered={item.altered}
@@ -70,6 +77,14 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
         foil={item.finish === 'foil'}
         onClick={() => setDialogOpen(true)}
       />
+
+      {item.groups.length > 0 && (
+        <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" justifyContent="center">
+          {item.groups.map((group) => (
+            <Chip key={group.id} label={group.name} size="small" variant="outlined" />
+          ))}
+        </Stack>
+      )}
 
       <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.25}>
         <IconButton
@@ -94,11 +109,27 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
           <AddIcon fontSize="small" />
         </IconButton>
 
-        {!item.forTrade && (
-          <Tooltip title="Not offered for trade">
-            <VisibilityOffOutlinedIcon fontSize="small" color="disabled" />
-          </Tooltip>
-        )}
+        <Tooltip
+          title={item.forTrade ? 'For trade. Click to keep it.' : 'Kept. Click to offer it.'}
+        >
+          <IconButton
+            size="small"
+            aria-label={
+              item.forTrade
+                ? `Stop offering ${item.card.name}`
+                : `Offer ${item.card.name} for trade`
+            }
+            aria-pressed={item.forTrade}
+            onClick={() => onUpdate(item.id, { forTrade: !item.forTrade })}
+            disabled={saving}
+          >
+            {item.forTrade ? (
+              <SwapHorizIcon fontSize="small" color="primary" />
+            ) : (
+              <VisibilityOffOutlinedIcon fontSize="small" color="disabled" />
+            )}
+          </IconButton>
+        </Tooltip>
 
         <Tooltip title="Edit this card">
           <IconButton
@@ -111,7 +142,7 @@ export function BinderItemTile({ item, onUpdate, onRemove, saving, error }: Bind
         </Tooltip>
       </Stack>
 
-      <BinderItemDialog
+      <CollectionItemDialog
         item={item}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}

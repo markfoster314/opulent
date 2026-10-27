@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { profileVisibilitySchema } from './enums';
+import { binderVisibilitySchema, profileVisibilitySchema } from './enums';
 import { placeIdSchema, placeRefSchema } from './place';
 import { genericWantSchema } from './want';
 
@@ -20,7 +20,10 @@ export const reservedUsernames = new Set([
   'binders',
   'card',
   'cards',
+  'collection',
+  'groups',
   'help',
+  'matches',
   'login',
   'logout',
   'me',
@@ -101,6 +104,10 @@ export const meSchema = userSchema.extend({
   onboarded: z.boolean(),
   profileVisibility: profileVisibilitySchema,
   bio: z.string().nullable(),
+  /** Who can open the trade binder: every stack marked for trade. */
+  tradeBinderVisibility: binderVisibilitySchema,
+  /** Share link secret for an unlisted trade binder. */
+  tradeBinderShareToken: z.string(),
 });
 export type Me = z.infer<typeof meSchema>;
 
@@ -125,6 +132,7 @@ export const updateProfileSchema = z
     username: claimedUsernameSchema.optional(),
     placeId: placeIdSchema.nullable().optional(),
     profileVisibility: profileVisibilitySchema.optional(),
+    tradeBinderVisibility: binderVisibilitySchema.optional(),
     bio: bioSchema.nullable().optional(),
   })
   .refine(
@@ -132,6 +140,7 @@ export const updateProfileSchema = z
       value.username !== undefined ||
       value.placeId !== undefined ||
       value.profileVisibility !== undefined ||
+      value.tradeBinderVisibility !== undefined ||
       value.bio !== undefined,
     'Nothing to save',
   );
@@ -193,11 +202,13 @@ export const profileSchema = z.object({
   isFollowing: z.boolean(),
   followerCount: z.number().int().nonnegative(),
   followingCount: z.number().int().nonnegative(),
-  /** Matches across every public binder. Omitted for the owner and for signed-out visitors. */
-  binderMatchCount: z.number().int().nonnegative().optional(),
+  /**
+   * Copies in the public trade binder. Present when the profile is public and
+   * the trade binder is public. Missing means there is no trade binder to open.
+   */
+  tradeBinderCount: z.number().int().nonnegative().optional(),
   /** Matches across every public want list. Omitted for the owner and for signed-out visitors. */
   wantMatchCount: z.number().int().nonnegative().optional(),
-  binders: z.array(profileEntrySchema).optional(),
   wantLists: z.array(profileEntrySchema).optional(),
   genericWants: z.array(genericWantSchema).optional(),
 });

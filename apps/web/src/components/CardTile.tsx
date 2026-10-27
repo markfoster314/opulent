@@ -5,7 +5,7 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import { Box, Chip, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
-import type { BinderItem, Card } from '@opulent/shared';
+import type { CollectionItem, Card } from '@opulent/shared';
 import { askingPriceForFinish, cardFinishLabels, formatUsd } from '@opulent/shared';
 import type { ReactNode } from 'react';
 import { palette } from '../theme';
@@ -36,8 +36,8 @@ interface CardTileProps {
 }
 
 /** The dollar amount on a binder stack. With no stored market price, market shows MKT and a percent shows as 90% MKT. */
-export function binderTilePrice(
-  item: Pick<BinderItem, 'card' | 'finish' | 'price'>,
+export function collectionTilePrice(
+  item: Pick<CollectionItem, 'card' | 'finish' | 'price'>,
 ): string | null {
   if (!item.card) return null;
   const asking = formatUsd(askingPriceForFinish(item.card.prices, item.finish, item.price));
@@ -48,7 +48,7 @@ export function binderTilePrice(
 }
 
 /** Set code, printing, quality, and language code, in one line under the name. */
-export function binderTileCaption(item: BinderItem): string {
+export function collectionTileCaption(item: CollectionItem): string {
   if (!item.card) return '';
   return [
     item.card.setCode.toUpperCase(),

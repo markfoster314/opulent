@@ -3,6 +3,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import {
   AppBar,
+  Badge,
   Box,
   Button,
   CircularProgress,
@@ -17,7 +18,8 @@ import {
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
-import { useMe } from '../api/queries';
+import { useMe, useTrades } from '../api/queries';
+import { hasPendingAdd } from '../pendingAdd';
 import { palette } from '../theme';
 import { LogoMark } from './LogoMark';
 
@@ -26,6 +28,14 @@ export function AppLayout() {
   const location = useLocation();
   const me = useMe(isAuthenticated);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** A card picked before sign-up, so the welcome step hands off to the collection page. */
+  const [pendingAdd] = useState(() => hasPendingAdd());
+
+  // Trades waiting on this person. Drafts are theirs alone, so they do not count.
+  const trades = useTrades(isAuthenticated && me.data?.onboarded === true);
+  const yourTurnCount = (trades.data?.items ?? []).filter(
+    (trade) => trade.yourTurn && trade.status !== 'draft',
+  ).length;
 
   /**
    * A signed-in user without a chosen username is sent to the welcome screen
@@ -51,7 +61,7 @@ export function AppLayout() {
   const settlingAuthReturn = authReturnRef.current && (isLoading || accountPending);
   /**
    * A refresh of /welcome does not know yet whether onboarding is finished.
-   * Until the account row arrives, the bar would show My binders, as if setup
+   * Until the account row arrives, the bar would show My collection, as if setup
    * were already done. Cover the whole window instead.
    */
   const welcomePending = onWelcome && (isLoading || accountPending);
@@ -104,6 +114,7 @@ export function AppLayout() {
 
           <BarActions
             part="links"
+            yourTurnCount={yourTurnCount}
             isLoading={isLoading}
             isAuthenticated={isAuthenticated}
             needsWelcome={needsWelcome}
@@ -119,6 +130,7 @@ export function AppLayout() {
 
           <BarActions
             part="account"
+            yourTurnCount={yourTurnCount}
             isLoading={isLoading}
             isAuthenticated={isAuthenticated}
             needsWelcome={needsWelcome}
@@ -180,6 +192,7 @@ export function AppLayout() {
         <BarActions
           part="all"
           stacked
+          yourTurnCount={yourTurnCount}
           isLoading={isLoading}
           isAuthenticated={isAuthenticated}
           needsWelcome={needsWelcome}
@@ -191,11 +204,14 @@ export function AppLayout() {
         />
       </Drawer>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 }, flexGrow: 1 }}>
+      <Container maxWidth="lg" sx={{ px: { xs: 2.5, sm: 3 }, py: { xs: 4, md: 5 }, flexGrow: 1 }}>
         {redirectingToWelcome && (
           <Navigate
             to="/welcome"
-            state={{ from: `${location.pathname}${location.search}` }}
+            state={{
+              // A visitor who picked a card finishes that add on the collection page.
+              from: pendingAdd ? '/collection' : `${location.pathname}${location.search}`,
+            }}
             replace
           />
         )}
@@ -204,7 +220,11 @@ export function AppLayout() {
 
       <Box
         component="footer"
-        sx={{ borderTop: `1px solid ${palette.divider}`, py: 3, textAlign: 'center' }}
+        sx={{
+          borderTop: `1px solid ${palette.divider}`,
+          py: { xs: 4, md: 3 },
+          textAlign: 'center',
+        }}
       >
         <Typography variant="caption" color="text.secondary">
           Card data and images courtesy of Scryfall. Opulent Tutor is unofficial Fan Content
@@ -220,6 +240,8 @@ interface BarActionsProps {
   /** Links sit on the left of a wide bar. The account sits on the right. The menu shows both. */
   part: 'links' | 'account' | 'all';
   stacked?: boolean;
+  /** Trades waiting on this person. Zero hides the badge. */
+  yourTurnCount: number;
   isLoading: boolean;
   isAuthenticated: boolean;
   needsWelcome: boolean;
@@ -235,6 +257,7 @@ interface BarActionsProps {
 function BarActions({
   part,
   stacked = false,
+  yourTurnCount,
   isLoading,
   isAuthenticated,
   needsWelcome,
@@ -263,14 +286,16 @@ function BarActions({
         <>
           <Button
             component={RouterLink}
-            to="/binders"
+            to="/collection"
             color={
-              pathname === '/binders' || pathname.startsWith('/binders/') ? 'primary' : 'inherit'
+              pathname.startsWith('/collection') || pathname.startsWith('/groups/')
+                ? 'primary'
+                : 'inherit'
             }
             fullWidth={stacked}
             sx={itemSx}
           >
-            My binders
+            My collection
           </Button>
           <Button
             component={RouterLink}
@@ -283,6 +308,15 @@ function BarActions({
           </Button>
           <Button
             component={RouterLink}
+            to="/matches"
+            color={pathname === '/matches' ? 'primary' : 'inherit'}
+            fullWidth={stacked}
+            sx={itemSx}
+          >
+            Find trades
+          </Button>
+          <Button
+            component={RouterLink}
             to="/trades"
             color={
               pathname === '/trades' || pathname.startsWith('/trades/') ? 'primary' : 'inherit'
@@ -290,7 +324,14 @@ function BarActions({
             fullWidth={stacked}
             sx={itemSx}
           >
-            Trades
+            <Badge
+              badgeContent={yourTurnCount}
+              color="primary"
+              max={99}
+              sx={{ '& .MuiBadge-badge': { right: -12, top: 2 } }}
+            >
+              Trades
+            </Badge>
           </Button>
         </>
       )}

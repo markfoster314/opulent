@@ -27,6 +27,17 @@ export const cardPricesSchema = z.object({
 export type CardPrices = z.infer<typeof cardPricesSchema>;
 
 /**
+ * The id of one exact printing.
+ *
+ * Today it is Scryfall's id, and the wire field is still named `scryfallId`
+ * so no client breaks. Every schema uses this one type for it, so when a
+ * second game arrives the field can be renamed to `printingId` in one pass
+ * without hunting through each schema. The database column keeps its name.
+ */
+export const printingIdSchema = z.string().uuid();
+export type PrintingId = z.infer<typeof printingIdSchema>;
+
+/**
  * The slice of a Scryfall card we promote to real columns.
  *
  * `scryfallId` identifies one exact printing. `oracleId` identifies the card
@@ -34,7 +45,7 @@ export type CardPrices = z.infer<typeof cardPricesSchema>;
  * concepts, because most traders do not care which set a card came from.
  */
 export const cardSchema = z.object({
-  scryfallId: z.string().uuid(),
+  scryfallId: printingIdSchema,
   oracleId: z.string().uuid(),
   name: z.string(),
   setCode: z.string(),

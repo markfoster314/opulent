@@ -21,6 +21,8 @@ export interface RequestOptions {
   /** Share token for viewing an unlisted binder without signing in. */
   shareToken?: string;
   signal?: AbortSignal;
+  /** Read the body as text instead of JSON. For file downloads such as the CSV export. */
+  asText?: boolean;
 }
 
 /**
@@ -34,7 +36,9 @@ export function createApiClient(getToken: TokenProvider) {
     const url = new URL(path, env.apiBaseUrl);
     if (options.shareToken) url.searchParams.set('t', options.shareToken);
 
-    const headers: Record<string, string> = { Accept: 'application/json' };
+    const headers: Record<string, string> = {
+      Accept: options.asText ? 'text/csv, text/plain' : 'application/json',
+    };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
 
     const token = await getToken();
@@ -48,6 +52,7 @@ export function createApiClient(getToken: TokenProvider) {
     });
 
     if (response.status === 204) return undefined as T;
+    if (options.asText && response.ok) return (await response.text()) as T;
 
     const payload = (await response.json().catch(() => null)) as T | ApiErrorBody | null;
 

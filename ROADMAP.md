@@ -41,7 +41,7 @@ Picture one kitchen with labeled stations: salad, grill, dessert. Microservices 
 The service has one folder per module:
 
 ```
-users  cards  binders  wants  health   (trades comes later)
+users  cards  groups  wants  health   (trades comes later)
 ```
 
 **The rule that keeps this cheap to split later:** a module may call another module only through an exported function. A module must never read another module's tables directly. Follow that rule and any module can be lifted into its own service without a rewrite.
@@ -127,7 +127,7 @@ The database password is **never** placed in an environment variable or a CloudF
                                  |
                                  v
                         AWS Lambda  "the whole API"
-                          users | cards | binders | wants
+                          users | cards | groups | wants
                                  |
                                  v
                          Amazon RDS Proxy  (shares connections)
@@ -146,17 +146,42 @@ The database password is **never** placed in an environment variable or a CloudF
 
 ## 4. Data model
 
-Seven tables carry the whole product. The first six are in use; `trades` and `trade_items` are built but unused until Phase 7.
+These tables carry the core of the product. `trades` and `trade_items` are built but unused until
+Phase 7.
 
-| Table          | Holds                                       | Key detail                                             |
-| -------------- | ------------------------------------------- | ------------------------------------------------------ |
-| `users`        | One row per person                          | `auth0_sub` is the only link to Auth0                  |
-| `cards`        | Local Scryfall mirror, one row per printing | `raw` keeps the untouched card object                  |
-| `binders`      | A named, shareable list                     | `share_token` is a secret second door                  |
-| `binder_items` | One stack of cards in a binder              | Same card in a different condition is a separate stack |
-| `want_items`   | What a user is hunting                      | Keyed on `oracle_id`, not a printing                   |
-| `trades`       | A proposed swap (Phase 7)                   | —                                                      |
-| `trade_items`  | The cards in a swap (Phase 7)               | —                                                      |
+| Table               | Holds                                       | Key detail                            |
+| ------------------- | ------------------------------------------- | ------------------------------------- |
+| `users`             | One row per person                          | `auth0_sub` is the only link to Auth0 |
+| `cards`             | Local Scryfall mirror, one row per printing | `raw` keeps the untouched card object |
+| `collection_items`  | One stack of cards a person owns            | Keyed on the person; no folder column |
+| `card_groups`       | A private named label                       | Unique name per person, ignoring case |
+| `group_memberships` | One card in one group                       | Primary key is `(item_id, group_id)`  |
+| `want_items`        | What a user is hunting                      | Keyed on `oracle_id`, not a printing  |
+| `trades`            | A proposed swap (Phase 7)                   | —                                     |
+| `trade_items`       | The cards in a swap (Phase 7)               | —                                     |
+
+### The collection model
+
+One person owns one collection. A **group** is a private label, joined to a card through
+`group_memberships`, so one card can sit in several groups or in none. A group never owns a card.
+The trade binder is not a table either: it is every stack marked `for_trade`.
+
+Think of a shoebox and sticky notes on the cards. The note says "modern staples", the card stays in
+the shoebox, and one card can carry two notes. Pulling a note off does not throw the card away.
+
+Four consequences:
+
+- **The stack key starts with the person.** Same printing, finish, condition, language, and marks
+  is one stack, so "how many do I own" has exactly one answer.
+- **Price is not part of that key.** A price belongs to the stack, so changing it edits the same
+  row instead of making a second stack.
+- **Deleting a group keeps the cards.** The membership rows cascade away; the collection rows do
+  not.
+- **Groups are private.** There is no slug, visibility, or share token. The only public surface is
+  the trade binder.
+
+A personal collection starts with `for_trade = false`. The owner opts each stack into the trade
+binder.
 
 ### The `scryfall_id` and `oracle_id` split
 
@@ -175,24 +200,27 @@ That split is why the match query can join a want list to a binder at all.
 SELECT w.oracle_id, MIN(c.name), w.quantity, w.priority, SUM(bi.quantity)
 FROM want_items w
 JOIN cards c         ON c.oracle_id   = w.oracle_id
-JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
+JOIN collection_items bi ON bi.scryfall_id = c.scryfall_id
 WHERE w.user_id   = :viewer
-  AND bi.binder_id = :binder
+  AND bi.user_id   = :owner
   AND bi.for_trade = true
 GROUP BY w.oracle_id, w.quantity, w.priority
 ORDER BY w.priority ASC
 ```
 
-Read the joins as a chain: _my want_ → _every printing of that card_ → _the copies sitting in your binder_.
+Read the joins as a chain: _my want_ → _every printing of that card_ → _the copies you offer for trade_.
 
 ### Sharing
 
-Each binder has two doors:
+Groups are private. The two things a person can share are the trade binder and a want list, and
+each has the same three doors:
 
-- A **public slug**, at `/u/:handle/:slug`, for binders set to `public`.
-- A **secret share token**, passed as `?t=...`, for binders set to `unlisted`.
+- A **public address**, at `/u/:handle/trade-binder` or `/u/:handle/wants/:slug`.
+- A **secret share token**, passed as `?t=...`, for a list set to `unlisted`.
+- **Private**, which reports "not found" rather than "forbidden", so its existence is not leaked to
+  people guessing URLs.
 
-A `private` binder reports "not found" rather than "forbidden", so its existence is not leaked to people guessing URLs. Rotating the share token revokes every link handed out before.
+Rotating the trade binder token revokes every link handed out before.
 
 ---
 

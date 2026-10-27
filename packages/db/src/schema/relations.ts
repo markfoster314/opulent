@@ -1,6 +1,6 @@
 import { relations } from 'drizzle-orm';
-import { binderItems, binders } from './binders';
 import { cards } from './cards';
+import { cardGroups, collectionItems, groupMemberships } from './collection';
 import { places } from './places';
 import { tradeItems, trades } from './trades';
 import { friendships, users } from './users';
@@ -12,7 +12,8 @@ export const placesRelations = relations(places, ({ many }) => ({
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   place: one(places, { fields: [users.placeId], references: [places.geonameId] }),
-  binders: many(binders),
+  collectionItems: many(collectionItems),
+  cardGroups: many(cardGroups),
   wantItems: many(wantItems),
   wantLists: many(wantLists),
   genericWants: many(genericWants),
@@ -32,14 +33,26 @@ export const friendshipsRelations = relations(friendships, ({ one }) => ({
   }),
 }));
 
-export const bindersRelations = relations(binders, ({ one, many }) => ({
-  owner: one(users, { fields: [binders.userId], references: [users.id] }),
-  items: many(binderItems),
+export const cardGroupsRelations = relations(cardGroups, ({ one, many }) => ({
+  owner: one(users, { fields: [cardGroups.userId], references: [users.id] }),
+  memberships: many(groupMemberships),
 }));
 
-export const binderItemsRelations = relations(binderItems, ({ one }) => ({
-  binder: one(binders, { fields: [binderItems.binderId], references: [binders.id] }),
-  card: one(cards, { fields: [binderItems.scryfallId], references: [cards.scryfallId] }),
+export const collectionItemsRelations = relations(collectionItems, ({ one, many }) => ({
+  owner: one(users, { fields: [collectionItems.userId], references: [users.id] }),
+  card: one(cards, { fields: [collectionItems.scryfallId], references: [cards.scryfallId] }),
+  memberships: many(groupMemberships),
+}));
+
+export const groupMembershipsRelations = relations(groupMemberships, ({ one }) => ({
+  item: one(collectionItems, {
+    fields: [groupMemberships.itemId],
+    references: [collectionItems.id],
+  }),
+  group: one(cardGroups, {
+    fields: [groupMemberships.groupId],
+    references: [cardGroups.id],
+  }),
 }));
 
 export const wantListsRelations = relations(wantLists, ({ one, many }) => ({

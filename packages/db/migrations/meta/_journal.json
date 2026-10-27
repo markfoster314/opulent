@@ -113,6 +113,62 @@
       "when": 1792371854205,
       "tag": "0015_trade_turns",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793047532123,
+      "tag": "0016_collection",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793048278861,
+      "tag": "0017_find_trades_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793048968596,
+      "tag": "0018_cards_game",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793058619556,
+      "tag": "0019_card_price_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793059655264,
+      "tag": "0020_partition_card_price_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793060422781,
+      "tag": "0021_price_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793060427926,
+      "tag": "0022_drop_price_json",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793064902533,
+      "tag": "0023_collection_model",
+      "breakpoints": true
     }
   ]
 }

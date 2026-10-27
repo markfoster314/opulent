@@ -40,8 +40,7 @@ tradeRoutes.get(
   requireUser,
   zValidator('param', tradeIdParam),
   async (c) => {
-    const items = await listChoices(c.get('db'), c.get('user').id, c.req.valid('param').id);
-    return c.json({ items });
+    return c.json(await listChoices(c.get('db'), c.get('user').id, c.req.valid('param').id));
   },
 );
 

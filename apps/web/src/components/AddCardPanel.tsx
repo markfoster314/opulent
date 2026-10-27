@@ -1,7 +1,7 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import { Alert, Box, Button, IconButton, Link, Paper, Stack, Typography } from '@mui/material';
-import type { AddBinderItemInput, Card, CardLanguage } from '@opulent/shared';
+import type { AddCollectionItemInput, Card, CardLanguage } from '@opulent/shared';
 import {
   askingPrice,
   cardLanguageOrEnglish,
@@ -37,14 +37,19 @@ interface AddCardPanelProps {
    * concept, so this is the newest printing and acts as the starting selection.
    */
   card: Card;
-  onAdd: (input: AddBinderItemInput) => void;
+  onAdd: (input: AddCollectionItemInput) => void;
   onCancel: () => void;
   pending: boolean;
   error?: string | undefined;
+  /**
+   * A visitor's first card. Price, photo link, and notes fold behind "More
+   * options", so the form between the card and sign-up stays short.
+   */
+  foldAdvanced?: boolean;
 }
 
 /**
- * The steps between finding a card and it landing in the binder.
+ * The steps between finding a card and it landing in the collection.
  *
  * The set comes first, because two copies of one name can be worth very
  * different amounts. The quantity and condition come after that. Going back
@@ -53,7 +58,14 @@ interface AddCardPanelProps {
  * Mount this with `key={card.oracleId}` so picking a different card from search
  * gives a fresh panel rather than carrying the previous card's choices over.
  */
-export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardPanelProps) {
+export function AddCardPanel({
+  card,
+  onAdd,
+  onCancel,
+  pending,
+  error,
+  foldAdvanced,
+}: AddCardPanelProps) {
   const [step, setStep] = useState<'set' | 'details'>('set');
   const [hasChosenSet, setHasChosenSet] = useState(false);
   const [printing, setPrinting] = useState<Card>(card);
@@ -234,6 +246,7 @@ export function AddCardPanel({ card, onAdd, onCancel, pending, error }: AddCardP
           onCancel={onCancel}
           onAdd={handleAdd}
           onSelectPrinting={handleSelectPrinting}
+          foldAdvanced={foldAdvanced}
         />
       )}
     </Paper>
@@ -256,6 +269,7 @@ function DetailsStep({
   onCancel,
   onAdd,
   onSelectPrinting,
+  foldAdvanced,
 }: {
   cardName: string;
   printing: Card;
@@ -272,6 +286,7 @@ function DetailsStep({
   onCancel: () => void;
   onAdd: () => void;
   onSelectPrinting: (card: Card, language: CardLanguage) => void;
+  foldAdvanced?: boolean;
 }) {
   const image = printing.imageUris?.normal ?? printing.imageUris?.large;
   const languagesQuery = useCardLanguages(printing.scryfallId);
@@ -420,6 +435,7 @@ function DetailsStep({
           languageOptions={printedLanguages ?? [details.language]}
           languagesReady={languagesQuery.isSuccess}
           prices={printing.prices}
+          foldAdvanced={foldAdvanced}
         />
 
         {error && <Alert severity="error">{error}</Alert>}
@@ -440,7 +456,7 @@ function DetailsStep({
             onClick={onAdd}
             disabled={quantityError || priceError || photoError || pending}
           >
-            {pending ? 'Adding…' : 'Add to binder'}
+            {pending ? 'Adding…' : 'Add to collection'}
           </Button>
         </Stack>
       </Stack>

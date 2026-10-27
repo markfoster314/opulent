@@ -1,5 +1,5 @@
 import type { Database, UserRow } from '@opulent/db';
-import { binders, friendships, users, wantLists } from '@opulent/db';
+import { collectionItems, friendships, users, wantLists } from '@opulent/db';
 import type {
   CompleteOnboardingInput,
   Friend,
@@ -8,7 +8,7 @@ import type {
   UpdateProfileInput,
   UsernameAvailability,
 } from '@opulent/shared';
-import { reservedUsernames, usernameSchema } from '@opulent/shared';
+import { CARD_GAME, reservedUsernames, usernameSchema } from '@opulent/shared';
 import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 import { getPlace } from '../places/service';
@@ -103,6 +103,9 @@ export async function updateProfile(
     ...(input.placeId !== undefined ? { placeId: input.placeId } : {}),
     ...(input.profileVisibility !== undefined
       ? { profileVisibility: input.profileVisibility }
+      : {}),
+    ...(input.tradeBinderVisibility !== undefined
+      ? { tradeBinderVisibility: input.tradeBinderVisibility }
       : {}),
     ...(input.bio !== undefined ? { bio: input.bio } : {}),
   });
@@ -238,8 +241,11 @@ function isDuplicateFriend(error: unknown): boolean {
   });
 }
 
-/** Same copy rules as a binder match: language, finish, condition, and set. */
-function copyScope() {
+/**
+ * Same copy rules as a binder match: language, finish, condition, and set.
+ * Expects the want row as `w`, the card as `c`, and the stack as `bi`.
+ */
+export function copyScope() {
   return sql`
     AND (cardinality(w.wanted_languages) = 0 OR c.lang = ANY(w.wanted_languages))
     AND (cardinality(w.unwanted_languages) = 0 OR NOT (c.lang = ANY(w.unwanted_languages)))
@@ -252,55 +258,48 @@ function copyScope() {
   `;
 }
 
-/** Viewer wants that this person's public binders are holding for trade. */
-function binderMatchSql(ownerId: string, viewerId: string) {
-  return sql`
-    SELECT b.slug AS slug, COUNT(DISTINCT w.id)::int AS "matchCount"
-    FROM want_items w
-    JOIN cards c ON c.oracle_id = w.oracle_id
-    JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
-    JOIN binders b ON b.id = bi.binder_id
-    WHERE w.user_id = ${viewerId}
-      AND b.user_id = ${ownerId}
-      AND b.visibility = 'public'
-      AND bi.for_trade = true
-      ${copyScope()}
-    GROUP BY GROUPING SETS ((b.slug), ())
-  `;
-}
-
 /** Their public wants that the viewer is holding for trade. */
 function wantMatchSql(ownerId: string, viewerId: string) {
   return sql`
-    SELECT wl.slug AS slug, COUNT(DISTINCT w.id)::int AS "matchCount"
+    SELECT wl.slug AS slug, GROUPING(wl.slug) AS "isTotal", COUNT(DISTINCT w.id)::int AS "matchCount"
     FROM want_items w
     JOIN want_lists wl ON wl.id = w.want_list_id
     JOIN cards c ON c.oracle_id = w.oracle_id
-    JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
-    JOIN binders b ON b.id = bi.binder_id
+    JOIN collection_items bi ON bi.scryfall_id = c.scryfall_id
     WHERE w.user_id = ${ownerId}
       AND wl.user_id = ${ownerId}
       AND wl.visibility = 'public'
-      AND b.user_id = ${viewerId}
+      AND bi.user_id = ${viewerId}
+      AND c.game = ${CARD_GAME}
       AND bi.for_trade = true
       ${copyScope()}
     GROUP BY GROUPING SETS ((wl.slug), ())
   `;
 }
 
-async function matchCountsBySlug(db: Database, query: ReturnType<typeof binderMatchSql>) {
+async function matchCountsBySlug(db: Database, query: ReturnType<typeof wantMatchSql>) {
   const rows = (await db.execute(query)) as unknown as {
     slug: string | null;
+    isTotal: number | string;
     matchCount: number | string;
   }[];
   const bySlug = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
     const value = Number(row.matchCount);
-    if (!row.slug) total = value;
-    else if (value > 0) bySlug.set(row.slug, value);
+    if (Number(row.isTotal) === 1) total = value;
+    else if (row.slug && value > 0) bySlug.set(row.slug, value);
   }
   return { bySlug, total };
+}
+
+/** Copies this person has marked for trade. */
+async function countTradeBinder(db: Database, userId: string): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`coalesce(sum(${collectionItems.quantity}), 0)::int` })
+    .from(collectionItems)
+    .where(and(eq(collectionItems.userId, userId), eq(collectionItems.forTrade, true)));
+  return Number(rows[0]?.total ?? 0);
 }
 
 function withMatchCounts<T extends { slug: string }>(
@@ -314,11 +313,7 @@ function withMatchCounts<T extends { slug: string }>(
   });
 }
 
-async function listedEntries(
-  db: Database,
-  userId: string,
-  table: typeof binders | typeof wantLists,
-) {
+async function listedEntries(db: Database, userId: string, table: typeof wantLists) {
   return db
     .select({
       slug: table.slug,
@@ -355,23 +350,19 @@ export async function getProfile(
   };
   if (user.profileVisibility !== 'public') return profile;
 
-  const [binderEntries, wantEntries] = await Promise.all([
-    listedEntries(db, user.id, binders),
-    listedEntries(db, user.id, wantLists),
-  ]);
+  const wantEntries = await listedEntries(db, user.id, wantLists);
   const viewerCanMatch = viewerId !== undefined && viewerId !== user.id;
-  const [binderMatches, wantMatches] = viewerCanMatch
-    ? await Promise.all([
-        matchCountsBySlug(db, binderMatchSql(user.id, viewerId)),
-        matchCountsBySlug(db, wantMatchSql(user.id, viewerId)),
-      ])
-    : [undefined, undefined];
+  const tradeBinderOpen = user.tradeBinderVisibility === 'public';
+  const wantMatches = viewerCanMatch
+    ? await matchCountsBySlug(db, wantMatchSql(user.id, viewerId))
+    : undefined;
 
   return {
     ...profile,
-    ...(binderMatches && binderMatches.total > 0 ? { binderMatchCount: binderMatches.total } : {}),
+    ...(tradeBinderOpen || isOwner
+      ? { tradeBinderCount: await countTradeBinder(db, user.id) }
+      : {}),
     ...(wantMatches && wantMatches.total > 0 ? { wantMatchCount: wantMatches.total } : {}),
-    binders: withMatchCounts(binderEntries, binderMatches?.bySlug),
     wantLists: withMatchCounts(wantEntries, wantMatches?.bySlug),
     genericWants: await listGenericWants(db, user.id),
   };

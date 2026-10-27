@@ -1,0 +1,256 @@
+import type { CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
+import { cardLanguageSchema } from '@opulent/shared';
+
+/**
+ * A small RFC 4180 reader. Handles quoted fields, doubled quotes, and line
+ * breaks inside quotes. Every export tool we care about writes this shape.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  const source = text.startsWith('\uFEFF') ? text.slice(1) : text;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    if (quoted) {
+      if (char === '"') {
+        if (source[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && source[i + 1] === '\n') i += 1;
+      row.push(field);
+      field = '';
+      if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+      row = [];
+    } else {
+      field += char;
+    }
+  }
+  row.push(field);
+  if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+  return rows;
+}
+
+export function toCsvLine(cells: (string | number | boolean | null)[]): string {
+  return cells
+    .map((cell) => {
+      const text = cell === null ? '' : String(cell);
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    })
+    .join(',');
+}
+
+export type ImportFormat = 'manabox' | 'moxfield' | 'plain';
+
+/** Which header names each tool uses, lower-cased. */
+const columnNames: Record<ImportFormat, Record<keyof RawRow, string[]>> = {
+  manabox: {
+    name: ['name'],
+    set: ['set code'],
+    number: ['collector number'],
+    quantity: ['quantity'],
+    condition: ['condition'],
+    finish: ['foil'],
+    language: ['language'],
+    forTrade: [],
+    scryfallId: ['scryfall id'],
+  },
+  moxfield: {
+    name: ['name'],
+    set: ['edition'],
+    number: ['collector number'],
+    quantity: ['count'],
+    condition: ['condition'],
+    finish: ['foil'],
+    language: ['language'],
+    forTrade: ['tradelist count'],
+    scryfallId: [],
+  },
+  plain: {
+    name: ['name', 'card', 'card name'],
+    set: ['set', 'set code', 'edition'],
+    number: ['number', 'collector number', 'collector_number'],
+    quantity: ['quantity', 'qty', 'count'],
+    condition: ['condition'],
+    finish: ['finish', 'foil'],
+    language: ['language', 'lang'],
+    forTrade: ['for trade', 'for_trade', 'trade', 'tradelist count'],
+    scryfallId: ['scryfall id', 'scryfall_id'],
+  },
+};
+
+export interface RawRow {
+  name: string;
+  set: string;
+  number: string;
+  quantity: string;
+  condition: string;
+  finish: string;
+  language: string;
+  forTrade: string;
+  scryfallId: string;
+}
+
+/** Picks the tool by the headers that only it writes. */
+export function detectFormat(header: string[]): ImportFormat {
+  const lower = new Set(header.map((cell) => cell.trim().toLowerCase()));
+  if (lower.has('manabox id') || (lower.has('set code') && lower.has('scryfall id'))) {
+    return 'manabox';
+  }
+  if (lower.has('edition') && lower.has('count')) return 'moxfield';
+  return 'plain';
+}
+
+/** Maps a header row to field positions for one format. Missing columns are -1. */
+export function columnIndexes(header: string[], format: ImportFormat): Record<keyof RawRow, number> {
+  const lower = header.map((cell) => cell.trim().toLowerCase());
+  const find = (names: string[]) => {
+    for (const name of names) {
+      const at = lower.indexOf(name);
+      if (at !== -1) return at;
+    }
+    return -1;
+  };
+  const columns = columnNames[format];
+  return {
+    name: find(columns.name),
+    set: find(columns.set),
+    number: find(columns.number),
+    quantity: find(columns.quantity),
+    condition: find(columns.condition),
+    finish: find(columns.finish),
+    language: find(columns.language),
+    forTrade: find(columns.forTrade),
+    scryfallId: find(columns.scryfallId),
+  };
+}
+
+export function readRow(cells: string[], at: Record<keyof RawRow, number>): RawRow {
+  const pick = (index: number) => (index === -1 ? '' : (cells[index] ?? '').trim());
+  return {
+    name: pick(at.name),
+    set: pick(at.set),
+    number: pick(at.number),
+    quantity: pick(at.quantity),
+    condition: pick(at.condition),
+    finish: pick(at.finish),
+    language: pick(at.language),
+    forTrade: pick(at.forTrade),
+    scryfallId: pick(at.scryfallId),
+  };
+}
+
+const conditionWords: Record<string, CardCondition> = {
+  nm: 'NM',
+  'near mint': 'NM',
+  near_mint: 'NM',
+  mint: 'NM',
+  m: 'NM',
+  lp: 'LP',
+  'lightly played': 'LP',
+  lightly_played: 'LP',
+  'light play': 'LP',
+  'light played': 'LP',
+  ex: 'LP',
+  excellent: 'LP',
+  mp: 'MP',
+  'moderately played': 'MP',
+  moderately_played: 'MP',
+  'moderate play': 'MP',
+  played: 'MP',
+  pl: 'MP',
+  gd: 'MP',
+  good: 'MP',
+  hp: 'HP',
+  'heavily played': 'HP',
+  heavily_played: 'HP',
+  'heavy play': 'HP',
+  poor: 'HP',
+  dmg: 'DMG',
+  damaged: 'DMG',
+  d: 'DMG',
+};
+
+export function parseCondition(value: string): CardCondition {
+  return conditionWords[value.trim().toLowerCase()] ?? 'NM';
+}
+
+export function parseFinish(value: string): CardFinish {
+  const word = value.trim().toLowerCase();
+  if (word === 'etched' || word === 'etched foil') return 'etched';
+  if (word === 'foil' || word === 'true' || word === 'yes' || word === '1') return 'foil';
+  return 'nonfoil';
+}
+
+const languageWords: Record<string, CardLanguage> = {
+  english: 'en',
+  spanish: 'es',
+  french: 'fr',
+  german: 'de',
+  italian: 'it',
+  portuguese: 'pt',
+  'portuguese (brazil)': 'pt',
+  japanese: 'ja',
+  korean: 'ko',
+  russian: 'ru',
+  'chinese simplified': 'zhs',
+  'simplified chinese': 'zhs',
+  'chinese traditional': 'zht',
+  'traditional chinese': 'zht',
+  hebrew: 'he',
+  latin: 'la',
+  'ancient greek': 'grc',
+  arabic: 'ar',
+  sanskrit: 'sa',
+  phyrexian: 'ph',
+  sp: 'es',
+  jp: 'ja',
+  kr: 'ko',
+  cs: 'zhs',
+  ct: 'zht',
+  'zh-cn': 'zhs',
+  'zh-tw': 'zht',
+};
+
+export function parseLanguage(value: string): CardLanguage {
+  const word = value.trim().toLowerCase();
+  if (!word) return 'en';
+  const code = cardLanguageSchema.safeParse(word);
+  if (code.success) return code.data;
+  return languageWords[word] ?? 'en';
+}
+
+export function parseQuantity(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 1;
+  const amount = Number(trimmed);
+  if (!Number.isInteger(amount) || amount < 0) return null;
+  return amount;
+}
+
+/** Blank means "use the default". Moxfield's tradelist count is a number. */
+export function parseForTrade(value: string, fallback: boolean): boolean {
+  const word = value.trim().toLowerCase();
+  if (!word) return fallback;
+  if (['true', 'yes', 'y', '1', 'x'].includes(word)) return true;
+  if (['false', 'no', 'n', '0'].includes(word)) return false;
+  const amount = Number(word);
+  if (Number.isFinite(amount)) return amount > 0;
+  return fallback;
+}

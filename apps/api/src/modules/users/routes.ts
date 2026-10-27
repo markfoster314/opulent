@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   addFriendSchema,
+  collectionItemQuerySchema,
   completeOnboardingSchema,
   nearbyQuerySchema,
   updateProfileSchema,
@@ -14,11 +15,19 @@ import { ApiError } from '../../lib/http';
 import type { Database, UserRow } from '@opulent/db';
 import { getPlace } from '../places/service';
 import {
+  assertCanViewTradeBinder,
+  findTradeBinderMatches,
+  getTradeBinder,
+  listTradeBinderItems,
+  rotateTradeBinderToken,
+} from '../collection/service';
+import {
   checkUsernameAvailability,
   completeOnboarding,
   findUsersWithinRadius,
   addFriend,
   getProfile,
+  getUserByUsername,
   listFriends,
   listFollowers,
   listFollowing,
@@ -52,7 +61,18 @@ async function toMe(db: Database, user: UserRow) {
     onboarded: user.onboardedAt !== null,
     profileVisibility: user.profileVisibility,
     bio: user.bio,
+    tradeBinderVisibility: user.tradeBinderVisibility,
+    tradeBinderShareToken: user.tradeBinderShareToken,
   };
+}
+
+const handleParam = z.object({ username: usernameSchema });
+
+/** Share links carry the token in the query string: ?t=abc123 */
+async function tradeBinderOwner(db: Database, username: string) {
+  const owner = await getUserByUsername(db, username);
+  if (!owner) throw ApiError.notFound('User not found');
+  return owner;
 }
 
 userRoutes.get('/me', requireAuth, requireUser, async (c) =>
@@ -101,6 +121,11 @@ userRoutes.patch(
     return c.json(await toMe(c.get('db'), updated));
   },
 );
+
+/** New secret for the trade binder link. Every old link stops working. */
+userRoutes.post('/me/trade-binder/share-token/rotate', requireAuth, requireUser, async (c) => {
+  return c.json({ shareToken: await rotateTradeBinderToken(c.get('db'), c.get('user').id) });
+});
 
 userRoutes.get('/me/friends', requireAuth, requireUser, async (c) => {
   const items = await listFriends(c.get('db'), c.get('user').id);
@@ -161,6 +186,52 @@ userRoutes.get(
       query.radiusMeters,
     );
     return c.json({ items });
+  },
+);
+
+// --- Trade binder: every stack this person marked for trade ---
+
+userRoutes.get(
+  '/:username/trade-binder',
+  optionalAuth,
+  zValidator('param', handleParam),
+  async (c) => {
+    const db = c.get('db');
+    const owner = await tradeBinderOwner(db, c.req.valid('param').username);
+    const viewer = { userId: c.get('user')?.id, shareToken: c.req.query('t') };
+    return c.json(await getTradeBinder(db, owner, viewer));
+  },
+);
+
+userRoutes.get(
+  '/:username/trade-binder/items',
+  optionalAuth,
+  zValidator('param', handleParam),
+  zValidator('query', collectionItemQuerySchema),
+  async (c) => {
+    const db = c.get('db');
+    const owner = await tradeBinderOwner(db, c.req.valid('param').username);
+    const viewerId = c.get('user')?.id;
+    assertCanViewTradeBinder(owner, { userId: viewerId, shareToken: c.req.query('t') });
+    return c.json(await listTradeBinderItems(db, owner.id, c.req.valid('query'), viewerId));
+  },
+);
+
+/** Cards on my want lists that this person holds for trade. */
+userRoutes.get(
+  '/:username/trade-binder/matches',
+  requireAuth,
+  requireUser,
+  zValidator('param', handleParam),
+  async (c) => {
+    const db = c.get('db');
+    const owner = await tradeBinderOwner(db, c.req.valid('param').username);
+    const viewer = c.get('user');
+    assertCanViewTradeBinder(owner, { userId: viewer.id, shareToken: c.req.query('t') });
+    if (owner.id === viewer.id) {
+      throw ApiError.badRequest('Matching your want list against your own cards is not useful');
+    }
+    return c.json({ items: await findTradeBinderMatches(db, owner.id, viewer.id) });
   },
 );
 

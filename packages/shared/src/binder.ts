@@ -6,7 +6,7 @@ import {
   cardLanguageSchema,
   type CardFinish,
 } from './enums';
-import { cardSchema, priceForFinish, type CardPrices } from './card';
+import { cardSchema, priceForFinish, printingIdSchema, type CardPrices } from './card';
 import { paginationQuerySchema } from './pagination';
 
 /** Lowercase letters, numbers and single hyphens. Used in share URLs. */
@@ -16,20 +16,31 @@ export const slugSchema = z
   .max(60)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and hyphens only');
 
-export const binderSchema = z.object({
+/**
+ * A named lump of cards from someone's collection.
+ *
+ * Groups are private labels: a card can sit in several or none, and there is no
+ * link to share. The public surface is the trade binder, built from the cards
+ * marked for trade.
+ */
+export const cardGroupSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
-  slug: slugSchema,
   name: z.string(),
   description: z.string().nullable(),
-  visibility: binderVisibilitySchema,
+  /** Copies in the group. Present when the caller asked for it. */
   itemCount: z.number().int().nonnegative().optional(),
-  /** Present only when the caller owns the binder. Strangers never receive it. */
-  shareToken: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type Binder = z.infer<typeof binderSchema>;
+export type CardGroup = z.infer<typeof cardGroupSchema>;
+
+/** The group chip shown on a collection item. */
+export const groupRefSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+});
+export type GroupRef = z.infer<typeof groupRefSchema>;
 
 /** A dollar string from $0.01 to $99,999.99, normalized to cents. */
 export function parseCustomAmount(value: string): string | null {
@@ -105,21 +116,22 @@ export function askingPriceForFinish(
   return askingPrice(priceForFinish(prices, finish), price);
 }
 
-export const createBinderSchema = z.object({
+export const createCardGroupSchema = z.object({
   name: z.string().min(1).max(80),
-  slug: slugSchema.optional(),
   description: z.string().max(500).optional(),
-  visibility: binderVisibilitySchema.default('private'),
 });
-export type CreateBinderInput = z.infer<typeof createBinderSchema>;
+export type CreateCardGroupInput = z.infer<typeof createCardGroupSchema>;
 
-export const updateBinderSchema = createBinderSchema.partial();
-export type UpdateBinderInput = z.infer<typeof updateBinderSchema>;
+export const updateCardGroupSchema = createCardGroupSchema.partial();
+export type UpdateCardGroupInput = z.infer<typeof updateCardGroupSchema>;
 
-export const binderItemSchema = z.object({
+/**
+ * One stack in a person's collection. `groups` is every group the owner has put
+ * it in, and may be empty. `forTrade` puts it in the public trade binder.
+ */
+export const collectionItemSchema = z.object({
   id: z.string().uuid(),
-  binderId: z.string().uuid(),
-  scryfallId: z.string().uuid(),
+  scryfallId: printingIdSchema,
   quantity: z.number().int().positive(),
   finish: cardFinishSchema,
   condition: cardConditionSchema,
@@ -135,6 +147,8 @@ export const binderItemSchema = z.object({
   artistProof: z.boolean(),
   /** How the owner priced this stack. Older rows are full market. */
   price: itemPriceSchema,
+  /** The groups this stack sits in. Empty when it is filed nowhere. */
+  groups: z.array(groupRefSchema),
   card: cardSchema.optional(),
   /**
    * Which finishes this printing was actually produced in. The edit form uses
@@ -142,10 +156,10 @@ export const binderItemSchema = z.object({
    */
   availableFinishes: z.array(cardFinishSchema).optional(),
 });
-export type BinderItem = z.infer<typeof binderItemSchema>;
+export type CollectionItem = z.infer<typeof collectionItemSchema>;
 
-export const addBinderItemSchema = z.object({
-  scryfallId: z.string().uuid(),
+export const addCollectionItemSchema = z.object({
+  scryfallId: printingIdSchema,
   quantity: z.number().int().positive().max(999).default(1),
   finish: cardFinishSchema.default('nonfoil'),
   condition: cardConditionSchema.default('NM'),
@@ -157,16 +171,43 @@ export const addBinderItemSchema = z.object({
   artistProof: z.boolean().default(false),
   notes: z.string().max(280).optional(),
   photoUrl: photoLinkSchema.nullable().optional(),
-  forTrade: z.boolean().default(true),
+  /** A personal collection starts private; the owner marks cards for trade. */
+  forTrade: z.boolean().default(false),
   price: itemPriceSchema.default({ kind: 'market' }),
 });
-export type AddBinderItemInput = z.infer<typeof addBinderItemSchema>;
+export type AddCollectionItemInput = z.infer<typeof addCollectionItemSchema>;
 
-export const updateBinderItemSchema = addBinderItemSchema.partial().omit({ scryfallId: true });
-export type UpdateBinderItemInput = z.infer<typeof updateBinderItemSchema>;
+export const updateCollectionItemSchema = addCollectionItemSchema
+  .partial()
+  .omit({ scryfallId: true });
+export type UpdateCollectionItemInput = z.infer<typeof updateCollectionItemSchema>;
+
+/** The numbers at the top of the collection page. */
+export const collectionSummarySchema = z.object({
+  /** Total copies across every stack. */
+  cardCount: z.number().int().nonnegative(),
+  /** Copies marked for trade. */
+  forTradeCount: z.number().int().nonnegative(),
+  /** Market value of every copy, as a dollar string. Copies with no price add nothing. */
+  marketValue: z.string(),
+  /** Market value of the copies marked for trade. */
+  forTradeValue: z.string(),
+});
+export type CollectionSummary = z.infer<typeof collectionSummarySchema>;
+
+/** What a visitor learns about a trade binder before the cards load. */
+export const tradeBinderSchema = z.object({
+  username: z.string(),
+  visibility: binderVisibilitySchema,
+  /** Total copies marked for trade. */
+  cardCount: z.number().int().nonnegative(),
+  /** Present only for the owner. */
+  shareToken: z.string().optional(),
+});
+export type TradeBinder = z.infer<typeof tradeBinderSchema>;
 
 /**
- * One row of the headline feature: a card the viewer wants that the binder
+ * One row of the headline feature: a card the viewer wants that the collection
  * owner is holding for trade.
  */
 export const tradeMatchSchema = z.object({
@@ -176,12 +217,31 @@ export const tradeMatchSchema = z.object({
   wantQuantity: z.number().int().positive(),
   wantPriority: z.number().int(),
   availableQuantity: z.number().int().positive(),
-  printings: z.array(binderItemSchema),
+  printings: z.array(collectionItemSchema),
 });
 export type TradeMatch = z.infer<typeof tradeMatchSchema>;
 
-/** Rarities a binder search can narrow to. These are the ones Scryfall prints on a card. */
-export const binderRaritySchema = z.enum([
+/** One person who holds cards on the viewer's want lists. The Find trades page shows one per paper. */
+export const matchOwnerSchema = z.object({
+  username: z.string(),
+  /** Their saved city, or null if they did not set one. */
+  city: z.string().nullable(),
+  /** Meters from the viewer's city. Null when either side has no city. */
+  distanceMeters: z.number().int().nonnegative().nullable(),
+  /** How many distinct wants of the viewer this person can fill. */
+  matchCount: z.number().int().positive(),
+  /** A few of the card names, for the paper. */
+  cardNames: z.array(z.string()),
+});
+export type MatchOwner = z.infer<typeof matchOwnerSchema>;
+
+export const matchesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type MatchesQuery = z.infer<typeof matchesQuerySchema>;
+
+/** Rarities a collection search can narrow to. These are the ones Scryfall prints on a card. */
+export const cardRaritySchema = z.enum([
   'common',
   'uncommon',
   'rare',
@@ -189,9 +249,9 @@ export const binderRaritySchema = z.enum([
   'special',
   'bonus',
 ]);
-export type BinderRarity = z.infer<typeof binderRaritySchema>;
+export type CardRarity = z.infer<typeof cardRaritySchema>;
 
-export const binderRarityLabels: Record<BinderRarity, string> = {
+export const cardRarityLabels: Record<CardRarity, string> = {
   common: 'Common',
   uncommon: 'Uncommon',
   rare: 'Rare',
@@ -215,18 +275,18 @@ function queryFlag() {
 }
 
 /**
- * Filters for the cards inside a binder.
+ * Filters for the cards inside a collection or a group.
  *
  * Name and set are typed text. The rest pick one value, or a mark that must be present.
  * `onWantList` keeps cards that sit on one of the signed-in viewer's want lists.
  */
-export const binderItemQuerySchema = paginationQuerySchema.extend({
+export const collectionItemQuerySchema = paginationQuerySchema.extend({
   q: z.preprocess(blankToUndefined, z.string().max(80).optional()),
   set: z.preprocess(blankToUndefined, z.string().max(80).optional()),
   finish: z.preprocess(blankToUndefined, cardFinishSchema.optional()),
   condition: z.preprocess(blankToUndefined, cardConditionSchema.optional()),
   language: z.preprocess(blankToUndefined, cardLanguageSchema.optional()),
-  rarity: z.preprocess(blankToUndefined, binderRaritySchema.optional()),
+  rarity: z.preprocess(blankToUndefined, cardRaritySchema.optional()),
   forTrade: queryFlag(),
   signed: queryFlag(),
   altered: queryFlag(),
@@ -235,4 +295,4 @@ export const binderItemQuerySchema = paginationQuerySchema.extend({
   artistProof: queryFlag(),
   onWantList: queryFlag(),
 });
-export type BinderItemQuery = z.infer<typeof binderItemQuerySchema>;
+export type CollectionItemQuery = z.infer<typeof collectionItemQuerySchema>;

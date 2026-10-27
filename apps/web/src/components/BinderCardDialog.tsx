@@ -13,12 +13,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { BinderItem } from '@opulent/shared';
+import type { CollectionItem } from '@opulent/shared';
 import { cardConditionLabels, cardFinishLabels, cardLanguageLabels } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useCard, useOpenTrade, useTrades } from '../api/queries';
-import { binderTilePrice } from './CardTile';
+import { collectionTilePrice } from './CardTile';
 
 const closedTrade = new Set(['completed', 'cancelled', 'declined']);
 
@@ -28,7 +28,7 @@ export function BinderCardDialog({
   open,
   onClose,
 }: {
-  item: BinderItem | null;
+  item: CollectionItem | null;
   /** Set when this copy belongs to someone else. The trade prompt uses this name. */
   ownerUsername?: string | undefined;
   open: boolean;
@@ -63,7 +63,7 @@ export function BinderCardDialog({
     item.miscut ? 'Miscut' : '',
     item.artistProof ? 'Artist proof' : '',
   ].filter((mark) => mark !== '');
-  const price = binderTilePrice(item);
+  const price = collectionTilePrice(item);
   const facts = [
     fact(
       'Set',

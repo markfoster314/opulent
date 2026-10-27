@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { profileVisibility } from './enums';
+import { binderVisibility, profileVisibility } from './enums';
 import { places } from './places';
 
 export const users = pgTable(
@@ -32,9 +32,21 @@ export const users = pgTable(
 
     /**
      * private  only this person can open /u/:username
-     * public   anyone can open it and see the public binders and want lists
+     * public   anyone can open it and see the trade binder and want lists
      */
     profileVisibility: profileVisibility('profile_visibility').notNull().default('private'),
+
+    /**
+     * Who can open this person's trade binder: every stack they marked for trade.
+     * private   only the owner
+     * unlisted  anyone holding the share token
+     * public    anyone, and it is listed on the profile
+     */
+    tradeBinderVisibility: binderVisibility('trade_binder_visibility').notNull().default('private'),
+    /** Secret second door to an unlisted trade binder. Rotating it revokes old links. */
+    tradeBinderShareToken: text('trade_binder_share_token')
+      .notNull()
+      .default(sql`encode(gen_random_bytes(16), 'hex')`),
 
     /**
      * Optional city, chosen from the GeoNames list. Null means they skipped it.
@@ -59,6 +71,7 @@ export const users = pgTable(
   (table) => [
     uniqueIndex('users_auth0_sub_key').on(table.auth0Sub),
     uniqueIndex('users_username_key').on(table.username),
+    uniqueIndex('users_trade_binder_share_token_key').on(table.tradeBinderShareToken),
     index('users_place_id_idx').on(table.placeId),
   ],
 );

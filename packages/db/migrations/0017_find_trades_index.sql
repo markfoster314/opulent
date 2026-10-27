@@ -1,0 +1,1 @@
+CREATE INDEX "binder_items_for_trade_scryfall_idx" ON "binder_items" USING btree ("for_trade","scryfall_id");

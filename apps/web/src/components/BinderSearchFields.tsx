@@ -12,10 +12,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { BinderRarity, CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
+import type { CardRarity, CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
 import {
-  binderRarityLabels,
-  binderRaritySchema,
+  cardRarityLabels,
+  cardRaritySchema,
   cardConditionLabels,
   cardConditionSchema,
   cardFinishLabels,
@@ -88,11 +88,11 @@ export function BinderSearchFields({ value, onChange, canUseWantList }: BinderSe
           id="binder-search-rarity"
           label="Rarity"
           value={value.rarity}
-          options={binderRaritySchema.options.map((option) => ({
+          options={cardRaritySchema.options.map((option) => ({
             value: option,
-            label: binderRarityLabels[option],
+            label: cardRarityLabels[option],
           }))}
-          onChange={(rarity) => patch({ rarity: rarity as BinderRarity | '' })}
+          onChange={(rarity) => patch({ rarity: rarity as CardRarity | '' })}
         />
       </Box>
       <FormGroup sx={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2 }}>

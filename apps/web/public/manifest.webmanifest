@@ -1,0 +1,25 @@
+{
+  "name": "Opulent Tutor",
+  "short_name": "Opulent",
+  "description": "Your Magic: The Gathering trade binder, one link away. Find who has what you want.",
+  "start_url": "/collection",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

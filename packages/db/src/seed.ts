@@ -4,12 +4,15 @@ import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { loadEnv } from './load-env';
+import { ensurePricePartitions } from './price-partitions';
 import {
-  binders,
-  binderItems,
+  cardGroups,
+  collectionItems,
+  cardPriceHistory,
   cards,
   friendships,
   genericWants,
+  groupMemberships,
   places,
   tradeItems,
   trades,
@@ -17,20 +20,21 @@ import {
   wantItems,
   wantLists,
 } from './schema';
+import type { NewCardPriceHistoryRow } from './schema';
 
 /**
  * Dev data for local trade tests.
  *
  * Looks up real cities and real card printings already in the database.
- * Each binder and each want list gets 100 cards. Part of each list is shared
+ * Each group and each want list gets 100 cards. Part of each list is shared
  * across these users. The rest of each list is unique.
- * Safe to run again. It replaces seed binders, seed want lists, seed generic
+ * Safe to run again. It replaces seed groups, seed want lists, seed generic
  * wants, friendships, and trades between these ten users. It leaves every other row alone.
  *
  *   pnpm db:seed
  */
 
-/** Each binder and each want list gets this many cards. */
+/** Each group and each want list gets this many cards. */
 const CARDS_PER_COLLECTION = 100;
 
 /** Cards many people both own and want. The rest of each list is unique. */
@@ -135,13 +139,12 @@ const PEOPLE: Person[] = [
   },
 ];
 
-const BINDER_SLUGS = ['seed-trade-staples', 'seed-foil-box', 'seed-extra-copies'] as const;
 const WANT_SLUGS = ['seed-staples-i-need', 'seed-commander-upgrades', 'seed-specs'] as const;
 
-const BINDER_PLANS = [
-  { name: 'Trade staples', slug: BINDER_SLUGS[0], visibility: 'public' as const },
-  { name: 'Foil box', slug: BINDER_SLUGS[1], visibility: 'unlisted' as const },
-  { name: 'Extra copies', slug: BINDER_SLUGS[2], visibility: 'private' as const },
+const GROUP_PLANS = [
+  { name: 'Trade staples', description: 'Seed data for local trade tests.' },
+  { name: 'Foil box', description: 'Seed data for local trade tests.' },
+  { name: 'Extra copies', description: 'Seed data for local trade tests.' },
 ];
 
 const WANT_PLANS = [
@@ -263,6 +266,7 @@ export async function runSeed() {
   try {
     const placeIds = await loadPlaces(db);
     const pool = await loadPrintings(db);
+    const priceRows = await seedPriceHistory(db, pool);
     const shared = pool.slice(0, SHARED_POOL_SIZE);
     const filler = pool.slice(SHARED_POOL_SIZE);
     const fillerCursor = { index: 0 };
@@ -290,7 +294,10 @@ export async function runSeed() {
     }
 
     const ids = [...userIds.values()];
-    await db.delete(binders).where(and(inArray(binders.userId, ids), like(binders.slug, 'seed-%')));
+    // The seed owns the whole collection of these ten users, groups included.
+    await db.delete(groupMemberships).where(inArray(groupMemberships.userId, ids));
+    await db.delete(cardGroups).where(inArray(cardGroups.userId, ids));
+    await db.delete(collectionItems).where(inArray(collectionItems.userId, ids));
     await db
       .delete(wantLists)
       .where(and(inArray(wantLists.userId, ids), like(wantLists.slug, 'seed-%')));
@@ -305,7 +312,7 @@ export async function runSeed() {
     const wanted = new Map<string, Set<string>>();
     const stock = new Map<string, StockCard[]>();
     const wantsByUser = new Map<string, Set<string>>();
-    let binderCount = 0;
+    let groupCount = 0;
     let copyCount = 0;
     let listCount = 0;
     let wantCount = 0;
@@ -315,7 +322,7 @@ export async function runSeed() {
       const userId = userIds.get(person.username);
       if (!userId) continue;
 
-      const binderTotal = index % 2 === 0 ? 3 : 2;
+      const groupTotal = index % 2 === 0 ? 3 : 2;
       const listTotal = index % 2 === 0 ? 2 : 3;
       const genericTotal = index % 2 === 0 ? 3 : 2;
 
@@ -324,9 +331,9 @@ export async function runSeed() {
       const wantedShared = take(shared, index * 10 + 100, SHARED_WANT, userHeld);
       const userWanted = new Set(wantedShared.map((card) => card.oracleId));
 
-      const binderSlices = splitEven(heldShared, binderTotal);
-      for (const [binderIndex, sharedCards] of binderSlices.entries()) {
-        const plan = BINDER_PLANS[binderIndex];
+      const groupSlices = splitEven(heldShared, groupTotal);
+      for (const [groupIndex, sharedCards] of groupSlices.entries()) {
+        const plan = GROUP_PLANS[groupIndex];
         if (!plan) continue;
         const uniqueCards = nextFiller(
           filler,
@@ -335,20 +342,41 @@ export async function runSeed() {
           userHeld,
         );
         for (const card of uniqueCards) userHeld.add(card.oracleId);
-        const copies = toCopies([...sharedCards, ...uniqueCards], index, binderIndex, russian);
-        const [binder] = await db
-          .insert(binders)
+        const copies = toCopies([...sharedCards, ...uniqueCards], index, groupIndex, russian);
+        const [group] = await db
+          .insert(cardGroups)
           .values({
             userId,
             name: plan.name,
-            slug: plan.slug,
-            description: 'Seed data for local trade tests.',
-            visibility: plan.visibility,
+            description: plan.description,
           })
-          .returning({ id: binders.id });
-        if (!binder) throw new Error(`Could not create a binder for ${person.username}`);
-        await db.insert(binderItems).values(copies.map((copy) => toBinderItem(binder.id, copy)));
-        binderCount += 1;
+          .returning({ id: cardGroups.id });
+        if (!group) throw new Error(`Could not create a group for ${person.username}`);
+
+        const inserted = await db
+          .insert(collectionItems)
+          .values(copies.map((copy) => toCollectionItem(userId, copy)))
+          .onConflictDoUpdate({
+            target: [
+              collectionItems.userId,
+              collectionItems.scryfallId,
+              collectionItems.finish,
+              collectionItems.condition,
+              collectionItems.language,
+              collectionItems.signed,
+              collectionItems.altered,
+              collectionItems.misprint,
+              collectionItems.miscut,
+              collectionItems.artistProof,
+            ],
+            set: { quantity: sql`${collectionItems.quantity} + excluded.quantity` },
+          })
+          .returning({ id: collectionItems.id });
+
+        await db
+          .insert(groupMemberships)
+          .values(inserted.map((row) => ({ itemId: row.id, groupId: group.id, userId })));
+        groupCount += 1;
         copyCount += copies.length;
         const pile = stock.get(person.username) ?? [];
         for (const copy of copies) {
@@ -431,6 +459,8 @@ export async function runSeed() {
       genericCount += chosenMixes.length;
     }
 
+    const markPriceRows = await seedMarkPriceHistory(db, requiredId(userIds, 'mark'));
+
     const friendPairs: [string, string][] = [
       ['mark', 'ava_lane'],
       ['ava_lane', 'mark'],
@@ -476,15 +506,203 @@ export async function runSeed() {
     console.log(`Seeded ${PEOPLE.length} users.`);
     console.log('Mark is in Atlanta, Georgia, United States.');
     console.log(
-      `${binderCount} binders, ${copyCount} copies, ${listCount} want lists, ${wantCount} wants, ${genericCount} generic wants.`,
+      `${groupCount} groups, ${copyCount} copies, ${listCount} want lists, ${wantCount} wants, ${genericCount} generic wants.`,
     );
-    console.log(`Each binder and each want list has ${CARDS_PER_COLLECTION} cards.`);
+    console.log(`Each group and each want list has ${CARDS_PER_COLLECTION} cards.`);
     console.log(`${sharedWants} wants are cards another seeded user already has for trade.`);
     console.log(`${friendPairs.length} friend links between these users.`);
     console.log(`${tradeCount} trades between these users.`);
+    console.log(`${priceRows.toLocaleString()} price change points for the seeded cards.`);
+    console.log(`${markPriceRows.toLocaleString()} price points across the year for Mark's cards.`);
   } finally {
     await client.end();
   }
+}
+
+/**
+ * Fake change points for the cards the seed uses.
+ *
+ * History keeps a row only on the day a price changes, so one row is enough for
+ * a seeded card: its current price on the first day of its window. Readers carry
+ * that price forward, which gives charts a flat line without inventing movement.
+ *
+ * Only the seed's card pool gets rows. The card table holds more than half a
+ * million printings, so touching all of them would be needless work in a seed.
+ */
+async function seedPriceHistory(
+  db: ReturnType<typeof drizzle>,
+  printings: Printing[],
+): Promise<number> {
+  if (printings.length === 0) return 0;
+
+  // The monthly partitions must exist before any row can land in them.
+  const now = Date.now();
+  await ensurePricePartitions(
+    db,
+    new Date(now - 400 * 86_400_000).toISOString().slice(0, 10),
+    new Date(now).toISOString().slice(0, 10),
+  );
+
+  const ids = printings.map((printing) => printing.scryfallId);
+  const inList = () =>
+    sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    );
+
+  // Replace what an earlier seed wrote, so the pool follows the current rule.
+  await db.execute(sql`DELETE FROM card_price_history WHERE scryfall_id IN (${inList()})`);
+
+  const result = await db.execute(sql`
+    INSERT INTO card_price_history (
+      scryfall_id, recorded_on, usd, usd_foil, usd_etched, eur, eur_foil, tix
+    )
+    SELECT
+      c.scryfall_id,
+      GREATEST(
+        CASE WHEN c.released_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN c.released_at::date END,
+        CURRENT_DATE - INTERVAL '1 year'
+      )::date,
+      NULLIF(c.prices->>'usd', '')::numeric,
+      NULLIF(c.prices->>'usd_foil', '')::numeric,
+      NULLIF(c.prices->>'usd_etched', '')::numeric,
+      NULLIF(c.prices->>'eur', '')::numeric,
+      NULLIF(c.prices->>'eur_foil', '')::numeric,
+      NULLIF(c.prices->>'tix', '')::numeric
+    FROM cards c
+    WHERE c.scryfall_id IN (${inList()})
+      AND c.prices IS NOT NULL
+      AND GREATEST(
+        CASE WHEN c.released_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN c.released_at::date END,
+        CURRENT_DATE - INTERVAL '1 year'
+      ) <= CURRENT_DATE
+    ON CONFLICT (scryfall_id, recorded_on) DO UPDATE SET
+      usd = excluded.usd,
+      usd_foil = excluded.usd_foil,
+      usd_etched = excluded.usd_etched,
+      eur = excluded.eur,
+      eur_foil = excluded.eur_foil,
+      tix = excluded.tix
+  `);
+
+  return Number((result as unknown as { count?: number }).count ?? 0);
+}
+
+/** A deterministic 0..1 value for a string, so every reseed draws the same line. */
+function hashUnit(seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Every `days` days from `start` up to `end`, with `end` always included. */
+function everyFewDays(start: Date, end: Date, days: number): Date[] {
+  const step = days * 86_400_000;
+  const points: Date[] = [];
+  for (let cursor = start.getTime(); cursor < end.getTime(); cursor += step) {
+    points.push(new Date(cursor));
+  }
+  points.push(end);
+  return points;
+}
+
+function parseDay(value: string | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** A price moved by a factor and rounded to cents, or null when there is none. */
+function priceAt(value: string | null | undefined, factor: number): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return (amount * factor).toFixed(2);
+}
+
+/**
+ * Gives Mark's cards a year of movement.
+ *
+ * Every other seeded card keeps one flat change point, which draws a line but
+ * makes a dull chart. Mark's own cards get a change every two weeks, shaped by a
+ * smooth wave plus a small deterministic wobble: interesting to look at, and the
+ * same on every reseed. The last few points settle back onto the card's real
+ * price, so the line ends where the collection page says it does and the nightly
+ * job has nothing to correct.
+ */
+async function seedMarkPriceHistory(
+  db: ReturnType<typeof drizzle>,
+  markUserId: string,
+): Promise<number> {
+  const rows = (await db.execute(sql`
+    SELECT DISTINCT
+      c.scryfall_id AS "scryfallId",
+      c.released_at AS "releasedAt",
+      c.prices
+    FROM collection_items bi
+    JOIN cards c ON c.scryfall_id = bi.scryfall_id
+    WHERE bi.user_id = ${markUserId}::uuid
+      AND c.prices IS NOT NULL
+  `)) as unknown as {
+    scryfallId: string;
+    releasedAt: string | null;
+    prices: Record<string, string | null>;
+  }[];
+
+  if (rows.length === 0) return 0;
+
+  // Replace the single flat point the pool pass wrote for these cards.
+  await db.execute(sql`
+    DELETE FROM card_price_history
+    WHERE scryfall_id IN (
+      SELECT scryfall_id FROM collection_items WHERE user_id = ${markUserId}::uuid
+    )
+  `);
+
+  const today = new Date(`${isoDay(new Date())}T00:00:00Z`);
+  const yearAgo = new Date(today.getTime() - 364 * 86_400_000);
+
+  const batch: NewCardPriceHistoryRow[] = [];
+  for (const card of rows) {
+    const released = parseDay(card.releasedAt);
+    const start = released && released > yearAgo ? released : yearAgo;
+    const days = everyFewDays(start, today, 14);
+    const phase = hashUnit(`${card.scryfallId}:phase`) * Math.PI * 2;
+
+    days.forEach((day, step) => {
+      // Fade the movement out over the last four points so the line lands on the
+      // current price instead of jumping to it.
+      const left = days.length - 1 - step;
+      const taper = Math.min(1, left / 4);
+      const wave = Math.sin(step * 0.55 + phase) * 0.2;
+      const wobble = (hashUnit(`${card.scryfallId}:${isoDay(day)}`) * 2 - 1) * 0.1;
+      const factor = 1 + taper * (wave + wobble);
+
+      batch.push({
+        scryfallId: card.scryfallId,
+        recordedOn: isoDay(day),
+        usd: priceAt(card.prices.usd, factor),
+        usdFoil: priceAt(card.prices.usd_foil, factor),
+        usdEtched: priceAt(card.prices.usd_etched, factor),
+        eur: priceAt(card.prices.eur, factor),
+        eurFoil: priceAt(card.prices.eur_foil, factor),
+        tix: priceAt(card.prices.tix, factor),
+      });
+    });
+  }
+
+  for (let index = 0; index < batch.length; index += 500) {
+    await db.insert(cardPriceHistory).values(batch.slice(index, index + 500));
+  }
+
+  return batch.length;
 }
 
 async function loadPlaces(db: ReturnType<typeof drizzle>): Promise<Map<string, number>> {
@@ -549,14 +767,14 @@ async function loadPrintings(db: ReturnType<typeof drizzle>): Promise<Printing[]
 function toCopies(
   printings: Printing[],
   personIndex: number,
-  binderIndex: number,
+  groupIndex: number,
   russian: Map<string, { scryfallId: string; finishes: string[] }>,
 ): OwnedCopy[] {
-  const prefer = binderIndex === 1 ? 'foil' : 'nonfoil';
+  const prefer = groupIndex === 1 ? 'foil' : 'nonfoil';
   return printings.map((printing, copyIndex) => {
     const russianPrinting = russian.get(printing.oracleId);
     const chosen =
-      binderIndex === 1 && personIndex % 3 === 0 && copyIndex < 2 && russianPrinting
+      groupIndex === 1 && personIndex % 3 === 0 && copyIndex < 2 && russianPrinting
         ? {
             ...printing,
             scryfallId: russianPrinting.scryfallId,
@@ -569,8 +787,8 @@ function toCopies(
       finish: finishOf(chosen, prefer),
       language: chosen.language,
       condition: copyIndex % 17 === 0 ? 'LP' : 'NM',
-      signed: binderIndex === 1 && personIndex % 4 === 1 && copyIndex === 0,
-      artistProof: binderIndex === 1 && personIndex % 4 === 2 && copyIndex === 0,
+      signed: groupIndex === 1 && personIndex % 4 === 1 && copyIndex === 0,
+      artistProof: groupIndex === 1 && personIndex % 4 === 2 && copyIndex === 0,
       quantity: 1,
     };
   });
@@ -630,6 +848,7 @@ async function upsertPerson(
     username: person.username,
     placeId,
     profileVisibility: person.visibility,
+    tradeBinderVisibility: person.visibility,
     bio: person.bio,
     onboardedAt: existing?.onboardedAt ?? new Date(),
     updatedAt: new Date(),
@@ -650,9 +869,9 @@ async function upsertPerson(
   return created.id;
 }
 
-function toBinderItem(binderId: string, copy: OwnedCopy) {
+function toCollectionItem(userId: string, copy: OwnedCopy) {
   return {
-    binderId,
+    userId,
     scryfallId: copy.printing.scryfallId,
     quantity: copy.quantity,
     finish: copy.finish,

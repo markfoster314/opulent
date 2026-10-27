@@ -13,18 +13,28 @@ import {
 } from '@mui/material';
 import type { Me, PlaceRef } from '@opulent/shared';
 import { isReservedUsername, usernameSchema } from '@opulent/shared';
-import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useCompleteOnboarding, useMe, useUsernameAvailability } from '../api/queries';
 import { CitySearchField } from '../components/CitySearchField';
+import { WelcomeSplash } from '../components/WelcomeSplash';
 import { useDebounced } from '../hooks/useDebounced';
 import { palette } from '../theme';
+
+/** The two things setup asks for. The second one may be skipped. */
+const STEPS = ['Username', 'City'] as const;
+
+/** How long the gold fill takes to cross one part of the progress bar. */
+const FILL_MS = 520;
 
 /**
  * Shown once, straight after the first sign-in.
  *
  * Until this is saved the user is carrying a generated username such as
- * `mark_a1b2c3`, which would otherwise end up in every link they share.
+ * `mark_a1b2c3`, which would otherwise end up in every link they share. Setup
+ * asks for two things in order: a name they must choose, then a city they may
+ * leave blank.
  */
 export function WelcomePage() {
   const { isAuthenticated, isLoading } = useAuth0();
@@ -48,15 +58,15 @@ function WelcomeForm({ me }: { me: Me }) {
   const navigate = useNavigate();
   const completeOnboarding = useCompleteOnboarding();
 
-  const reduceMotion = useRef(
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  ).current;
+  const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [city, setCity] = useState<PlaceRef | null>(null);
-  const [welcomeDone, setWelcomeDone] = useState(reduceMotion);
-  const [promptDone, setPromptDone] = useState(reduceMotion);
+  /** The splash covers the form once, then hands over for good. */
+  const [splash, setSplash] = useState(true);
+  const finishSplash = useCallback(() => setSplash(false), []);
   const usernameRef = useRef<HTMLInputElement>(null);
-  const detailsRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLElement>(null);
+  const firstStep = useRef(true);
 
   // Fold case as the user types rather than complaining about it afterwards.
   // Somebody entering "Mark" means "mark", and watching it happen in the field
@@ -75,231 +85,283 @@ function WelcomeForm({ me }: { me: Me }) {
     usernameSchema.safeParse(debounced).success && !isReservedUsername(debounced),
   );
 
-  const canSave = shape.success && !reserved && settled && availability.data?.available === true;
+  const checking = !settled || availability.isFetching;
+  const canContinue =
+    shape.success && !reserved && settled && availability.data?.available === true;
+  const saving = completeOnboarding.isPending;
+  const onCity = step === 1;
+  const origin = window.location.origin;
 
   /** Where the user was heading before being stopped, such as a shared binder. */
-  const returnTo = (location.state as { from?: string } | null)?.from ?? '/binders';
+  const returnTo = (location.state as { from?: string } | null)?.from ?? '/collection';
+
+  // A phone keeps its keyboard down until the person taps the field themselves.
+  // Nothing reaches for focus while the splash owns the window.
+  useEffect(() => {
+    if (splash) return;
+    if (!window.matchMedia('(min-width: 900px)').matches) return;
+    usernameRef.current?.focus();
+  }, [splash]);
+
+  // The button that moved the page has gone, so put the reader on the new step
+  // instead of leaving focus on the body.
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    headingRef.current?.focus();
+  }, [step]);
 
   if (me.onboarded) return <Navigate to={returnTo} replace />;
 
-  function handleSave() {
-    if (!canSave) return;
+  function handleFinish() {
     completeOnboarding.mutate(
       { username: normalized, ...(city ? { placeId: city.geonameId } : {}) },
       { onSuccess: () => void navigate(returnTo, { replace: true }) },
     );
   }
 
-  const checking = !settled || availability.isFetching;
-
-  useEffect(() => {
-    if (detailsRef.current) detailsRef.current.inert = !promptDone;
-    if (!promptDone) return;
-    usernameRef.current?.focus();
-  }, [promptDone]);
-
   return (
-    <Stack spacing={3} sx={{ maxWidth: 560, mx: 'auto' }}>
-      <TypedLine
-        text={WELCOME_LINE}
-        goldStart={WELCOME_PREFIX.length}
-        active
-        onDone={() => setWelcomeDone(true)}
-        variant="h2"
-      />
-
-      <TypedLine
-        text={PROMPT_LINE}
-        active={welcomeDone}
-        onDone={() => setPromptDone(true)}
-        variant="body1"
-        color="text.secondary"
-      />
-
-      {/*
-       * Kept at full height while invisible, so the title, the subtitle, and
-       * the footer do not move when this block fades in.
-       */}
+    <>
+      {splash && <WelcomeSplash onDone={finishSplash} />}
       <Stack
-        ref={detailsRef}
-        spacing={3}
-        aria-hidden={!promptDone}
-        sx={{
-          opacity: promptDone ? 1 : 0,
-          pointerEvents: promptDone ? 'auto' : 'none',
-          transition: 'opacity 600ms ease',
-        }}
+        aria-hidden={splash || undefined}
+        spacing={{ xs: 3, sm: 4 }}
+        sx={{ width: '100%', maxWidth: 560, mx: 'auto' }}
       >
-        <Stack spacing={1}>
-          <Typography variant="h1">
-            Pick a{' '}
-            <Box component="span" sx={{ color: palette.gold }}>
-              username
-            </Box>
-            .
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            This is the name people see, and it is the name in every binder link you share. It must
-            be unique. Letters, numbers and underscores only - no spaces.
-          </Typography>
-        </Stack>
+        <StepBar step={step} />
 
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={3}>
-            <TextField
-              label="Username"
-              value={normalized}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="mark"
-              inputRef={usernameRef}
-              error={Boolean(shapeError) || reserved || availability.data?.available === false}
-              helperText={describe({
-                empty: normalized.length === 0,
-                shapeError,
-                reserved,
-                checking,
-                takenReason:
-                  availability.data?.available === false ? availability.data.reason : null,
-              })}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      {normalized.length > 0 && checking && <CircularProgress size={18} />}
-                      {!checking && availability.data?.available === true && (
-                        <CheckCircleIcon fontSize="small" sx={{ color: palette.gold }} />
-                      )}
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          </Stack>
-        </Paper>
+        <ResizeBox step={step}>
+          {/*
+           * Only the words change with the step, so only the words are
+           * keyed. The card and the buttons below keep their place and
+           * their paint, which is what stops the whole block from fading
+           * on every move.
+           */}
+          <Box
+            key={step}
+            sx={{
+              animation: 'welcomeTitle 360ms cubic-bezier(0.22, 1, 0.36, 1) both',
+              '@keyframes welcomeTitle': {
+                from: { opacity: 0 },
+                to: { opacity: 1 },
+              },
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }}
+          >
+            <Stack spacing={1}>
+              <Typography
+                ref={headingRef}
+                tabIndex={-1}
+                variant="h1"
+                sx={{ overflowWrap: 'anywhere', outline: 'none' }}
+              >
+                {onCity ? (
+                  <>
+                    Add your{' '}
+                    <Box component="span" sx={{ color: palette.gold }}>
+                      city
+                    </Box>
+                    .
+                  </>
+                ) : (
+                  <>
+                    Pick a{' '}
+                    <Box component="span" sx={{ color: palette.gold }}>
+                      username
+                    </Box>
+                    .
+                  </>
+                )}
+              </Typography>
+              <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                {onCity
+                  ? 'Optional. It sorts the closest trades first, and you can change it later on your profile.'
+                  : 'This is the name people see, and the name in every binder link you share.'}
+              </Typography>
+            </Stack>
+          </Box>
+        </ResizeBox>
 
-        <Stack spacing={1}>
-          <Typography variant="h1">
-            Select your{' '}
-            <Box component="span" sx={{ color: palette.gold }}>
-              City
-            </Box>
-            .
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Optional. Type the city, the state, and the country to pick the right one.
-          </Typography>
-        </Stack>
-
-        <Paper sx={{ p: 3 }}>
-          <CitySearchField
-            value={city}
-            onChange={setCity}
-            helperText="For example, Austin, Texas, United States. You can leave this blank."
-          />
+        <Paper sx={{ p: { xs: 2.5, sm: 3 } }}>
+          <ResizeBox step={step}>
+            {onCity ? (
+              <CitySearchField
+                value={city}
+                onChange={setCity}
+                helperText="Start typing, then pick the matching city. Leaving this blank is fine."
+              />
+            ) : (
+              <Stack spacing={1.5}>
+                <TextField
+                  label="Username"
+                  value={normalized}
+                  onChange={(event) => setUsername(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canContinue) setStep(1);
+                  }}
+                  placeholder="mark"
+                  inputRef={usernameRef}
+                  error={Boolean(shapeError) || reserved || availability.data?.available === false}
+                  helperText={describe({
+                    empty: normalized.length === 0,
+                    shapeError,
+                    reserved,
+                    checking,
+                    takenReason:
+                      availability.data?.available === false ? availability.data.reason : null,
+                  })}
+                  fullWidth
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          {normalized.length > 0 && checking && <CircularProgress size={18} />}
+                          {!checking && availability.data?.available === true && (
+                            <CheckCircleIcon fontSize="small" sx={{ color: palette.gold }} />
+                          )}
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                {normalized.length > 0 && shape.success && !reserved && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ overflowWrap: 'anywhere' }}
+                  >
+                    Your profile link: {origin}/u/{normalized}
+                  </Typography>
+                )}
+              </Stack>
+            )}
+          </ResizeBox>
         </Paper>
 
         {completeOnboarding.error && (
           <Alert severity="error">{completeOnboarding.error.message}</Alert>
         )}
 
-        <Button
-          variant="contained"
-          size="large"
-          onClick={handleSave}
-          disabled={!canSave || completeOnboarding.isPending}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          justifyContent={{ sm: 'flex-end' }}
+          sx={{ '& .MuiButton-root': { width: { xs: '100%', sm: 'auto' } } }}
         >
-          {completeOnboarding.isPending ? 'Saving…' : 'Start my binder'}
-        </Button>
+          {onCity && (
+            <Button color="secondary" onClick={() => setStep(0)} disabled={saving}>
+              Back
+            </Button>
+          )}
+          {/*
+           * One button for both steps. A floor on the width stops
+           * "Continue" and "Finish setup" from moving it.
+           */}
+          <Button
+            variant="contained"
+            size="large"
+            onClick={onCity ? handleFinish : () => setStep(1)}
+            disabled={onCity ? saving : !canContinue}
+            sx={{ minWidth: { sm: 168 } }}
+          >
+            {onCity ? (saving ? 'Saving…' : 'Finish setup') : 'Continue'}
+          </Button>
+        </Stack>
+      </Stack>
+    </>
+  );
+}
+
+/** Where the reader is in setup: a caption, the step name, and a two-part bar. */
+function StepBar({ step }: { step: number }) {
+  return (
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="baseline">
+        <Typography variant="caption" color="text.secondary">
+          Account setup · step {step + 1} of {STEPS.length}
+        </Typography>
+        <Typography variant="caption" sx={{ color: palette.goldLight }}>
+          {STEPS[step]}
+        </Typography>
+      </Stack>
+      <Stack direction="row" spacing={1} aria-hidden>
+        {STEPS.map((label, index) => (
+          <Box
+            key={label}
+            sx={{
+              flex: 1,
+              height: 4,
+              borderRadius: 999,
+              bgcolor: palette.divider,
+              overflow: 'hidden',
+            }}
+          >
+            {/*
+             * Each part has a track and a fill. The fill grows from the left on
+             * the way forward and pulls back to the left on the way back, so the
+             * bar reports the move instead of blinking to the new step.
+             */}
+            <Box
+              sx={{
+                height: '100%',
+                width: index <= step ? '100%' : '0%',
+                borderRadius: 999,
+                bgcolor: palette.gold,
+                transition: `width ${FILL_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+                '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+              }}
+            />
+          </Box>
+        ))}
       </Stack>
     </Stack>
   );
 }
 
-const WELCOME_PREFIX = 'Welcome to ';
-const WELCOME_LINE = `${WELCOME_PREFIX}Opulent Tutor`;
-const PROMPT_LINE = "Let's finish setting up your account.";
-const TYPE_DELAY_MS = 33;
-
 /**
- * Types one line, one character at a time, with a gold caret.
+ * Holds its content at a measured height.
  *
- * `goldStart` paints from that character onward in gold, so "Opulent Tutor"
- * can be gold while "Welcome to " stays the normal text color.
- * The full line is always in the layout, invisibly, so the page does not grow
- * as characters appear. The caret goes away when the line is finished.
+ * The content is taken out of flow, so a swap between the two steps changes the
+ * wrapper's height instead of moving the page at once. The wrapper then animates
+ * to the new height over the same 360ms as the title fade, so the title block and
+ * the input card always resize together.
  */
-function TypedLine({
-  text,
-  active,
-  goldStart,
-  onDone,
-  variant,
-  color,
-}: {
-  text: string;
-  active: boolean;
-  goldStart?: number;
-  onDone: () => void;
-  variant: 'h2' | 'body1';
-  color?: string;
-}) {
-  const reduceMotion = useRef(
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  ).current;
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-  const [count, setCount] = useState(reduceMotion ? text.length : 0);
-  const done = count >= text.length;
+function ResizeBox({ step, children }: { step: number; children: ReactNode }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!active) return;
-    if (reduceMotion) {
-      onDoneRef.current();
-      return;
-    }
-    if (done) {
-      const pause = window.setTimeout(() => onDoneRef.current(), 280);
-      return () => window.clearTimeout(pause);
-    }
-    const step = window.setTimeout(() => setCount((current) => current + 1), TYPE_DELAY_MS);
-    return () => window.clearTimeout(step);
-  }, [active, count, done, reduceMotion]);
-
-  const leadEnd = goldStart === undefined ? count : Math.min(count, goldStart);
-  const brand = goldStart === undefined ? '' : text.slice(goldStart, count);
-
-  const showCaret = active && !done;
+  useLayoutEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    const measure = () => setHeight(node.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [step]);
 
   return (
-    <Typography variant={variant} color={color} aria-label={text} sx={{ position: 'relative' }}>
-      <Box component="span" aria-hidden sx={{ visibility: 'hidden' }}>
-        {text}
+    <Box
+      sx={{
+        position: 'relative',
+        height: height ?? undefined,
+        /*
+         * Clip the bottom while the box resizes, but leave room above the top.
+         * A floating field label sits outside the top of its input, and a plain
+         * `overflow: hidden` cuts it in half.
+         */
+        clipPath: 'inset(-16px 0 0 0)',
+        transition: 'height 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+      }}
+    >
+      <Box ref={contentRef} sx={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+        {children}
       </Box>
-      <Box component="span" aria-hidden sx={{ position: 'absolute', left: 0, top: 0, right: 0 }}>
-        {text.slice(0, leadEnd)}
-        {brand && (
-          <Box component="span" sx={{ color: palette.gold }}>
-            {brand}
-          </Box>
-        )}
-        <Box
-          component="span"
-          sx={{
-            display: 'inline-block',
-            width: showCaret ? '0.07em' : 0,
-            height: '0.9em',
-            ml: showCaret ? '1px' : 0,
-            bgcolor: palette.gold,
-            verticalAlign: '-0.05em',
-            animation: showCaret ? 'welcomeCaret 900ms steps(2, start) infinite' : 'none',
-            '@keyframes welcomeCaret': {
-              to: { visibility: 'hidden' },
-            },
-          }}
-        />
-      </Box>
-    </Typography>
+    </Box>
   );
 }
 

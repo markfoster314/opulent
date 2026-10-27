@@ -1,4 +1,4 @@
-import type { BinderRarity, CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
+import type { CardRarity, CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
 
 /** The choices on the binder search form. Empty text and false mean that rule is off. */
 export interface BinderSearch {
@@ -7,7 +7,7 @@ export interface BinderSearch {
   finish: CardFinish | '';
   condition: CardCondition | '';
   language: CardLanguage | '';
-  rarity: BinderRarity | '';
+  rarity: CardRarity | '';
   forTrade: boolean;
   signed: boolean;
   altered: boolean;

@@ -63,7 +63,7 @@ export function ProfilePage() {
 
   const page = profile.data;
   const ownPage = page.isOwner || me.data?.username === page.username;
-  const canSeeLists = page.binders !== undefined && page.wantLists !== undefined;
+  const canSeeLists = page.wantLists !== undefined;
 
   function applyConfirm() {
     if (!confirm) return;
@@ -197,18 +197,23 @@ export function ProfilePage() {
         <Alert severity="error">{(addFriend.error ?? removeFriend.error)?.message}</Alert>
       )}
 
-      {canSeeLists && (
-        <ProfileLinks
-          title="Binders"
-          empty="No public binders."
-          lead={{
-            name: 'All public cards',
-            href: `/u/${page.username}/all`,
-            matchCount: page.binderMatchCount,
-          }}
-          items={page.binders ?? []}
-          href={(slug) => `/u/${page.username}/${slug}`}
-        />
+      {page.tradeBinderCount !== undefined && (
+        <Paper sx={{ p: 3 }}>
+          <Stack spacing={1}>
+            <Typography variant="h2">Trade binder</Typography>
+            <Typography color="text.secondary">
+              {page.tradeBinderCount} card{page.tradeBinderCount === 1 ? '' : 's'} marked for trade.
+            </Typography>
+            <Button
+              component={RouterLink}
+              to={`/u/${page.username}/trade-binder`}
+              variant="outlined"
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Open the trade binder
+            </Button>
+          </Stack>
+        </Paper>
       )}
       {canSeeLists && (
         <ProfileLinks
@@ -377,8 +382,8 @@ function ProfileEditor({
       </FormControl>
       {changing && (
         <Alert severity="warning">
-          Changing your username will break the binder links you have already sent. They all point
-          at <strong>{page.username}</strong>.
+          Changing your username will break the links you have already sent. They all point at{' '}
+          <strong>{page.username}</strong>.
         </Alert>
       )}
       {updateProfile.error && <Alert severity="error">{updateProfile.error.message}</Alert>}
@@ -487,10 +492,11 @@ function ProfileLinks({
   lead,
   items,
   href,
+  itemsLabel,
 }: {
   title: string;
   empty: string;
-  lead?: { name: string; href: string; matchCount?: number | undefined };
+  lead?: { name: string; detail?: string; href: string; matchCount?: number | undefined };
   items: {
     slug: string;
     name: string;
@@ -498,24 +504,42 @@ function ProfileLinks({
     matchCount?: number | undefined;
   }[];
   href: (slug: string) => string;
+  /** A small heading over the list when the lead card stands apart from it. */
+  itemsLabel?: string;
 }) {
   return (
     <Stack spacing={2}>
       <Typography variant="h2">{title}</Typography>
+      {lead && (
+        <Paper
+          component={RouterLink}
+          to={lead.href}
+          sx={{
+            p: 2.5,
+            display: 'block',
+            minWidth: 0,
+            ...clickableSurfaceSx,
+            borderColor: palette.gold,
+          }}
+        >
+          <MatchChip count={lead.matchCount} />
+          <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            {lead.name}
+          </Typography>
+          {lead.detail && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {lead.detail}
+            </Typography>
+          )}
+        </Paper>
+      )}
+      {itemsLabel && items.length > 0 && (
+        <Typography variant="h3" component="h3">
+          {itemsLabel}
+        </Typography>
+      )}
       {items.length === 0 && <Alert severity="info">{empty}</Alert>}
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
-        {lead && (
-          <Paper
-            component={RouterLink}
-            to={lead.href}
-            sx={{ p: 2.5, display: 'block', minWidth: 0, ...clickableSurfaceSx }}
-          >
-            <MatchChip count={lead.matchCount} />
-            <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-              {lead.name}
-            </Typography>
-          </Paper>
-        )}
         {items.map((item) => (
           <Paper
             key={item.slug}

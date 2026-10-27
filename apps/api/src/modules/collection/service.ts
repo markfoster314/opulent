@@ -1,31 +1,40 @@
-import type { BinderRow, Database } from '@opulent/db';
-import { binderItems, binders, cards, users, wantItems } from '@opulent/db';
+import type { Database, UserRow } from '@opulent/db';
+import {
+  cardGroups,
+  cards,
+  collectionItems,
+  groupMemberships,
+  users,
+  wantItems,
+} from '@opulent/db';
 import type {
-  AddBinderItemInput,
-  BinderItem,
-  BinderItemQuery,
+  AddCollectionItemInput,
   CardFinish,
-  CreateBinderInput,
+  CollectionItem,
+  CollectionItemQuery,
+  CollectionSummary,
+  GroupRef,
   ItemPrice,
   Page,
+  TradeBinder,
   TradeMatch,
-  UpdateBinderInput,
-  UpdateBinderItemInput,
+  UpdateCollectionItemInput,
 } from '@opulent/shared';
 import {
+  CARD_GAME,
   cardFinishSchema,
   cardLanguageOrEnglish,
   marketPrices,
   parseCustomAmount,
 } from '@opulent/shared';
-import { and, asc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   assertPaperPrinting,
   assertPrintedLanguage,
   listLanguagePrintings,
 } from '../cards/service';
-import { ApiError, slugify } from '../../lib/http';
+import { ApiError } from '../../lib/http';
 
 /** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
 function isCardFinish(value: string): value is CardFinish {
@@ -39,206 +48,113 @@ export interface ViewerContext {
   shareToken?: string | undefined;
 }
 
-/**
- * Three ways to be allowed in: you own it, it is public, or you hold the token.
- * Everything that reads a binder funnels through here.
- */
-export function assertCanView(binder: BinderRow, viewer: ViewerContext): void {
-  if (viewer.userId && binder.userId === viewer.userId) return;
-  if (binder.visibility === 'public') return;
-  if (binder.visibility === 'unlisted' && viewer.shareToken === binder.shareToken) return;
-  // A private binder reports "not found" rather than "forbidden", so its
-  // existence is not leaked to people guessing URLs.
-  throw ApiError.notFound('Binder not found');
-}
-
-export function assertCanEdit(binder: BinderRow, viewer: ViewerContext): void {
-  if (!viewer.userId || binder.userId !== viewer.userId) {
-    throw ApiError.notFound('Binder not found');
+/** The trade binder follows the same three doors as any other shared list. */
+export function assertCanViewTradeBinder(owner: UserRow, viewer: ViewerContext): void {
+  if (viewer.userId && owner.id === viewer.userId) return;
+  if (owner.tradeBinderVisibility === 'public') return;
+  if (
+    owner.tradeBinderVisibility === 'unlisted' &&
+    viewer.shareToken === owner.tradeBinderShareToken
+  ) {
+    return;
   }
+  throw ApiError.notFound('Trade binder not found');
 }
 
-/**
- * Shapes a binder row for the wire.
- *
- * The share token is withheld from everyone but the owner. Without this, a
- * stranger who opens a public binder would learn its token, and that token
- * would still work if the owner later switched the binder to unlisted.
- */
-export function toBinderResponse(binder: BinderRow, viewerUserId: string | undefined) {
-  const { shareToken, ...rest } = binder;
-  return viewerUserId && binder.userId === viewerUserId ? { ...rest, shareToken } : rest;
-}
-
-export async function listBindersForOwner(db: Database, userId: string) {
+/** What a visitor sees above the trade binder. The token stays with the owner. */
+export async function getTradeBinder(
+  db: Database,
+  owner: UserRow,
+  viewer: ViewerContext,
+): Promise<TradeBinder> {
+  assertCanViewTradeBinder(owner, viewer);
   const rows = await db
-    .select({
-      id: binders.id,
-      userId: binders.userId,
-      slug: binders.slug,
-      name: binders.name,
-      description: binders.description,
-      visibility: binders.visibility,
-      shareToken: binders.shareToken,
-      createdAt: binders.createdAt,
-      updatedAt: binders.updatedAt,
-    })
-    .from(binders)
-    .where(eq(binders.userId, userId))
-    .orderBy(asc(binders.name));
-
-  const counts = await cardTotals(
-    db,
-    binderItems.binderId,
-    binderItems.quantity,
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => ({ ...row, itemCount: counts.get(row.id) ?? 0 }));
+    .select({ cardCount: sql<number>`coalesce(sum(${collectionItems.quantity}), 0)::int` })
+    .from(collectionItems)
+    .where(and(eq(collectionItems.userId, owner.id), eq(collectionItems.forTrade, true)));
+  const isOwner = viewer.userId === owner.id;
+  return {
+    username: owner.username,
+    visibility: owner.tradeBinderVisibility,
+    cardCount: Number(rows[0]?.cardCount ?? 0),
+    ...(isOwner ? { shareToken: owner.tradeBinderShareToken } : {}),
+  };
 }
 
-export async function listPublicBindersByHandle(db: Database, handle: string) {
-  return db
-    .select({
-      id: binders.id,
-      slug: binders.slug,
-      name: binders.name,
-      description: binders.description,
-      visibility: binders.visibility,
-      updatedAt: binders.updatedAt,
-    })
-    .from(binders)
-    .innerJoin(users, eq(users.id, binders.userId))
-    .where(and(eq(users.username, handle), eq(binders.visibility, 'public')))
-    .orderBy(asc(binders.name));
-}
-
-export async function createBinder(
-  db: Database,
-  userId: string,
-  input: CreateBinderInput,
-): Promise<BinderRow> {
-  const slug = input.slug ?? slugify(input.name);
-  if (!slug) throw ApiError.badRequest('Could not build a slug from that name');
-
-  const existing = await db
-    .select({ id: binders.id })
-    .from(binders)
-    .where(and(eq(binders.userId, userId), eq(binders.slug, slug)))
-    .limit(1);
-  if (existing.length > 0) {
-    throw ApiError.conflict(`You already have a binder at /${slug}`);
-  }
-
-  const inserted = await db
-    .insert(binders)
-    .values({
-      userId,
-      slug,
-      name: input.name,
-      description: input.description ?? null,
-      visibility: input.visibility,
-    })
-    .returning();
-
-  const binder = inserted[0];
-  if (!binder) throw new ApiError('internal_error', 'Could not create the binder');
-  return binder;
-}
-
-export async function getBinderById(db: Database, id: string): Promise<BinderRow> {
-  const rows = await db.select().from(binders).where(eq(binders.id, id)).limit(1);
-  const binder = rows[0];
-  if (!binder) throw ApiError.notFound('Binder not found');
-  return binder;
-}
-
-export async function getBinderByHandleAndSlug(
-  db: Database,
-  handle: string,
-  slug: string,
-): Promise<BinderRow> {
-  const rows = await db
-    .select()
-    .from(binders)
-    .innerJoin(users, eq(users.id, binders.userId))
-    .where(and(eq(users.username, handle), eq(binders.slug, slug)))
-    .limit(1);
-
-  const row = rows[0];
-  if (!row) throw ApiError.notFound('Binder not found');
-  return row.binders;
-}
-
-/**
- * Note that renaming a binder does not re-slug it. The slug is part of every
- * share link already handed out, so it only changes when asked for explicitly.
- */
-export async function updateBinder(
-  db: Database,
-  binderId: string,
-  userId: string,
-  input: UpdateBinderInput,
-): Promise<BinderRow> {
-  if (input.slug) {
-    const taken = await db
-      .select({ id: binders.id })
-      .from(binders)
-      .where(
-        and(eq(binders.userId, userId), eq(binders.slug, input.slug), ne(binders.id, binderId)),
-      )
-      .limit(1);
-    if (taken.length > 0) {
-      throw ApiError.conflict(`You already have a binder at /${input.slug}`);
-    }
-  }
-
+/** Invalidates every trade binder link handed out so far. */
+export async function rotateTradeBinderToken(db: Database, userId: string): Promise<string> {
   const updated = await db
-    .update(binders)
-    .set({ ...input, updatedAt: new Date() })
-    .where(eq(binders.id, binderId))
-    .returning();
-
-  const binder = updated[0];
-  if (!binder) throw ApiError.notFound('Binder not found');
-  return binder;
-}
-
-export async function deleteBinder(db: Database, binderId: string): Promise<void> {
-  await db.delete(binders).where(eq(binders.id, binderId));
-}
-
-/** Invalidates every share link handed out so far. */
-export async function rotateShareToken(db: Database, binderId: string): Promise<string> {
-  const updated = await db
-    .update(binders)
-    .set({ shareToken: sql`encode(gen_random_bytes(16), 'hex')`, updatedAt: new Date() })
-    .where(eq(binders.id, binderId))
-    .returning({ shareToken: binders.shareToken });
-
+    .update(users)
+    .set({ tradeBinderShareToken: sql`encode(gen_random_bytes(16), 'hex')`, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning({ shareToken: users.tradeBinderShareToken });
   const token = updated[0]?.shareToken;
-  if (!token) throw ApiError.notFound('Binder not found');
+  if (!token) throw ApiError.notFound('User not found');
   return token;
 }
 
-const binderItemSelection = {
-  id: binderItems.id,
-  binderId: binderItems.binderId,
-  scryfallId: binderItems.scryfallId,
-  quantity: binderItems.quantity,
-  finish: binderItems.finish,
-  condition: binderItems.condition,
-  language: binderItems.language,
-  signed: binderItems.signed,
-  altered: binderItems.altered,
-  misprint: binderItems.misprint,
-  miscut: binderItems.miscut,
-  artistProof: binderItems.artistProof,
-  notes: binderItems.notes,
-  photoUrl: binderItems.photoUrl,
-  forTrade: binderItems.forTrade,
-  priceKind: binderItems.priceKind,
-  pricePercent: binderItems.pricePercent,
-  priceAmount: binderItems.priceAmount,
+/**
+ * The market price of one copy, in SQL, so the whole collection sums in one pass.
+ * Foils and etched foils read their own price. A non-English printing falls
+ * back to the English printing of the same set and number, like `marketPrices`.
+ */
+function copyMarketPriceSql() {
+  const own = sql`CASE ${collectionItems.finish}::text
+    WHEN 'foil' THEN ${cards.prices}->>'usd_foil'
+    WHEN 'etched' THEN ${cards.prices}->>'usd_etched'
+    ELSE ${cards.prices}->>'usd' END`;
+  const english = sql`CASE ${collectionItems.finish}::text
+    WHEN 'foil' THEN ${englishCards.prices}->>'usd_foil'
+    WHEN 'etched' THEN ${englishCards.prices}->>'usd_etched'
+    ELSE ${englishCards.prices}->>'usd' END`;
+  return sql`COALESCE(NULLIF(${own}, '')::numeric, NULLIF(${english}, '')::numeric, 0)`;
+}
+
+/** Card and value totals for the top of the collection page. */
+export async function getCollectionSummary(
+  db: Database,
+  userId: string,
+): Promise<CollectionSummary> {
+  const price = copyMarketPriceSql();
+  const forTrade = sql`CASE WHEN ${collectionItems.forTrade} THEN 1 ELSE 0 END`;
+  const rows = await db
+    .select({
+      cardCount: sql<number>`coalesce(sum(${collectionItems.quantity}), 0)::int`,
+      forTradeCount: sql<number>`coalesce(sum(${collectionItems.quantity} * ${forTrade}), 0)::int`,
+      marketValue: sql<string>`coalesce(sum(${collectionItems.quantity} * ${price}), 0)::text`,
+      forTradeValue: sql<string>`coalesce(sum(${collectionItems.quantity} * ${price} * ${forTrade}), 0)::text`,
+    })
+    .from(collectionItems)
+    .innerJoin(cards, eq(cards.scryfallId, collectionItems.scryfallId))
+    .leftJoin(englishCards, englishPrintingJoin())
+    .where(and(eq(collectionItems.userId, userId), eq(cards.game, CARD_GAME)));
+  const row = rows[0];
+  return {
+    cardCount: Number(row?.cardCount ?? 0),
+    forTradeCount: Number(row?.forTradeCount ?? 0),
+    marketValue: Number(row?.marketValue ?? 0).toFixed(2),
+    forTradeValue: Number(row?.forTradeValue ?? 0).toFixed(2),
+  };
+}
+
+const collectionItemSelection = {
+  id: collectionItems.id,
+  scryfallId: collectionItems.scryfallId,
+  quantity: collectionItems.quantity,
+  finish: collectionItems.finish,
+  condition: collectionItems.condition,
+  language: collectionItems.language,
+  signed: collectionItems.signed,
+  altered: collectionItems.altered,
+  misprint: collectionItems.misprint,
+  miscut: collectionItems.miscut,
+  artistProof: collectionItems.artistProof,
+  notes: collectionItems.notes,
+  photoUrl: collectionItems.photoUrl,
+  forTrade: collectionItems.forTrade,
+  priceKind: collectionItems.priceKind,
+  pricePercent: collectionItems.pricePercent,
+  priceAmount: collectionItems.priceAmount,
   cardName: cards.name,
   cardSetCode: cards.setCode,
   cardSetName: cards.setName,
@@ -250,32 +166,34 @@ const binderItemSelection = {
   cardFinishes: cards.finishes,
 };
 
-type BinderItemJoinRow = Awaited<ReturnType<typeof selectBinderItems>>[number];
+type CollectionItemJoinRow = Awaited<ReturnType<typeof selectCollectionItems>>[number];
 
 const englishCards = alias(cards, 'english_card');
 
-function selectBinderItems(db: Database) {
+/** The English printing of the same set and number, which carries the price. */
+function englishPrintingJoin() {
+  return and(
+    eq(englishCards.setCode, cards.setCode),
+    eq(englishCards.collectorNumber, cards.collectorNumber),
+    eq(englishCards.lang, 'en'),
+    sql`jsonb_exists(${englishCards.raw}->'games', 'paper')`,
+    sql`${englishCards.layout} IS DISTINCT FROM 'art_series'`,
+  );
+}
+
+function selectCollectionItems(db: Database) {
   return db
     .select({
-      ...binderItemSelection,
+      ...collectionItemSelection,
       englishPrices: englishCards.prices,
     })
-    .from(binderItems)
-    .innerJoin(cards, eq(cards.scryfallId, binderItems.scryfallId))
-    .leftJoin(
-      englishCards,
-      and(
-        eq(englishCards.setCode, cards.setCode),
-        eq(englishCards.collectorNumber, cards.collectorNumber),
-        eq(englishCards.lang, 'en'),
-        sql`jsonb_exists(${englishCards.raw}->'games', 'paper')`,
-        sql`${englishCards.layout} IS DISTINCT FROM 'art_series'`,
-      ),
-    );
+    .from(collectionItems)
+    .innerJoin(cards, eq(cards.scryfallId, collectionItems.scryfallId))
+    .leftJoin(englishCards, englishPrintingJoin());
 }
 
 function toItemPrice(
-  row: Pick<BinderItemJoinRow, 'priceKind' | 'pricePercent' | 'priceAmount'>,
+  row: Pick<CollectionItemJoinRow, 'priceKind' | 'pricePercent' | 'priceAmount'>,
 ): ItemPrice {
   if (row.priceKind === 'percent') return { kind: 'percent', percent: row.pricePercent };
   if (row.priceKind === 'custom') return { kind: 'custom', amount: row.priceAmount };
@@ -283,7 +201,7 @@ function toItemPrice(
 }
 
 /**
- * Fills the unused price columns so the unique stack key can match them.
+ * Fills the unused price columns so the row is always complete.
  * Market is 100 and an empty amount. Custom is 0 and the dollar string.
  */
 function priceColumns(price: ItemPrice | undefined): {
@@ -305,10 +223,9 @@ function priceColumns(price: ItemPrice | undefined): {
   return { priceKind: 'market', pricePercent: 100, priceAmount: '' };
 }
 
-function toBinderItem(row: BinderItemJoinRow): BinderItem {
+function toCollectionItem(row: CollectionItemJoinRow, groups: GroupRef[]): CollectionItem {
   return {
     id: row.id,
-    binderId: row.binderId,
     scryfallId: row.scryfallId,
     quantity: row.quantity,
     finish: row.finish,
@@ -323,6 +240,7 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
     photoUrl: row.photoUrl,
     forTrade: row.forTrade,
     price: toItemPrice(row),
+    groups,
     availableFinishes: (row.cardFinishes ?? []).filter(isCardFinish),
     card: {
       scryfallId: row.scryfallId,
@@ -345,77 +263,138 @@ function toBinderItem(row: BinderItemJoinRow): BinderItem {
   };
 }
 
+/** Every group each of these stacks sits in, keyed by item id. */
+async function loadGroupsForItems(
+  db: Database,
+  itemIds: string[],
+): Promise<Map<string, GroupRef[]>> {
+  const byItem = new Map<string, GroupRef[]>();
+  if (itemIds.length === 0) return byItem;
+  const rows = await db
+    .select({ itemId: groupMemberships.itemId, groupId: cardGroups.id, name: cardGroups.name })
+    .from(groupMemberships)
+    .innerJoin(cardGroups, eq(cardGroups.id, groupMemberships.groupId))
+    .where(inArray(groupMemberships.itemId, itemIds))
+    .orderBy(asc(cardGroups.name));
+  for (const row of rows) {
+    const list = byItem.get(row.itemId) ?? [];
+    list.push({ id: row.groupId, name: row.name });
+    byItem.set(row.itemId, list);
+  }
+  return byItem;
+}
+
+/** Parsed search, or just a page size. A missing flag means that rule is off. */
+type CollectionItemListQuery = Partial<CollectionItemQuery> & { limit: number };
+
 /**
  * Keyset pagination ordered by card name. The cursor carries the last name and
  * row id, so adding a card mid-scroll never duplicates or skips a row.
  */
-/** Parsed search, or just a page size. A missing flag means that rule is off. */
-type BinderItemListQuery = Partial<BinderItemQuery> & { limit: number };
-
-export async function listBinderItems(
+async function pageOfItems(
   db: Database,
-  binderId: string,
-  pagination: BinderItemListQuery,
-  viewerId?: string,
-): Promise<Page<BinderItem>> {
+  scope: SQL | undefined,
+  pagination: CollectionItemListQuery,
+  viewerId: string | undefined,
+  withGroups: boolean,
+): Promise<Page<CollectionItem>> {
   const after = decodeCursor(pagination.cursor);
-
-  const rows = await selectBinderItems(db)
-    .where(
-      and(
-        eq(binderItems.binderId, binderId),
-        after
-          ? sql`(${cards.name}, ${binderItems.id}) > (${after.name}, ${after.id}::uuid)`
-          : undefined,
-        ...binderItemFilters(pagination, viewerId),
-      ),
-    )
-    .orderBy(asc(cards.name), asc(binderItems.id))
-    .limit(pagination.limit + 1);
-
-  const hasMore = rows.length > pagination.limit;
-  const page = hasMore ? rows.slice(0, pagination.limit) : rows;
-  const last = page[page.length - 1];
-
-  return {
-    items: page.map(toBinderItem),
-    nextCursor: hasMore && last ? encodeCursor(last.cardName, last.id) : null,
-  };
-}
-
-/** Every card this person holds, across their binders. Public skips private and unlisted binders. */
-export async function listCollectedBinderItems(
-  db: Database,
-  userId: string,
-  pagination: BinderItemListQuery,
-  onlyPublic: boolean,
-  viewerId?: string,
-): Promise<Page<BinderItem>> {
-  const after = decodeCursor(pagination.cursor);
-  const scope = onlyPublic
-    ? and(eq(binders.userId, userId), eq(binders.visibility, 'public'))
-    : eq(binders.userId, userId);
-
-  const rows = await selectBinderItems(db)
-    .innerJoin(binders, eq(binders.id, binderItems.binderId))
+  const rows = await selectCollectionItems(db)
     .where(
       and(
         scope,
         after
-          ? sql`(${cards.name}, ${binderItems.id}) > (${after.name}, ${after.id}::uuid)`
+          ? sql`(${cards.name}, ${collectionItems.id}) > (${after.name}, ${after.id}::uuid)`
           : undefined,
-        ...binderItemFilters(pagination, viewerId),
+        ...collectionItemFilters(pagination, viewerId),
       ),
     )
-    .orderBy(asc(cards.name), asc(binderItems.id))
+    .orderBy(asc(cards.name), asc(collectionItems.id))
     .limit(pagination.limit + 1);
 
   const hasMore = rows.length > pagination.limit;
   const page = hasMore ? rows.slice(0, pagination.limit) : rows;
   const last = page[page.length - 1];
 
+  const items = page.map((row) => toCollectionItem(row, []));
+  if (withGroups) {
+    const groups = await loadGroupsForItems(
+      db,
+      items.map((item) => item.id),
+    );
+    for (const item of items) item.groups = groups.get(item.id) ?? [];
+  }
+
   return {
-    items: page.map(toBinderItem),
+    items,
+    nextCursor: hasMore && last ? encodeCursor(last.cardName, last.id) : null,
+  };
+}
+
+/** Every stack this person owns. The owner reads this, groups included. */
+export async function listCollectionItems(
+  db: Database,
+  userId: string,
+  pagination: CollectionItemListQuery,
+): Promise<Page<CollectionItem>> {
+  return pageOfItems(db, eq(collectionItems.userId, userId), pagination, userId, true);
+}
+
+/**
+ * Every stack this person marked for trade. Check `assertCanViewTradeBinder` first.
+ * Group names are private, so visitors never receive them.
+ */
+export async function listTradeBinderItems(
+  db: Database,
+  ownerId: string,
+  pagination: CollectionItemListQuery,
+  viewerId?: string,
+): Promise<Page<CollectionItem>> {
+  return pageOfItems(
+    db,
+    and(eq(collectionItems.userId, ownerId), eq(collectionItems.forTrade, true)),
+    pagination,
+    viewerId,
+    false,
+  );
+}
+
+/** The stacks in one group. Only the owner reaches this, through the groups module. */
+export async function listItemsInGroup(
+  db: Database,
+  groupId: string,
+  pagination: CollectionItemListQuery,
+): Promise<Page<CollectionItem>> {
+  const after = decodeCursor(pagination.cursor);
+  const rows = await selectCollectionItems(db)
+    .innerJoin(
+      groupMemberships,
+      and(eq(groupMemberships.itemId, collectionItems.id), eq(groupMemberships.groupId, groupId)),
+    )
+    .where(
+      and(
+        after
+          ? sql`(${cards.name}, ${collectionItems.id}) > (${after.name}, ${after.id}::uuid)`
+          : undefined,
+        ...collectionItemFilters(pagination, undefined),
+      ),
+    )
+    .orderBy(asc(cards.name), asc(collectionItems.id))
+    .limit(pagination.limit + 1);
+
+  const hasMore = rows.length > pagination.limit;
+  const page = hasMore ? rows.slice(0, pagination.limit) : rows;
+  const last = page[page.length - 1];
+
+  const items = page.map((row) => toCollectionItem(row, []));
+  const groups = await loadGroupsForItems(
+    db,
+    items.map((item) => item.id),
+  );
+  for (const item of items) item.groups = groups.get(item.id) ?? [];
+
+  return {
+    items,
     nextCursor: hasMore && last ? encodeCursor(last.cardName, last.id) : null,
   };
 }
@@ -425,8 +404,11 @@ function containsPattern(value: string): string {
   return `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
 
-function binderItemFilters(query: BinderItemListQuery, viewerId: string | undefined): SQL[] {
-  const clauses: SQL[] = [];
+function collectionItemFilters(
+  query: CollectionItemListQuery,
+  viewerId: string | undefined,
+): SQL[] {
+  const clauses: SQL[] = [eq(cards.game, CARD_GAME)];
   if (query.q) {
     clauses.push(sql`${cards.name} ILIKE ${containsPattern(query.q)} ESCAPE '\\'`);
   }
@@ -438,16 +420,16 @@ function binderItemFilters(query: BinderItemListQuery, viewerId: string | undefi
       )`,
     );
   }
-  if (query.finish) clauses.push(eq(binderItems.finish, query.finish));
-  if (query.condition) clauses.push(eq(binderItems.condition, query.condition));
-  if (query.language) clauses.push(eq(binderItems.language, query.language));
+  if (query.finish) clauses.push(eq(collectionItems.finish, query.finish));
+  if (query.condition) clauses.push(eq(collectionItems.condition, query.condition));
+  if (query.language) clauses.push(eq(collectionItems.language, query.language));
   if (query.rarity) clauses.push(eq(cards.rarity, query.rarity));
-  if (query.forTrade) clauses.push(eq(binderItems.forTrade, true));
-  if (query.signed) clauses.push(eq(binderItems.signed, true));
-  if (query.altered) clauses.push(eq(binderItems.altered, true));
-  if (query.misprint) clauses.push(eq(binderItems.misprint, true));
-  if (query.miscut) clauses.push(eq(binderItems.miscut, true));
-  if (query.artistProof) clauses.push(eq(binderItems.artistProof, true));
+  if (query.forTrade) clauses.push(eq(collectionItems.forTrade, true));
+  if (query.signed) clauses.push(eq(collectionItems.signed, true));
+  if (query.altered) clauses.push(eq(collectionItems.altered, true));
+  if (query.misprint) clauses.push(eq(collectionItems.misprint, true));
+  if (query.miscut) clauses.push(eq(collectionItems.miscut, true));
+  if (query.artistProof) clauses.push(eq(collectionItems.artistProof, true));
   if (query.onWantList) {
     if (!viewerId) throw ApiError.unauthorized('Sign in to filter by your want lists.');
     clauses.push(sql`EXISTS (
@@ -457,27 +439,6 @@ function binderItemFilters(query: BinderItemListQuery, viewerId: string | undefi
     )`);
   }
   return clauses;
-}
-
-/** Total copies in each binder. A binder with no cards is left out of the map. */
-async function cardTotals(
-  db: Database,
-  idColumn: typeof binderItems.binderId,
-  quantityColumn: typeof binderItems.quantity,
-  ids: string[],
-) {
-  const totals = new Map<string, number>();
-  if (ids.length === 0) return totals;
-  const rows = await db
-    .select({
-      id: idColumn,
-      itemCount: sql<number>`coalesce(sum(${quantityColumn}), 0)::int`,
-    })
-    .from(binderItems)
-    .where(inArray(idColumn, ids))
-    .groupBy(idColumn);
-  for (const row of rows) totals.set(row.id, Number(row.itemCount));
-  return totals;
 }
 
 function encodeCursor(name: string, id: string): string {
@@ -491,25 +452,33 @@ function decodeCursor(cursor?: string): { name: string; id: string } | undefined
   return { name, id };
 }
 
+export type CollectionItemInput = Omit<
+  AddCollectionItemInput,
+  'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'
+> &
+  Partial<
+    Pick<AddCollectionItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'>
+  >;
+
 /**
  * Adds a card, or bumps the quantity if that exact stack is already present.
- * "Exact stack" means same printing, finish, condition, language, marks, and price.
+ * "Exact stack" means same printing, finish, condition, language, and marks.
+ * Price is not part of that key, so a second add never makes a second stack.
  *
  * Marks default to unchecked so a caller that only names the printing still works.
  */
-export async function addBinderItem(
+export async function addCollectionItem(
   db: Database,
-  binderId: string,
-  input: Omit<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'> &
-    Partial<Pick<AddBinderItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'>>,
-): Promise<BinderItem> {
+  userId: string,
+  input: CollectionItemInput,
+): Promise<CollectionItem> {
   await assertPaperPrinting(db, input.scryfallId);
   await assertPrintedLanguage(db, input.scryfallId, input.language);
 
   const inserted = await db
-    .insert(binderItems)
+    .insert(collectionItems)
     .values({
-      binderId,
+      userId,
       scryfallId: input.scryfallId,
       quantity: input.quantity,
       finish: input.finish,
@@ -527,54 +496,54 @@ export async function addBinderItem(
     })
     .onConflictDoUpdate({
       target: [
-        binderItems.binderId,
-        binderItems.scryfallId,
-        binderItems.finish,
-        binderItems.condition,
-        binderItems.language,
-        binderItems.signed,
-        binderItems.altered,
-        binderItems.misprint,
-        binderItems.miscut,
-        binderItems.artistProof,
-        binderItems.priceKind,
-        binderItems.pricePercent,
-        binderItems.priceAmount,
+        collectionItems.userId,
+        collectionItems.scryfallId,
+        collectionItems.finish,
+        collectionItems.condition,
+        collectionItems.language,
+        collectionItems.signed,
+        collectionItems.altered,
+        collectionItems.misprint,
+        collectionItems.miscut,
+        collectionItems.artistProof,
       ],
       set: {
-        quantity: sql`${binderItems.quantity} + ${input.quantity}`,
+        quantity: sql`${collectionItems.quantity} + ${input.quantity}`,
+        // The owner may already have priced this stack. Edit it to change the price.
+        forTrade: sql`${collectionItems.forTrade} OR excluded.for_trade`,
         updatedAt: new Date(),
       },
     })
-    .returning({ id: binderItems.id });
+    .returning({ id: collectionItems.id });
 
   const id = inserted[0]?.id;
   if (!id) throw new ApiError('internal_error', 'Could not add the card');
 
-  const rows = await selectBinderItems(db).where(eq(binderItems.id, id)).limit(1);
+  const rows = await selectCollectionItems(db).where(eq(collectionItems.id, id)).limit(1);
   const row = rows[0];
   if (!row) throw new ApiError('internal_error', 'Could not read back the added card');
-  return toBinderItem(row);
+  const groups = await loadGroupsForItems(db, [id]);
+  return toCollectionItem(row, groups.get(id) ?? []);
 }
 
-export async function updateBinderItem(
+export async function updateCollectionItem(
   db: Database,
-  binderId: string,
+  userId: string,
   itemId: string,
-  input: UpdateBinderItemInput,
-): Promise<BinderItem> {
-  const patch: Partial<typeof binderItems.$inferInsert> = { updatedAt: new Date() };
+  input: UpdateCollectionItemInput,
+): Promise<CollectionItem> {
+  const patch: Partial<typeof collectionItems.$inferInsert> = { updatedAt: new Date() };
   if (input.quantity !== undefined) patch.quantity = input.quantity;
   if (input.finish !== undefined) patch.finish = input.finish;
   if (input.condition !== undefined) patch.condition = input.condition;
   if (input.language !== undefined) {
     const existing = await db
-      .select({ scryfallId: binderItems.scryfallId })
-      .from(binderItems)
-      .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)))
+      .select({ scryfallId: collectionItems.scryfallId })
+      .from(collectionItems)
+      .where(and(eq(collectionItems.id, itemId), eq(collectionItems.userId, userId)))
       .limit(1);
     const scryfallId = existing[0]?.scryfallId;
-    if (!scryfallId) throw ApiError.notFound('Card not found in this binder');
+    if (!scryfallId) throw ApiError.notFound('Card not found in your collection');
     await assertPrintedLanguage(db, scryfallId, input.language);
     // The picture and the stored card are the printing, not the language label.
     // English and Japanese of one set are two Scryfall ids.
@@ -600,12 +569,12 @@ export async function updateBinderItem(
 
   try {
     const updated = await db
-      .update(binderItems)
+      .update(collectionItems)
       .set(patch)
-      .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)))
-      .returning({ id: binderItems.id });
+      .where(and(eq(collectionItems.id, itemId), eq(collectionItems.userId, userId)))
+      .returning({ id: collectionItems.id });
 
-    if (!updated[0]) throw ApiError.notFound('Card not found in this binder');
+    if (!updated[0]) throw ApiError.notFound('Card not found in your collection');
   } catch (error) {
     if (isStackCollision(error)) {
       throw ApiError.conflict(
@@ -615,10 +584,11 @@ export async function updateBinderItem(
     throw error;
   }
 
-  const rows = await selectBinderItems(db).where(eq(binderItems.id, itemId)).limit(1);
+  const rows = await selectCollectionItems(db).where(eq(collectionItems.id, itemId)).limit(1);
   const row = rows[0];
-  if (!row) throw ApiError.notFound('Card not found in this binder');
-  return toBinderItem(row);
+  if (!row) throw ApiError.notFound('Card not found in your collection');
+  const groups = await loadGroupsForItems(db, [itemId]);
+  return toCollectionItem(row, groups.get(itemId) ?? []);
 }
 
 /** Postgres reports a broken unique index as SQLSTATE 23505. */
@@ -627,18 +597,19 @@ function isStackCollision(error: unknown): boolean {
   return candidates.some((candidate) => {
     if (typeof candidate !== 'object' || candidate === null) return false;
     const row = candidate as { code?: unknown; constraint_name?: unknown };
-    return row.code === '23505' && row.constraint_name === 'binder_items_stack_key';
+    return row.code === '23505' && row.constraint_name === 'collection_items_stack_key';
   });
 }
 
-export async function removeBinderItem(
+/** Removes a stack. Its group memberships go with it. */
+export async function removeCollectionItem(
   db: Database,
-  binderId: string,
+  userId: string,
   itemId: string,
 ): Promise<void> {
   await db
-    .delete(binderItems)
-    .where(and(eq(binderItems.id, itemId), eq(binderItems.binderId, binderId)));
+    .delete(collectionItems)
+    .where(and(eq(collectionItems.id, itemId), eq(collectionItems.userId, userId)));
 }
 
 interface MatchAggregateRow {
@@ -672,17 +643,32 @@ function valueAllowed(wanted: string[], unwanted: string[], value: string): bool
   return true;
 }
 
-/**
- * The product in one query: cards on the viewer's want list that the binder
- * owner is holding for trade.
- *
- * The join goes want_items -> cards (by oracle_id) -> binder_items (by
- * scryfall_id), which is how a want for a card concept reaches every printing
- * of it sitting in the binder.
- */
-export async function findTradeMatches(
+/** Cards on the viewer's want list that this person holds for trade, across their collection. */
+export async function findTradeBinderMatches(
   db: Database,
-  binderId: string,
+  ownerId: string,
+  viewerUserId: string,
+): Promise<TradeMatch[]> {
+  return matchesWithin(
+    db,
+    sql`bi.user_id = ${ownerId}`,
+    eq(collectionItems.userId, ownerId),
+    viewerUserId,
+  );
+}
+
+/**
+ * The product in one query: cards on the viewer's want list that the owner is
+ * holding for trade.
+ *
+ * The join goes want_items -> cards (by oracle_id) -> collection_items (by
+ * scryfall_id), which is how a want for a card concept reaches every printing
+ * of it sitting in the trade binder.
+ */
+async function matchesWithin(
+  db: Database,
+  scope: SQL,
+  printingScope: SQL,
   viewerUserId: string,
 ): Promise<TradeMatch[]> {
   const aggregates = (await db.execute(sql`
@@ -702,10 +688,11 @@ export async function findTradeMatches(
       w.wanted_sets               AS "wantedSets",
       w.unwanted_sets             AS "unwantedSets"
     FROM want_items w
-    JOIN cards c         ON c.oracle_id = w.oracle_id
-    JOIN binder_items bi ON bi.scryfall_id = c.scryfall_id
+    JOIN cards c              ON c.oracle_id = w.oracle_id
+    JOIN collection_items bi  ON bi.scryfall_id = c.scryfall_id
     WHERE w.user_id = ${viewerUserId}
-      AND bi.binder_id = ${binderId}
+      AND ${scope}
+      AND c.game = ${CARD_GAME}
       AND bi.for_trade = true
       AND (
         cardinality(w.wanted_languages) = 0
@@ -754,18 +741,14 @@ export async function findTradeMatches(
 
   // Second trip for the individual printings, so the UI can show which exact
   // copies are on offer without a correlated subquery per row.
-  const printingRows = await selectBinderItems(db).where(
-    and(
-      eq(binderItems.binderId, binderId),
-      eq(binderItems.forTrade, true),
-      inArray(cards.oracleId, oracleIds),
-    ),
+  const printingRows = await selectCollectionItems(db).where(
+    and(printingScope, eq(collectionItems.forTrade, true), inArray(cards.oracleId, oracleIds)),
   );
 
-  const printingsByOracle = new Map<string, BinderItem[]>();
+  const printingsByOracle = new Map<string, CollectionItem[]>();
   for (const row of printingRows) {
     const list = printingsByOracle.get(row.cardOracleId) ?? [];
-    list.push(toBinderItem(row));
+    list.push(toCollectionItem(row, []));
     printingsByOracle.set(row.cardOracleId, list);
   }
 

@@ -1,4 +1,7 @@
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
+  Button,
   Checkbox,
   FormControl,
   FormControlLabel,
@@ -30,6 +33,7 @@ import {
   parsePhotoLink,
   priceForFinish,
 } from '@opulent/shared';
+import { useState } from 'react';
 
 /**
  * Everything the owner can decide about a stack of cards.
@@ -75,6 +79,11 @@ interface CardDetailsFieldsProps {
   prices?: CardPrices | null;
   /** Shown under the condition field. Editing and adding need different warnings. */
   stackNote?: string;
+  /**
+   * Price, photo link, and notes fold behind one quiet button. Used on the
+   * landing page, where the form stands between a card and a sign-up.
+   */
+  foldAdvanced?: boolean;
 }
 
 const MIN_QUANTITY = 1;
@@ -131,13 +140,31 @@ export function CardDetailsFields({
   languagesReady,
   prices,
   stackNote,
+  foldAdvanced = false,
 }: CardDetailsFieldsProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const finishes = finishOptions.length > 0 ? finishOptions : cardFinishSchema.options;
   const onlyFinish = finishOptions.length === 1;
   const languages = languageOptions.length > 0 ? languageOptions : [value.language];
   const onlyLanguage = languagesReady && languages.length === 1;
   const quantityError = isQuantityInvalid(value.quantity);
   const marketLabel = formatUsd(priceForFinish(prices, value.finish));
+
+  /**
+   * Closing the fold with an unfinished price or photo link would disable Add
+   * for a reason nobody can see, so those fall back before they are hidden.
+   */
+  function toggleAdvanced() {
+    if (!advancedOpen) {
+      setAdvancedOpen(true);
+      return;
+    }
+    const patch: Partial<CardDetails> = {};
+    if (isPriceInvalid(value)) patch.priceKind = 'market';
+    if (isPhotoLinkInvalid(value.photoUrl)) patch.photoUrl = '';
+    if (Object.keys(patch).length > 0) onChange(patch);
+    setAdvancedOpen(false);
+  }
 
   return (
     <Stack spacing={3}>
@@ -279,87 +306,114 @@ export function CardDetailsFields({
         />
       </FormGroup>
 
-      <FormControl fullWidth>
-        <InputLabel id="price-kind-label">Price</InputLabel>
-        <Select
-          labelId="price-kind-label"
-          label="Price"
-          value={value.priceKind}
-          onChange={(event) => {
-            const priceKind = event.target.value as ItemPrice['kind'];
-            const patch: Partial<CardDetails> = { priceKind };
-            if (priceKind === 'percent' && value.pricePercent.trim() === '') {
-              patch.pricePercent = '100';
-            }
-            onChange(patch);
+      {foldAdvanced && (
+        <Button
+          variant="text"
+          color="secondary"
+          size="small"
+          onClick={toggleAdvanced}
+          startIcon={advancedOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          aria-expanded={advancedOpen}
+          aria-controls="card-advanced-fields"
+          sx={{
+            alignSelf: 'flex-start',
+            width: { xs: '100%', sm: 'auto' },
+            justifyContent: 'flex-start',
           }}
         >
-          <MenuItem value="market">
-            {marketLabel ? `Market price - (${marketLabel})` : 'Market price'}
-          </MenuItem>
-          <MenuItem value="percent">Percent of market</MenuItem>
-          <MenuItem value="custom">Custom amount</MenuItem>
-        </Select>
-        {value.artistProof && value.priceKind === 'custom' && (
-          <FormHelperText>Set your own amount for this artist proof.</FormHelperText>
-        )}
-        {value.priceKind === 'market' && (
-          <FormHelperText>
-            {marketLabel
-              ? 'Uses the market price stored for this finish.'
-              : 'No market price is stored for this finish.'}
-          </FormHelperText>
-        )}
-      </FormControl>
-
-      {value.priceKind === 'percent' && (
-        <TextField
-          label="Percent of market"
-          type="number"
-          value={value.pricePercent}
-          onChange={(event) => onChange({ pricePercent: event.target.value })}
-          error={value.pricePercent.trim() !== '' && parsePercentField(value.pricePercent) === null}
-          helperText="A whole number from 0 to 100. Light play is often 90 (10% off), moderate play 80 (20% off), heavy play 70 (30% off), and damaged 50 (50% off)."
-          slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
-          fullWidth
-        />
+          {advancedOpen ? 'Fewer options' : 'More options'}
+        </Button>
       )}
 
-      {value.priceKind === 'custom' && (
-        <TextField
-          label="Your price"
-          value={value.priceAmount}
-          onChange={(event) => onChange({ priceAmount: event.target.value })}
-          error={value.priceAmount.trim() !== '' && parseCustomAmount(value.priceAmount) === null}
-          placeholder="4.50"
-          slotProps={{ htmlInput: { inputMode: 'decimal' } }}
-          fullWidth
-        />
+      {(!foldAdvanced || advancedOpen) && (
+        <Stack spacing={3} id="card-advanced-fields">
+          <FormControl fullWidth>
+            <InputLabel id="price-kind-label">Price</InputLabel>
+            <Select
+              labelId="price-kind-label"
+              label="Price"
+              value={value.priceKind}
+              onChange={(event) => {
+                const priceKind = event.target.value as ItemPrice['kind'];
+                const patch: Partial<CardDetails> = { priceKind };
+                if (priceKind === 'percent' && value.pricePercent.trim() === '') {
+                  patch.pricePercent = '100';
+                }
+                onChange(patch);
+              }}
+            >
+              <MenuItem value="market">
+                {marketLabel ? `Market price - (${marketLabel})` : 'Market price'}
+              </MenuItem>
+              <MenuItem value="percent">Percent of market</MenuItem>
+              <MenuItem value="custom">Custom amount</MenuItem>
+            </Select>
+            {value.artistProof && value.priceKind === 'custom' && (
+              <FormHelperText>Set your own amount for this artist proof.</FormHelperText>
+            )}
+            {value.priceKind === 'market' && (
+              <FormHelperText>
+                {marketLabel
+                  ? 'Uses the market price stored for this finish.'
+                  : 'No market price is stored for this finish.'}
+              </FormHelperText>
+            )}
+          </FormControl>
+
+          {value.priceKind === 'percent' && (
+            <TextField
+              label="Percent of market"
+              type="number"
+              value={value.pricePercent}
+              onChange={(event) => onChange({ pricePercent: event.target.value })}
+              error={
+                value.pricePercent.trim() !== '' && parsePercentField(value.pricePercent) === null
+              }
+              helperText="A whole number from 0 to 100. Light play is often 90 (10% off), moderate play 80 (20% off), heavy play 70 (30% off), and damaged 50 (50% off)."
+              slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
+              fullWidth
+            />
+          )}
+
+          {value.priceKind === 'custom' && (
+            <TextField
+              label="Your price"
+              value={value.priceAmount}
+              onChange={(event) => onChange({ priceAmount: event.target.value })}
+              error={
+                value.priceAmount.trim() !== '' && parseCustomAmount(value.priceAmount) === null
+              }
+              placeholder="4.50"
+              slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+              fullWidth
+            />
+          )}
+
+          <TextField
+            label="Photo link"
+            value={value.photoUrl}
+            onChange={(event) => onChange({ photoUrl: event.target.value })}
+            error={isPhotoLinkInvalid(value.photoUrl)}
+            helperText={
+              isPhotoLinkInvalid(value.photoUrl)
+                ? 'Paste a link that starts with http:// or https://.'
+                : 'A link to photos of this card on an image hosting site like imgur.'
+            }
+            placeholder="https://"
+            fullWidth
+          />
+
+          <TextField
+            label="Notes"
+            value={value.notes}
+            onChange={(event) => onChange({ notes: event.target.value })}
+            multiline
+            minRows={2}
+            fullWidth
+            placeholder="Small crease on the back, otherwise clean."
+          />
+        </Stack>
       )}
-
-      <TextField
-        label="Photo link"
-        value={value.photoUrl}
-        onChange={(event) => onChange({ photoUrl: event.target.value })}
-        error={isPhotoLinkInvalid(value.photoUrl)}
-        helperText={
-          isPhotoLinkInvalid(value.photoUrl)
-            ? 'Paste a link that starts with http:// or https://.'
-            : 'A link to photos of this card on an image hosting site like imgur.'
-        }
-        placeholder="https://"
-        fullWidth
-      />
-
-      <TextField
-        label="Notes"
-        value={value.notes}
-        onChange={(event) => onChange({ notes: event.target.value })}
-        multiline
-        minRows={2}
-        fullWidth
-        placeholder="Small crease on the back, otherwise clean."
-      />
 
       <Stack>
         <FormControlLabel

@@ -1,75 +1,211 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Box, Button, Paper, Stack, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
-import { palette } from '../theme';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
+import type { TradeSummary } from '@opulent/shared';
+import { useState } from 'react';
+import { Link as RouterLink, Navigate } from 'react-router-dom';
+import { useCollectionSummary, useMatchOwners, useMe, useTrades } from '../api/queries';
+import { MatchOwnerPaper } from '../components/MatchOwnerPaper';
+import { hasPendingAdd } from '../pendingAdd';
+import { clickableSurfaceSx, palette } from '../theme';
+import { LandingPage } from './LandingPage';
 
-const steps = [
-  {
-    title: 'Build your binder',
-    body: 'Search any Magic card and add it with its finish and condition. Your binder is the list of what you will trade.',
-  },
-  {
-    title: 'Share one link',
-    body: 'Send someone a link. They do not need an account to look, and a private binder stays private until you share it.',
-  },
-  {
-    title: 'See the overlap',
-    body: 'When someone opens your binder while signed in, we show exactly which cards on their want list you are holding.',
-  },
-];
+const pastStatus = new Set(['completed', 'cancelled', 'declined']);
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const HOME_MATCHES = 4;
 
 export function HomePage() {
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  if (isLoading) return <CircularProgress />;
+  if (isAuthenticated) return <SignedInHome />;
+  return <LandingPage onSignUp={() => void loginWithRedirect()} />;
+}
+
+/** Live work for a signed-in person. Trends and alerts wait in empty slots. */
+function SignedInHome() {
+  const me = useMe(true);
+  const trades = useTrades(true);
+  const matches = useMatchOwners(true);
+  const summary = useCollectionSummary(true);
+  /**
+   * A card chosen before sign-up. The collection page replays it, so a visitor
+   * who started with one card lands there rather than on the home page.
+   */
+  const [pendingAdd] = useState(() => hasPendingAdd());
+
+  const waitingOnYou = (trades.data?.items ?? []).filter(
+    (trade) => trade.status !== 'draft' && !pastStatus.has(trade.status) && trade.yourTurn,
+  );
+  const matchItems = (matches.data?.items ?? []).slice(0, HOME_MATCHES);
+  const totals = summary.data;
+
+  if (me.data?.onboarded && pendingAdd) return <Navigate to="/collection" replace />;
 
   return (
-    <Stack spacing={{ xs: 4, sm: 6 }}>
-      <Stack spacing={2.5} sx={{ maxWidth: 720 }}>
-        <Typography variant="h1">
-          Your trade binder,{' '}
-          <Box component="span" sx={{ color: palette.gold }}>
-            one link away
-          </Box>
-          .
+    <Stack spacing={4}>
+      <Stack spacing={1}>
+        <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          Welcome back{me.data ? `, @${me.data.username}` : ''}
         </Typography>
-        <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
-          Opulent Tutor turns the pile of cards you are willing to trade into a shareable binder,
-          then finds the overlap with what other people are hunting for.
-        </Typography>
+        {me.data && me.data.city === null && (
+          <Typography color="text.secondary">
+            Add your city on your{' '}
+            <Box
+              component={RouterLink}
+              to={`/u/${me.data.username}`}
+              sx={{ color: 'primary.main' }}
+            >
+              profile
+            </Box>{' '}
+            so nearby matches sort first.
+          </Typography>
+        )}
+      </Stack>
 
-        <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
-          {isAuthenticated ? (
-            <Button component={RouterLink} to="/binders" variant="contained" size="large">
-              Open my binders
-            </Button>
-          ) : (
-            <Button variant="contained" size="large" onClick={() => void loginWithRedirect()}>
-              Create your binder
-            </Button>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 3,
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)' },
+          alignItems: 'start',
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Typography variant="h2">Waiting on you</Typography>
+          {trades.isLoading && <CircularProgress />}
+          {trades.error && <Alert severity="error">{trades.error.message}</Alert>}
+          {trades.isSuccess && waitingOnYou.length === 0 && (
+            <Alert severity="info">Nothing waiting on you.</Alert>
           )}
+          {waitingOnYou.map((trade) => (
+            <HomeTradePaper key={trade.id} trade={trade} />
+          ))}
+          <Button
+            component={RouterLink}
+            to="/trades"
+            variant="outlined"
+            sx={{ width: { xs: '100%', sm: 'auto' }, alignSelf: { sm: 'flex-start' } }}
+          >
+            All trades
+          </Button>
+        </Stack>
+
+        <Stack spacing={1.5}>
+          <Typography variant="h2">Who has what you want</Typography>
+          {matches.isLoading && <CircularProgress />}
+          {matches.error && <Alert severity="error">{matches.error.message}</Alert>}
+          {matches.isSuccess && matchItems.length === 0 && (
+            <Alert severity="info">Add wants, then we look through public trade binders.</Alert>
+          )}
+          {matchItems.map((owner) => (
+            <MatchOwnerPaper key={owner.username} owner={owner} />
+          ))}
+          <Button
+            component={RouterLink}
+            to="/matches"
+            variant="outlined"
+            sx={{ width: { xs: '100%', sm: 'auto' }, alignSelf: { sm: 'flex-start' } }}
+          >
+            Find trades
+          </Button>
+        </Stack>
+      </Box>
+
+      <Stack spacing={1.5}>
+        <Typography variant="h2">Your collection</Typography>
+        {summary.error && <Alert severity="error">{summary.error.message}</Alert>}
+        {totals && (
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
+            <Chip color="primary" variant="outlined" label={`${totals.forTradeCount} for trade`} />
+            <Chip label={`${money.format(Number(totals.marketValue))} market value`} />
+          </Stack>
+        )}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          useFlexGap
+          sx={{ flexWrap: 'wrap' }}
+        >
+          <Button
+            component={RouterLink}
+            to="/collection"
+            variant="contained"
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            My collection
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/wants"
+            variant="outlined"
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            My wants
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/collection/import"
+            variant="outlined"
+            color="secondary"
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            Import CSV
+          </Button>
         </Stack>
       </Stack>
 
       <Box
         sx={{
           display: 'grid',
-          gap: 2.5,
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)' },
         }}
       >
-        {steps.map((step, index) => (
-          <Paper key={step.title} sx={{ p: 3 }}>
-            <Typography variant="overline" sx={{ color: palette.gold }}>
-              Step {index + 1}
-            </Typography>
-            <Typography variant="h3" sx={{ mt: 0.5, mb: 1 }}>
-              {step.title}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {step.body}
-            </Typography>
-          </Paper>
-        ))}
+        <ComingSlot title="Price moves" body="Cards in your collection that moved today." />
+        <ComingSlot title="Alerts" body="When a friend marks a card you want for trade." />
       </Box>
     </Stack>
+  );
+}
+
+function HomeTradePaper({ trade }: { trade: TradeSummary }) {
+  return (
+    <Paper
+      component={RouterLink}
+      to={`/trades/${trade.id}`}
+      sx={{ p: 2.5, display: 'block', minWidth: 0, ...clickableSurfaceSx }}
+    >
+      <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
+        @{trade.partnerUsername}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        Your turn. You get {trade.youReceiveCount}. You give {trade.youGiveCount}.
+      </Typography>
+    </Paper>
+  );
+}
+
+function ComingSlot({ title, body }: { title: string; body: string }) {
+  return (
+    <Paper sx={{ p: 2.5, minWidth: 0, borderColor: palette.steelBorder }}>
+      <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {body}
+      </Typography>
+      <Typography variant="caption" color="secondary" sx={{ mt: 1, display: 'block' }}>
+        Coming next.
+      </Typography>
+    </Paper>
   );
 }

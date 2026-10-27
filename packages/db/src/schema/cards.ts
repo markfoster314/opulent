@@ -17,6 +17,13 @@ export const cards = pgTable(
     /** Shared across every printing of the same card. Want lists point here. */
     oracleId: uuid('oracle_id').notNull(),
 
+    /**
+     * Which game or collectible this row belongs to. Magic is 'mtg'. A later
+     * catalog (Pokemon, Lorcana, comics) gets its own value and its own sync
+     * job, and every list query narrows on this column.
+     */
+    game: text('game').notNull().default('mtg'),
+
     name: text('name').notNull(),
     setCode: text('set_code').notNull(),
     setName: text('set_name'),
@@ -42,6 +49,7 @@ export const cards = pgTable(
   (table) => [
     index('cards_oracle_id_idx').on(table.oracleId),
     index('cards_set_code_idx').on(table.setCode),
+    index('cards_game_idx').on(table.game),
     // The oldest-picture index used by want lists is created in src/bootstrap.ts.
     // It is an expression index, which drizzle-kit cannot store.
     uniqueIndex('cards_printing_key').on(table.setCode, table.collectorNumber, table.lang),

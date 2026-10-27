@@ -1,14 +1,17 @@
-import { Box } from '@mui/material';
+import { Box, type SxProps, type Theme } from '@mui/material';
 import { palette } from '../theme';
 
 /** A gold card with a black O stacked above a black T. */
-export function LogoMark() {
+export function LogoMark({ sx }: { sx?: SxProps<Theme> }) {
   return (
     <Box
       component="svg"
       viewBox="0 0 32 40"
       aria-hidden
-      sx={{ width: 26, height: 32, flexShrink: 0, display: 'block' }}
+      sx={[
+        { width: 26, height: 32, flexShrink: 0, display: 'block' },
+        ...(sx ? (Array.isArray(sx) ? sx : [sx]) : []),
+      ]}
     >
       <rect
         x="2"

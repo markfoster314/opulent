@@ -12,6 +12,7 @@ import type {
   SetSearchQuery,
 } from '@opulent/shared';
 import {
+  CARD_GAME,
   cardFinishSchema,
   cardLanguageOrEnglish,
   cardLanguageSchema,
@@ -20,8 +21,12 @@ import {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 
-/** A printing that exists as a physical card. Arena-only and Magic Online-only rows are left out. */
-const paperOnly = sql`jsonb_exists(${cards.raw}->'games', 'paper')`;
+/**
+ * A Magic printing that exists as a physical card. Arena-only and Magic
+ * Online-only rows are left out. Every card list query goes through this, so
+ * the game filter rides along for free.
+ */
+const paperOnly = sql`(${cards.game} = ${CARD_GAME} AND jsonb_exists(${cards.raw}->'games', 'paper'))`;
 
 /**
  * Art Series cards are the extra art pieces in collector boosters. Scryfall

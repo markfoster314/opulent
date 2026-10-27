@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+/**
+ * Which catalog a card belongs to. Magic is the only value today. A later
+ * game (Pokemon, Lorcana) gets its own value and its own sync job. Every list
+ * query narrows on this so a second catalog cannot leak into Magic screens.
+ */
+export const CARD_GAME = 'mtg';
+
 /** How a physical card is printed. Mirrors Scryfall's `finishes` array. */
 export const cardFinishSchema = z.enum(['nonfoil', 'foil', 'etched']);
 export type CardFinish = z.infer<typeof cardFinishSchema>;
@@ -140,7 +147,7 @@ export const profileVisibilityLabels: Record<ProfileVisibility, string> = {
 
 export const profileVisibilityDescriptions: Record<ProfileVisibility, string> = {
   private: 'Only you can open this page.',
-  public: 'Anyone can open this page and see your public binders and want lists.',
+  public: 'Anyone can open this page and see your trade binder and want lists.',
 };
 
 export const wantPriorityLabels: Record<WantPriority, string> = {
