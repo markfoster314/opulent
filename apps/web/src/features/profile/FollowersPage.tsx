@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Button,
@@ -13,6 +12,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useFollowers, useFollowing, useRemoveFriend } from '@/features/profile/queries';
 import { useMe } from '@/features/auth/queries';
 import { clickableSurfaceSx } from '@/theme';
@@ -27,7 +27,7 @@ export function FollowingPage() {
 
 function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
   const { handle } = useParams<{ handle: string }>();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const me = useMe(isAuthenticated);
   const followers = useFollowers(kind === 'followers' ? handle : undefined);
   const following = useFollowing(kind === 'following' ? handle : undefined);

@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import {
   Alert,
@@ -16,6 +15,7 @@ import { isReservedUsername, usernameSchema } from '@opulent/shared';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useCompleteOnboarding, useMe, useUsernameAvailability } from '@/features/auth/queries';
 import { CitySearchField } from '@/shared/ui/CitySearchField';
 import { WelcomeSplash } from './WelcomeSplash';
@@ -34,7 +34,7 @@ function appPath(value: unknown): string {
 
 /** Shown once after first sign-in; a generated username would otherwise leak into every shared link. */
 export function WelcomePage() {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading } = useSession();
   const me = useMe(isAuthenticated);
 
   if (!isLoading && !isAuthenticated) return <Navigate to="/" replace />;

@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import {
@@ -18,6 +17,7 @@ import {
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useMe } from '@/features/auth/queries';
 import { useTrades } from '@/features/trades/queries';
 import { hasPendingAdd } from '@/features/auth';
@@ -26,7 +26,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { LogoMark } from './LogoMark';
 
 export function AppLayout() {
-  const { isAuthenticated, isLoading, loginWithRedirect, logout, user } = useAuth0();
+  const { isAuthenticated, isLoading, loginWithRedirect, logout, user } = useSession();
   const location = useLocation();
   const me = useMe(isAuthenticated);
   const [menuOpen, setMenuOpen] = useState(false);

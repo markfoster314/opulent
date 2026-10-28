@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -18,6 +17,7 @@ import type { Card } from '@opulent/shared';
 import { binderVisibilityLabels } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import {
   useAddGlobalWant,
   useAllWantItems,
@@ -49,7 +49,7 @@ function downloadWantsCsv(csv: string) {
 }
 
 export function WantsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const listsQuery = useWantLists(isAuthenticated);
   const allWants = useAllWantItems(isAuthenticated);
   const generic = useGenericWants(isAuthenticated);

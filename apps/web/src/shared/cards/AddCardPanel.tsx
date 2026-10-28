@@ -23,7 +23,7 @@ import {
   parsePhotoLink,
   priceForFinish,
 } from '@opulent/shared';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSession } from '@/app/session';
 import { useEffect, useState } from 'react';
 import { useCardLanguages, useGroups } from '@/shared/cards/queries';
 import type { CardDetails } from './CardDetailsFields';
@@ -286,7 +286,7 @@ function DetailsStep({
   const languagesQuery = useCardLanguages(printing.scryfallId);
   const languagePrintings = languagesQuery.data?.items;
   const printedLanguages = languagePrintings?.map((card) => cardLanguageOrEnglish(card.lang));
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const groupsQuery = useGroups(isAuthenticated);
   const groupOptions = groupsQuery.data?.items ?? [];
   const selectedGroups = groupOptions.filter((group) => details.groupIds.includes(group.id));

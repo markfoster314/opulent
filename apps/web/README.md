@@ -19,6 +19,18 @@ Vite reads `.env` from the **repository root** (`envDir` in `vite.config.ts`). R
 
 Signed-in work needs Auth0: [docs/auth0-development.md](../../docs/auth0-development.md). Public routes still render without a token.
 
+## UI only
+
+Screens, with no database, API, or Auth0 tenant:
+
+```bash
+pnpm --filter @opulent/web dev:mock
+```
+
+Open http://localhost:5173. The app is already signed in. Fake `/v1` answers come from fixtures in `src/mocks`. A **Mocks** button in the bottom corner sets **Ok**, **Empty**, **Slow**, **401**, **404**, **500**, or **Offline** for every `/v1` call on the open screen.
+
+`pnpm dev` still uses the real API. The button is absent there.
+
 | Command                                | Use                                     |
 | -------------------------------------- | --------------------------------------- |
 | `pnpm dev`                             | API and web through Turbo               |

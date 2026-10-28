@@ -9,7 +9,6 @@ import type {
   TradeMatch,
   UpdateProfileInput,
 } from '@opulent/shared';
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -17,6 +16,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { useSession } from '@/app/session';
 import { useApi } from '@/api/ApiProvider';
 import { queryKeys } from '@/api/queryKeys';
 import { useMe } from '@/features/auth/queries';
@@ -44,7 +44,7 @@ export function useUpdateProfile() {
 
 export function useProfile(username: string | undefined) {
   const api = useApi();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const me = useMe(isAuthenticated);
   const viewer = isAuthenticated ? (me.data?.id ?? 'signed-in') : 'guest';
   return useQuery({

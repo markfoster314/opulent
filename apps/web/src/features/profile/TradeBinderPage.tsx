@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
   Alert,
@@ -13,6 +12,7 @@ import {
 import type { CollectionItem } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { flattenPages } from '@/api/flattenPages';
 import { useMe } from '@/features/auth/queries';
 import {
@@ -38,7 +38,7 @@ import { palette } from '@/theme';
 export function TradeBinderPage() {
   const { handle } = useParams<{ handle: string }>();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const [selected, setSelected] = useState<CollectionItem | null>(null);
   const [search, setSearch] = useState<BinderSearch>(() => ({
     ...emptyBinderSearch,

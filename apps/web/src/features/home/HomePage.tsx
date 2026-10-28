@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Box,
@@ -12,6 +11,7 @@ import {
 import type { TradeSummary } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink, Navigate } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useCollectionSummary } from '@/features/collection/queries';
 import { useMatchOwners } from '@/features/matches/queries';
 import { useMe } from '@/features/auth/queries';
@@ -25,7 +25,7 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 const HOME_MATCHES = 4;
 
 export function HomePage() {
-  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, loginWithRedirect } = useSession();
   if (isLoading) return <CircularProgress />;
   if (isAuthenticated) return <SignedInHome />;
   return <LandingPage onSignUp={() => void loginWithRedirect()} />;

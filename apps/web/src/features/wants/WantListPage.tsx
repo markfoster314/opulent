@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
@@ -20,6 +19,7 @@ import {
 import { binderVisibilityLabels } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import {
   useDeleteWantList,
   useExportWants,
@@ -35,7 +35,7 @@ import { WantListSettingsDialog } from '@/features/wants/WantListSettingsDialog'
 
 export function WantListPage() {
   const { listId } = useParams<{ listId: string }>();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

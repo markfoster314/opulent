@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Box,
@@ -17,6 +16,7 @@ import { describeGenericWant, profileVisibilityLabels } from '@opulent/shared';
 import type { Me } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useMe } from '@/features/auth/queries';
 import { ProfileEditor } from '@/features/profile/ProfileEditor';
 import { ProfileTradeBinder } from '@/features/profile/ProfileTradeBinder';
@@ -28,7 +28,7 @@ type FriendConfirm = { kind: 'add' | 'remove'; username: string };
 export function ProfilePage() {
   const { handle } = useParams<{ handle: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading, loginWithRedirect } = useSession();
   const profile = useProfile(handle);
   const me = useMe(isAuthenticated);
   const addFriend = useAddFriend();

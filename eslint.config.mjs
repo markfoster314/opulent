@@ -78,6 +78,7 @@ export default tseslint.config(
       'packages/db/migrations/**',
       'playwright-report/**',
       'test-results/**',
+      'apps/web/public/mockServiceWorker.js',
       '*.jsonl',
       'eslint.config.mjs',
       'commitlint.config.mjs',

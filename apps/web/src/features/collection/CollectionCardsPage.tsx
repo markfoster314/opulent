@@ -1,7 +1,7 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Alert, CircularProgress, Stack } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { flattenPages } from '@/api/flattenPages';
 import { CollectionCardsBrowser } from './CollectionCardsBrowser';
 import { CollectionHeader } from './CollectionHeader';
@@ -12,7 +12,7 @@ import { useGroups } from '@/shared/cards/queries';
 
 /** Unpriced cards sort last; one-shot navigation intent seeds state once and is cleared from history. */
 export function CollectionCardsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
 

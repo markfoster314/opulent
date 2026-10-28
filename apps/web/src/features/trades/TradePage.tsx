@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Box,
@@ -13,6 +12,7 @@ import type { CardImageUris, TradeCard, TradeChoice, TradeDetail } from '@opulen
 import { formatUsd, tradeSideValue } from '@opulent/shared';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import {
   useCancelTrade,
   useFinalizeTrade,
@@ -26,7 +26,7 @@ type DraftCard = TradeCard;
 
 export function TradePage() {
   const { tradeId } = useParams<{ tradeId: string }>();
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const trade = useTrade(isAuthenticated ? tradeId : undefined);
 
   if (authLoading || trade.isLoading) return <CircularProgress />;

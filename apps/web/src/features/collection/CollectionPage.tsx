@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -19,6 +18,7 @@ import {
 import type { Card } from '@opulent/shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useAddCollectionItem, useCollectionSummary } from '@/features/collection/queries';
 import { useCreateGroup } from '@/features/groups/queries';
 import { useGroups } from '@/shared/cards/queries';
@@ -38,7 +38,7 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 
 /** Collection dashboard; the full card grid lives at /collection/cards to keep this page light. */
 export function CollectionPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const me = useMe(isAuthenticated);
   const summary = useCollectionSummary(isAuthenticated);
   const [addOpen, setAddOpen] = useState(false);

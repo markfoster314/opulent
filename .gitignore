@@ -9,6 +9,7 @@ cdk.out/
 .env
 .env.*
 !.env.example
+!.env.mock
 
 .DS_Store
 *.log

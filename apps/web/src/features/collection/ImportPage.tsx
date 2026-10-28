@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   Alert,
@@ -17,12 +16,13 @@ import type { CollectionImportResult, ImportRow } from '@opulent/shared';
 import { cardConditionLabels, cardFinishLabels, cardLanguageLabels } from '@opulent/shared';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useImportCollection } from '@/features/collection/queries';
 import { palette } from '@/theme';
 
 /** Preview is a dry run; only the final Import writes. */
 export function ImportPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const importRows = useImportCollection();
   const [searchParams] = useSearchParams();
   const groupId = searchParams.get('group') ?? undefined;

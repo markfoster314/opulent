@@ -1,7 +1,7 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
 import type { AddCollectionItemInput, Card } from '@opulent/shared';
 import { useState } from 'react';
+import { useSession } from '@/app/session';
 import { AddCardPanel } from '@/shared/cards/AddCardPanel';
 import { CardSearchField } from '@/shared/cards/CardSearchField';
 import { MatchExamplePaper } from './MatchExamplePaper';
@@ -296,7 +296,7 @@ function Pocket({ benefit }: { benefit: Benefit }) {
 
 /** Search is open to all; keeping the card needs an account, so the form is saved and replayed after sign-up. */
 function StartBinder() {
-  const { loginWithRedirect } = useAuth0();
+  const { loginWithRedirect } = useSession();
   const [card, setCard] = useState<Card | null>(null);
 
   function handleAdd(input: AddCollectionItemInput) {

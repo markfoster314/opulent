@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -22,6 +21,7 @@ import {
 import type { Card } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { flattenPages } from '@/api/flattenPages';
 import { CollectionCardsBrowser } from '@/features/collection';
 import {
@@ -57,7 +57,7 @@ function downloadCsv(csv: string, filename: string) {
 /** Removing a card here leaves it in the collection. */
 export function GroupPage() {
   const { groupId } = useParams<{ groupId: string }>();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSession();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState<BinderSearch>(emptyBinderSearch);

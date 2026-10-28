@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -13,6 +12,7 @@ import {
 import type { WantItem } from '@opulent/shared';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useAllWantItems, usePublicWantItems, useWantLists } from '@/features/wants/queries';
 import { CardGrid } from '@/shared/cards/CardGrid';
 import { WantAddSection } from '@/features/wants/WantAddSection';
@@ -20,7 +20,7 @@ import { WantCardsBrowser } from '@/features/wants/WantCardsBrowser';
 import { WantItemTile } from '@/features/wants/WantItemTile';
 
 export function MineAllWantsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const wants = useAllWantItems(isAuthenticated);
   const lists = useWantLists(isAuthenticated);
   const [addOpen, setAddOpen] = useState(false);

@@ -1,5 +1,5 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useSession } from '@/app/session';
 import { env } from '@/app/env';
 import { createApiClient, type ApiClient } from './client';
 
@@ -16,7 +16,7 @@ export function ApiClientProvider({
 }
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated } = useSession();
 
   const client = useMemo(
     () =>

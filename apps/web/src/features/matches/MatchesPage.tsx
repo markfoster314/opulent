@@ -1,6 +1,6 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Alert, Box, CircularProgress, Divider, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useMatchOwners } from '@/features/matches/queries';
 import { useMe } from '@/features/auth/queries';
 import { GenericMatchesSection } from '@/features/matches/GenericMatchesSection';
@@ -8,7 +8,7 @@ import { MatchOwnerPaper } from '@/features/matches/MatchOwnerPaper';
 
 /** Results are nearest-first; opening one prechecks "On my want lists". */
 export function MatchesPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const me = useMe(isAuthenticated);
   const matches = useMatchOwners(isAuthenticated);
 

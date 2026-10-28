@@ -1,14 +1,14 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Alert, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import type { TradeSummary } from '@opulent/shared';
 import { Link as RouterLink } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useTrades } from '@/features/trades/queries';
 import { clickableSurfaceSx } from '@/theme';
 
 const pastStatus = new Set(['completed', 'cancelled', 'declined']);
 
 export function TradesPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const trades = useTrades(isAuthenticated);
 
   if (authLoading || trades.isLoading) return <CircularProgress />;
@@ -53,7 +53,7 @@ export function TradesPage() {
 }
 
 export function PastTradesPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const trades = useTrades(isAuthenticated);
 
   if (authLoading || trades.isLoading) return <CircularProgress />;

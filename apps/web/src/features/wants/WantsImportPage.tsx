@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   Alert,
@@ -15,11 +14,12 @@ import {
 import type { WantsImportResult } from '@opulent/shared';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useImportWants, useWantLists } from '@/features/wants/queries';
 import { palette } from '@/theme';
 
 export function WantsImportPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useSession();
   const [search] = useSearchParams();
   const initialList = search.get('list') ?? '';
   const listsQuery = useWantLists(isAuthenticated);

@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Alert,
   Box,
@@ -22,6 +21,7 @@ import {
 } from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useSession } from '@/app/session';
 import { useCard } from '@/shared/cards/queries';
 import { useOpenTrade, useTrades } from '@/features/trades/queries';
 import { collectionTilePrice } from '@/shared/cards/CardTile';
@@ -40,7 +40,7 @@ export function BinderCardDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, loginWithRedirect } = useSession();
   const cardQuery = useCard(open ? item?.scryfallId : undefined);
   const trades = useTrades(
     open && isAuthenticated && Boolean(ownerUsername) && Boolean(item?.forTrade),
