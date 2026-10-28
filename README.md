@@ -75,17 +75,7 @@ CI: Quality, Database, Browser smoke, Analyze, Dependency Review, Secret scan, P
 
 Conventional Commits. Branch from `main`. Squash merge. [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-pnpm build
-pnpm --filter @opulent/infra run deploy -- \
-  --context stage=dev \
-  --context auth0Domain=... \
-  --context auth0Audience=... \
-  --context auth0ClientId=... \
-  --context corsOrigin=...
-```
-
-`pnpm build` first. Deploy runs the schema migration and uploads `apps/web/dist`. The site reads `/config.json` for the API address and Auth0 settings. A prod deploy (`stage=prod`) also requires `webOrigin` (https), `emailFrom`, and `resendApiKey`. Optional: `alarmEmail`. Production from GitHub: [docs/deploy.md](docs/deploy.md).
+A green push to `main` deploys production. First-time setup and the one-time deploy command: [docs/deploy.md](docs/deploy.md).
 
 ## Credits
 

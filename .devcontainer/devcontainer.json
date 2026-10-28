@@ -1,0 +1,25 @@
+{
+  "name": "Opulent Tutor",
+  "dockerComposeFile": ["../docker-compose.yml", "compose.yaml"],
+  "service": "dev",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [5173, 8787],
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.11.0"
+    }
+  },
+  "postCreateCommand": "sudo corepack enable && sudo corepack prepare pnpm@10.26.1 --activate && pnpm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "vitest.explorer",
+        "ms-playwright.playwright",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

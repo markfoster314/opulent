@@ -14,4 +14,4 @@ Edit the Drizzle schema, run `pnpm db:generate`, commit the migration with the s
 
 ## Secrets
 
-Do not commit `.env` or credentials. New variables go in `.env.example`. Production AWS access will use GitHub OIDC. That path is not in this repo yet.
+Do not commit `.env` or credentials. New variables go in `.env.example`. Production deploy assumes an AWS role from GitHub. Setup: [docs/deploy.md](docs/deploy.md).

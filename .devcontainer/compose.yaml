@@ -1,0 +1,16 @@
+services:
+  dev:
+    image: mcr.microsoft.com/devcontainers/base:bookworm
+    volumes:
+      - ..:/workspaces/${localWorkspaceFolderBasename}:cached
+    command: sleep infinity
+    # The app keeps using localhost from .env. Sharing this network makes that address the database.
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    ports:
+      - '5173:5173'
+      - '8787:8787'

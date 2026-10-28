@@ -68,10 +68,10 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       // Regression floor for the current suite. Raise these numbers as coverage grows.
       thresholds: {
-        statements: 2,
-        branches: 0.5,
-        functions: 1,
-        lines: 2,
+        statements: 7.41,
+        branches: 2.75,
+        functions: 2.77,
+        lines: 8.14,
       },
       include: ['apps/*/src/**/*.{ts,tsx}', 'jobs/*/src/**/*.ts', 'packages/*/src/**/*.ts'],
       exclude: ['**/*.test.{ts,tsx}', '**/test/**', '**/*.d.ts'],

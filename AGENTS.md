@@ -1,3 +1,5 @@
+This file is for the coding agent. People should start at [README.md](README.md).
+
 # Communication Tone (global — applies to all projects)
 
 ## You must strictly communicate using a combination of the 'ELI5' format and the ASD-STE-100 (Simplified Technical English) language standard.
