@@ -239,6 +239,9 @@ importers:
       aws-cdk:
         specifier: 'catalog:'
         version: 2.1144.0
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.24.2
       tsx:
         specifier: 'catalog:'
         version: 4.19.2

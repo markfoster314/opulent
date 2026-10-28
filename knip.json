@@ -7,8 +7,11 @@
     },
     "infra": {
       "entry": ["bin/app.ts"]
+    },
+    "packages/db": {
+      "entry": ["src/migrate-aws.ts"]
     }
   },
-  "ignoreDependencies": ["tsx"],
+  "ignoreDependencies": ["tsx", "esbuild"],
   "ignore": []
 }

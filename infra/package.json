@@ -5,6 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "synth": "cdk synth",
+    "check": "tsx bin/check-template.ts",
     "diff": "cdk diff",
     "deploy": "cdk deploy --all",
     "destroy": "cdk destroy --all"
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "aws-cdk": "catalog:",
+    "esbuild": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   }

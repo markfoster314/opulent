@@ -8,7 +8,7 @@ pnpm workspace, Turborepo. Node 24, pnpm 10 via Corepack. GitHub repo `opulent`.
 
 Built: accounts, collection, groups, wants, matches, binders, trades, CSV import/export, nightly Scryfall mirror.
 
-Not built: automated deploy, publishing `apps/web/dist`, authenticated browser coverage on a dedicated Auth0 tenant.
+Not built: a CI deploy to AWS, authenticated browser coverage on a dedicated Auth0 tenant.
 
 ## Run
 
@@ -46,7 +46,7 @@ pnpm dev
 | `packages/shared` | Zod schemas and shared types                                                                     |
 | `packages/db`     | Drizzle schema, migrations, seed                                                                 |
 | `jobs/card-sync`  | Scryfall mirror. Scheduled ECS task                                                              |
-| `infra`           | AWS CDK                                                                                          |
+| `infra`           | AWS CDK. [infra/README.md](infra/README.md)                                                      |
 | `e2e`             | Playwright                                                                                       |
 | `docs`            | [Monorepo](docs/monorepo.md), [GitHub](docs/github-setup.md), [Auth0](docs/auth0-development.md) |
 
@@ -56,7 +56,7 @@ API prefixes: `/health`, `/v1/users`, `/v1/places`, `/v1/cards`, `/v1/collection
 
 Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → RDS Proxy → PostgreSQL 16 + PostGIS.
 
-Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. Deploy is manual. CI synths the stack and does not upload the SPA.
+Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. `cdk deploy` applies the schema and uploads the site. CI synths the stack and checks the template. It does not deploy.
 
 ## Commands
 
@@ -81,10 +81,11 @@ pnpm --filter @opulent/infra run deploy -- \
   --context stage=dev \
   --context auth0Domain=... \
   --context auth0Audience=... \
+  --context auth0ClientId=... \
   --context corsOrigin=...
 ```
 
-Upload `apps/web/dist` and invalidate CloudFront. Apply migrations before the API.
+`pnpm build` first. Deploy runs the schema migration and uploads `apps/web/dist`. The site reads `/config.json` for the API address and Auth0 settings. A prod deploy (`stage=prod`) also requires `webOrigin` (https), `emailFrom`, and `resendApiKey`. Optional: `alarmEmail`.
 
 ## Credits
 

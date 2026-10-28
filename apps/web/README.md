@@ -10,7 +10,7 @@ React 18, Vite 8, MUI 6, React Router 7, TanStack Query 5, Auth0 SPA SDK, Rechar
 pnpm dev
 ```
 
-Web http://localhost:5173. API http://localhost:8787. Vite reads `.env` from the repo root (`envDir`). Missing `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, or `VITE_AUTH0_AUDIENCE` throws at boot. `VITE_API_BASE_URL` defaults to `http://localhost:8787`.
+Web http://localhost:5173. API http://localhost:8787. Vite reads `.env` from the repo root (`envDir`). Missing `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, or `VITE_AUTH0_AUDIENCE` throws at boot. `VITE_API_BASE_URL` defaults to `http://localhost:8787`. A production build reads those four values from `/config.json` before it renders.
 
 UI only, no database or Auth0:
 

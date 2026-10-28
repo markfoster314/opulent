@@ -23,9 +23,9 @@ export default defineConfig({
       },
       {
         test: {
-          name: 'api',
+          name: 'infra',
           environment: 'node',
-          include: ['apps/api/src/**/*.test.ts'],
+          include: ['infra/lib/**/*.test.ts'],
         },
       },
       {

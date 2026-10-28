@@ -3,22 +3,36 @@ import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 export interface OpulentTutorStackProps extends cdk.StackProps {
   stage: string;
   auth0Domain: string;
   auth0Audience: string;
+  auth0ClientId: string;
   corsOrigin: string;
+  webOrigin: string;
+  emailFrom: string;
+  resendApiKey: string;
+  alarmEmail: string;
 }
 
 const repoRoot = path.join(__dirname, '..', '..');
@@ -71,11 +85,16 @@ export class OpulentTutorStack extends cdk.Stack {
     });
 
     /** No DATABASE_URL with a password: that would put it in the CloudFormation template and the Lambda console, so compute assembles it from Secrets Manager. */
-    const databaseEnvironment = {
+    const proxyDatabaseEnvironment = {
       DB_SECRET_ARN: database.secret!.secretArn,
       DB_HOST: dbProxy.endpoint,
       DB_NAME: 'opulent_tutor',
       DB_PORT: '5432',
+    };
+    // One long job does not need the proxy, and the proxy blocks session locks the migrator uses.
+    const directDatabaseEnvironment = {
+      ...proxyDatabaseEnvironment,
+      DB_HOST: database.instanceEndpoint.hostname,
     };
 
     // API: the whole backend in one Lambda function
@@ -92,16 +111,68 @@ export class OpulentTutorStack extends cdk.Stack {
       logRetention: logs.RetentionDays.TWO_WEEKS,
       environment: {
         NODE_ENV: 'production',
-        ...databaseEnvironment,
+        ...proxyDatabaseEnvironment,
         AUTH0_DOMAIN: props.auth0Domain,
         AUTH0_AUDIENCE: props.auth0Audience,
         CORS_ORIGIN: props.corsOrigin,
+        WEB_ORIGIN: props.webOrigin,
+        // Empty mail settings stay off the function, so a dev deploy does not try to send.
+        ...(props.emailFrom ? { EMAIL_FROM: props.emailFrom } : {}),
+        ...(props.resendApiKey ? { RESEND_API_KEY: props.resendApiKey } : {}),
       },
     });
 
     dbProxy.grantConnect(apiFunction, 'opulent');
     dbProxy.connections.allowFrom(apiFunction, ec2.Port.tcp(5432));
     database.secret!.grantRead(apiFunction);
+
+    const migrationsHash = createHash('sha256')
+      .update(
+        readFileSync(path.join(repoRoot, 'packages', 'db', 'migrations', 'meta', '_journal.json')),
+      )
+      .digest('hex')
+      .slice(0, 16);
+
+    const migrateSecurityGroup = new ec2.SecurityGroup(this, 'MigrateSecurityGroup', {
+      vpc,
+      description: 'Schema migration on deploy',
+    });
+    database.connections.allowFrom(migrateSecurityGroup, ec2.Port.tcp(5432), 'schema migration');
+
+    const migrateFunction = new nodejs.NodejsFunction(this, 'MigrateFunction', {
+      entry: path.join(repoRoot, 'packages', 'db', 'src', 'migrate-aws.ts'),
+      projectRoot: repoRoot,
+      depsLockFilePath: path.join(repoRoot, 'pnpm-lock.yaml'),
+      runtime: lambda.Runtime.NODEJS_24_X,
+      handler: 'handler',
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [migrateSecurityGroup],
+      memorySize: 512,
+      timeout: cdk.Duration.minutes(5),
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      environment: {
+        ...directDatabaseEnvironment,
+        MIGRATIONS_HASH: migrationsHash,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir, outputDir) => [
+            `cp -R "${inputDir}/packages/db/migrations" "${outputDir}/migrations"`,
+          ],
+        },
+      },
+    });
+    database.secret!.grantRead(migrateFunction);
+
+    const migrateOnDeploy = new triggers.Trigger(this, 'MigrateOnDeploy', {
+      handler: migrateFunction,
+      timeout: cdk.Duration.minutes(5),
+    });
+    apiFunction.node.addDependency(migrateOnDeploy);
 
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: `opulent-tutor-${props.stage}`,
@@ -163,7 +234,7 @@ export class OpulentTutorStack extends cdk.Stack {
         logRetention: logs.RetentionDays.ONE_MONTH,
       }),
       environment: {
-        ...databaseEnvironment,
+        ...directDatabaseEnvironment,
         SCRYFALL_BULK_TYPE: 'all_cards',
         // Scryfall requires an accurate User-Agent on every request.
         SCRYFALL_USER_AGENT: 'OpulentTutor/0.1 (+https://opulenttutor.com)',
@@ -180,7 +251,7 @@ export class OpulentTutorStack extends cdk.Stack {
     database.connections.allowFrom(cardSyncSecurityGroup, ec2.Port.tcp(5432), 'card sync task');
 
     // Scryfall rebuilds its bulk files in the evening UTC, so 06:00 UTC is safely after a fresh file.
-    new events.Rule(this, 'CardSyncSchedule', {
+    const cardSyncRule = new events.Rule(this, 'CardSyncSchedule', {
       schedule: events.Schedule.cron({ minute: '0', hour: '6' }),
       targets: [
         new targets.EcsTask({
@@ -190,6 +261,60 @@ export class OpulentTutorStack extends cdk.Stack {
           securityGroups: [cardSyncSecurityGroup],
         }),
       ],
+    });
+
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic');
+    if (props.alarmEmail) {
+      alarmTopic.addSubscription(new subscriptions.EmailSubscription(props.alarmEmail));
+    }
+    const alarmAction = new cloudwatchActions.SnsAction(alarmTopic);
+
+    const apiErrors = new cloudwatch.Alarm(this, 'ApiErrors', {
+      metric: apiFunction.metricErrors({ period: cdk.Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'The API Lambda returned an error',
+    });
+    apiErrors.addAlarmAction(alarmAction);
+
+    const dbStorage = new cloudwatch.Alarm(this, 'DbStorage', {
+      metric: database.metricFreeStorageSpace({ period: cdk.Duration.minutes(15) }),
+      threshold: 2 * 1024 * 1024 * 1024,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Database free storage is under 2 GB',
+    });
+    dbStorage.addAlarmAction(alarmAction);
+
+    const cardSyncFailed = new cloudwatch.Alarm(this, 'CardSyncFailed', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Events',
+        metricName: 'FailedInvocations',
+        dimensionsMap: { RuleName: cardSyncRule.ruleName },
+        statistic: 'Sum',
+        period: cdk.Duration.hours(1),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'The nightly card sync did not start',
+    });
+    cardSyncFailed.addAlarmAction(alarmAction);
+
+    // A container that exits non-zero does not count as a failed schedule invocation.
+    new events.Rule(this, 'CardSyncTaskFailed', {
+      eventPattern: {
+        source: ['aws.ecs'],
+        detailType: ['ECS Task State Change'],
+        detail: {
+          clusterArn: [cluster.clusterArn],
+          lastStatus: ['STOPPED'],
+          containers: { exitCode: [{ 'anything-but': 0 }] },
+        },
+      },
+      targets: [new targets.SnsTopic(alarmTopic)],
     });
 
     // Web: static React build on S3, served through CloudFront
@@ -202,11 +327,19 @@ export class OpulentTutorStack extends cdk.Stack {
       autoDeleteObjects: !isProd,
     });
 
+    const webOrigin = origins.S3BucketOrigin.withOriginAccessControl(webBucket);
     const distribution = new cloudfront.Distribution(this, 'WebDistribution', {
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
+        origin: webOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      additionalBehaviors: {
+        '/config.json': {
+          origin: webOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        },
       },
       defaultRootObject: 'index.html',
       // Single-page app: unknown paths must still load index.html so client routing takes over.
@@ -214,6 +347,22 @@ export class OpulentTutorStack extends cdk.Stack {
         { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
+    });
+
+    new s3deploy.BucketDeployment(this, 'WebDeploy', {
+      sources: [
+        s3deploy.Source.asset(path.join(repoRoot, 'apps', 'web', 'dist')),
+        s3deploy.Source.jsonData('config.json', {
+          auth0Domain: props.auth0Domain,
+          auth0ClientId: props.auth0ClientId,
+          auth0Audience: props.auth0Audience,
+          apiBaseUrl: httpApi.apiEndpoint,
+        }),
+      ],
+      destinationBucket: webBucket,
+      distribution,
+      distributionPaths: ['/*'],
+      prune: true,
     });
 
     // Outputs

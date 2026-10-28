@@ -8,6 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ApiProvider } from '@/api/ApiProvider';
 import { theme } from '@/theme';
 import { App } from './App';
+import { loadPublicEnv } from './env';
 import { MockPanel } from './MockPanel';
 import { AppSession } from './session';
 
@@ -25,6 +26,8 @@ const queryClient = new QueryClient({
 const useMocks = import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true';
 
 async function start() {
+  await loadPublicEnv();
+
   if (useMocks) {
     const { worker } = await import('@/mocks/browser');
     await worker.start({ onUnhandledFrame: 'bypass' });
@@ -54,4 +57,8 @@ async function start() {
   );
 }
 
-void start();
+void start().catch((error: unknown) => {
+  const container = document.getElementById('root');
+  const message = error instanceof Error ? error.message : 'The app could not start';
+  if (container) container.textContent = message;
+});
