@@ -1,7 +1,38 @@
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { rdsCa } from './rds-ca';
 
-/** Keeps the password out of templates and env vars: local uses DATABASE_URL, AWS passes DB_SECRET_ARN and DB_HOST to Secrets Manager. */
+/** Local uses DATABASE_URL. AWS passes DB_SECRET_ARN and DB_HOST, and the password stays in memory. */
 let resolution: Promise<string> | undefined;
+let secretUrl: string | undefined;
+
+export function awsDatabaseUrl(input: {
+  username: string;
+  password: string;
+  host: string;
+  port: string;
+  database: string;
+}): string {
+  const user = encodeURIComponent(input.username);
+  const password = encodeURIComponent(input.password);
+  return `postgresql://${user}:${password}@${input.host}:${input.port}/${input.database}?sslmode=verify-full`;
+}
+
+/**
+ * postgres.js treats sslmode=verify-full as a string and never loads a CA.
+ * An ssl object is what actually checks the RDS certificate.
+ */
+export function postgresSsl(
+  connectionString: string,
+): { ssl: { ca: string; rejectUnauthorized: true } } | Record<string, never> {
+  let mode: string | null;
+  try {
+    mode = new URL(connectionString).searchParams.get('sslmode');
+  } catch {
+    return {};
+  }
+  if (mode !== 'verify-full') return {};
+  return { ssl: { ca: rdsCa, rejectUnauthorized: true } };
+}
 
 async function resolve(): Promise<string> {
   const direct = process.env.DATABASE_URL;
@@ -24,10 +55,13 @@ async function resolve(): Promise<string> {
     const database = process.env.DB_NAME ?? 'opulent_tutor';
     const port = process.env.DB_PORT ?? '5432';
 
-    return (
-      `postgres://${encodeURIComponent(secret.username)}:${encodeURIComponent(secret.password)}` +
-      `@${host}:${port}/${database}?sslmode=require`
-    );
+    return awsDatabaseUrl({
+      username: secret.username,
+      password: secret.password,
+      host,
+      port,
+      database,
+    });
   } finally {
     // A live client keeps the process open after the job has finished.
     client.destroy();
@@ -41,7 +75,15 @@ export function resolveConnectionString(): Promise<string> {
   return resolution;
 }
 
-/** Sets DATABASE_URL once so getDatabase() stays synchronous; the cached promise shares one Secrets Manager call across cold starts. */
-export async function ensureDatabaseUrl(): Promise<void> {
-  process.env.DATABASE_URL = await resolveConnectionString();
+/** Returns the URL. A secret is not copied into process.env. */
+export async function ensureDatabaseUrl(): Promise<string> {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  secretUrl ??= await resolveConnectionString();
+  return secretUrl;
+}
+
+export function databaseUrl(): string {
+  const url = process.env.DATABASE_URL ?? secretUrl;
+  if (!url) throw new Error('DATABASE_URL is not set');
+  return url;
 }

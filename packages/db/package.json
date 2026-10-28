@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
-    "push": "drizzle-kit push",
+    "push": "tsx src/assert-local-db.ts && drizzle-kit push",
     "studio": "drizzle-kit studio",
     "bootstrap": "tsx src/bootstrap.ts",
     "places:sync": "tsx src/import-places.ts",

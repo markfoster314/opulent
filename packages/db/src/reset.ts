@@ -1,5 +1,7 @@
 import postgres from 'postgres';
+import { postgresSsl } from './connection-string';
 import { loadEnv } from './load-env';
+import { assertLocalDatabase } from './local-only';
 import { runSeed } from './seed';
 
 /** Empties every app table then re-seeds; cards, places, and the PostGIS spatial_ref_sys table survive because city search reads them. */
@@ -12,8 +14,13 @@ async function emptyAppTables(): Promise<void> {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set. Add it to the repo .env file.');
   }
+  assertLocalDatabase(connectionString);
 
-  const sql = postgres(connectionString, { max: 1, prepare: false });
+  const sql = postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    ...postgresSsl(connectionString),
+  });
   try {
     const rows = await sql<{ table_name: string }[]>`
       SELECT table_name

@@ -6,6 +6,7 @@
     "NODE_ENV",
     "LOG_LEVEL",
     "DATABASE_URL",
+    "ALLOW_REMOTE_DB",
     "AUTH0_DOMAIN",
     "AUTH0_AUDIENCE",
     "CORS_ORIGIN",

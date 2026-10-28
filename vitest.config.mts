@@ -16,6 +16,13 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'db',
+          environment: 'node',
+          include: ['packages/db/src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'card-sync',
           environment: 'node',
           include: ['jobs/card-sync/src/**/*.test.ts'],

@@ -27,7 +27,7 @@ VITE_API_BASE_URL=http://localhost:8787
 
 ## Seed users
 
-`pnpm db:seed` gives `mark` an `auth0|...` subject. Other demo users use `seed|...`. A login whose `sub` is missing creates an empty account. Point a seeded row's `auth0Sub` at the dev subject only in the dev database.
+Every demo user has a `seed|...` subject. A login whose `sub` is missing creates an empty account. To open the `mark` collection, set that row's `auth0_sub` to your dev subject in the local database only.
 
 ## Playwright
 

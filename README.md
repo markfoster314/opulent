@@ -43,8 +43,8 @@ pnpm dev
 | ----------------- | ------------------------------------------------------------------------------------------------ |
 | `apps/web`        | React SPA. [apps/web/README.md](apps/web/README.md)                                              |
 | `apps/api`        | Hono API. One Lambda. [apps/api/README.md](apps/api/README.md)                                   |
-| `packages/shared` | Zod schemas and shared types                                                                     |
-| `packages/db`     | Drizzle schema, migrations, seed                                                                 |
+| `packages/shared` | Zod schemas and shared types. [packages/shared/README.md](packages/shared/README.md)             |
+| `packages/db`     | Drizzle schema, migrations, seed. [packages/db/README.md](packages/db/README.md)                 |
 | `jobs/card-sync`  | Scryfall mirror. [jobs/card-sync/README.md](jobs/card-sync/README.md)                            |
 | `infra`           | AWS CDK. [infra/README.md](infra/README.md)                                                      |
 | `e2e`             | Playwright                                                                                       |

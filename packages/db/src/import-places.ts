@@ -1,5 +1,6 @@
 import { unzipSync } from 'fflate';
 import postgres from 'postgres';
+import { postgresSsl } from './connection-string';
 import { loadEnv } from './load-env';
 
 loadEnv();
@@ -108,7 +109,11 @@ async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is not set');
 
-  const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
+  const sql = postgres(connectionString, {
+    max: 1,
+    onnotice: () => {},
+    ...postgresSsl(connectionString),
+  });
 
   try {
     const table = await sql<{ exists: boolean }[]>`

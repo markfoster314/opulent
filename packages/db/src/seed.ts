@@ -8,7 +8,9 @@ import {
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { postgresSsl } from './connection-string';
 import { loadEnv } from './load-env';
+import { assertLocalDatabase } from './local-only';
 import { ensurePricePartitions } from './price-partitions';
 import {
   cardGroups,
@@ -68,7 +70,7 @@ type Person = {
 const PEOPLE: Person[] = [
   {
     username: 'mark',
-    auth0Sub: 'auth0|6ad52793a07a8bf37e40baf6',
+    auth0Sub: 'seed|mark',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
     bio: 'Trading from Atlanta. Near mint copies preferred.',
@@ -264,8 +266,13 @@ export async function runSeed() {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set. Add it to the repo .env file.');
   }
+  assertLocalDatabase(connectionString);
 
-  const client = postgres(connectionString, { max: 1, prepare: false });
+  const client = postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    ...postgresSsl(connectionString),
+  });
   const db = drizzle(client);
 
   try {

@@ -1,9 +1,14 @@
 import postgres from 'postgres';
+import { postgresSsl } from './connection-string';
 
 /** Raw SQL drizzle-kit cannot express; safe to re-run, and run again after migrations. */
 export async function applyBootstrap(connectionString: string): Promise<void> {
   // Re-runnable by design, so "already exists, skipping" notices are expected noise.
-  const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
+  const sql = postgres(connectionString, {
+    max: 1,
+    onnotice: () => {},
+    ...postgresSsl(connectionString),
+  });
 
   try {
     // pgcrypto supplies gen_random_uuid() and gen_random_bytes().
