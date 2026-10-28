@@ -9,9 +9,3 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  postgres:
-    # The dev service shares this network, so the app ports are published here.
-    ports:
-      - '5173:5173'
-      - '8787:8787'

@@ -3,7 +3,6 @@
   "dockerComposeFile": ["../docker-compose.yml", "compose.yaml"],
   "service": "dev",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "forwardPorts": [5173, 8787],
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       // Keep this equal to .nvmrc.
