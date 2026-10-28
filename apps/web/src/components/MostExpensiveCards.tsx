@@ -47,7 +47,9 @@ export function MostExpensiveCards({ enabled }: { enabled: boolean }) {
             <CollectionCardTable
               key={index}
               items={rows}
-              onRowClick={(item) => navigate('/collection/cards', { state: { cardId: item.id } })}
+              onRowClick={(item) => {
+                void navigate('/collection/cards', { state: { cardId: item.id } });
+              }}
             />
           ),
         )}

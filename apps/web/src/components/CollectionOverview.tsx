@@ -199,7 +199,11 @@ export function CollectionOverview({
                       contentStyle={tooltipStyle}
                       labelStyle={{ color: palette.textPrimary }}
                       itemStyle={{ color: palette.textPrimary }}
-                      labelFormatter={(label) => formatDay(String(label))}
+                      labelFormatter={(label) =>
+                        typeof label === 'string' || typeof label === 'number'
+                          ? formatDay(String(label))
+                          : ''
+                      }
                       formatter={(value) => [money.format(Number(value)), 'Value']}
                     />
                     <Line

@@ -183,6 +183,7 @@ export function WantItemTile({
           }}
           saving={saving}
           error={error}
+          removeLabel={removeLabel}
         />
       )}
     </Stack>

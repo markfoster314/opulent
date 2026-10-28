@@ -143,7 +143,7 @@ export function useUpdateProfile() {
       api<Me>('/v1/users/me', { method: 'PATCH', body: input }),
     onSuccess: (me) => {
       queryClient.setQueryData(queryKeys.me, me);
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 }
@@ -185,10 +185,10 @@ export function useAddFriend() {
     mutationFn: (input: AddFriendInput) =>
       api<Friend>('/v1/users/me/friends', { method: 'POST', body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.friends });
-      queryClient.invalidateQueries({ queryKey: ['followers'] });
-      queryClient.invalidateQueries({ queryKey: ['following'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      void queryClient.invalidateQueries({ queryKey: ['followers'] });
+      void queryClient.invalidateQueries({ queryKey: ['following'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 }
@@ -200,10 +200,10 @@ export function useRemoveFriend() {
     mutationFn: (username: string) =>
       api<void>(`/v1/users/me/friends/${username}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.friends });
-      queryClient.invalidateQueries({ queryKey: ['followers'] });
-      queryClient.invalidateQueries({ queryKey: ['following'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+      void queryClient.invalidateQueries({ queryKey: ['followers'] });
+      void queryClient.invalidateQueries({ queryKey: ['following'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 }
@@ -313,27 +313,11 @@ export function useCollectionCardsByValue(
   });
 }
 
-export function useCollectionItems(enabled: boolean, search: BinderSearch = emptyBinderSearch) {
-  const api = useApi();
-  const filters = useDebouncedSearch(search);
-  return useInfiniteQuery({
-    queryKey: [...queryKeys.collectionItems, filters],
-    queryFn: ({ pageParam }) =>
-      api<Page<CollectionItem>>(
-        `/v1/collection/items?${binderSearchParams(filters, pageParam, BINDER_PAGE_SIZE).toString()}`,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    placeholderData: keepPreviousData,
-    enabled,
-  });
-}
-
 /** A stack change invalidates the collection, its groups, and group-list counts. */
 function refreshStacks(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.collection });
-  queryClient.invalidateQueries({ queryKey: queryKeys.groups });
-  queryClient.invalidateQueries({ queryKey: ['group'] });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.collection });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+  void queryClient.invalidateQueries({ queryKey: ['group'] });
 }
 
 export function useAddCollectionItem() {
@@ -394,8 +378,8 @@ export function useSetTradeFlag() {
       }
 
       // Other collection screens refetch when next opened, not now.
-      queryClient.invalidateQueries({ queryKey: queryKeys.collection, refetchType: 'none' });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collectionSummary });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collection, refetchType: 'none' });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collectionSummary });
     },
   });
 }
@@ -438,25 +422,6 @@ export function useGroup(groupId: string | undefined) {
   });
 }
 
-export function useGroupItems(
-  groupId: string | undefined,
-  search: BinderSearch = emptyBinderSearch,
-) {
-  const api = useApi();
-  const filters = useDebouncedSearch(search);
-  return useInfiniteQuery({
-    queryKey: [...queryKeys.groupItems(groupId ?? 'none'), filters],
-    queryFn: ({ pageParam }) =>
-      api<Page<CollectionItem>>(
-        `/v1/groups/${groupId}/items?${binderSearchParams(filters, pageParam, BINDER_PAGE_SIZE).toString()}`,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    placeholderData: keepPreviousData,
-    enabled: Boolean(groupId),
-  });
-}
-
 export function useCreateGroup() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -475,7 +440,7 @@ export function useUpdateGroup(groupId: string) {
       api<CardGroup>(`/v1/groups/${groupId}`, { method: 'PATCH', body: input }),
     onSuccess: (group) => {
       queryClient.setQueryData(queryKeys.group(groupId), group);
-      queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
     },
   });
 }
@@ -486,8 +451,8 @@ export function useDeleteGroup() {
   return useMutation({
     mutationFn: (groupId: string) => api<void>(`/v1/groups/${groupId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.groups });
-      queryClient.invalidateQueries({ queryKey: ['group'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: ['group'] });
     },
   });
 }
@@ -549,9 +514,9 @@ export function useImportWants() {
       api<WantsImportResult>('/v1/wants/import', { method: 'POST', body: input }),
     onSuccess: (result) => {
       if (result.dryRun) return;
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: ['wants'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      void queryClient.invalidateQueries({ queryKey: ['wants'] });
     },
   });
 }
@@ -855,7 +820,7 @@ export function useUpdateWantList(listId: string) {
       api<WantList>(`/v1/wants/lists/${listId}`, { method: 'PATCH', body: input }),
     onSuccess: (list) => {
       queryClient.setQueryData(queryKeys.wantList(listId), list);
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
     },
   });
 }
@@ -908,23 +873,8 @@ export function useAddGlobalWant() {
     mutationFn: (input: AddWantItemInput) =>
       api<WantItem>('/v1/wants/items', { method: 'POST', body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
-    },
-  });
-}
-
-export function useAddWantItem(listId: string) {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: AddWantItemInput) =>
-      api<WantItem>(`/v1/wants/lists/${listId}/items`, { method: 'POST', body: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
     },
   });
 }
@@ -939,11 +889,11 @@ export function useUpdateWantItem(listId: string) {
         body: input,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
       if (listId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
       }
     },
   });
@@ -955,8 +905,8 @@ export function useDeleteWantItem() {
   return useMutation({
     mutationFn: (wantId: string) => api<void>(`/v1/wants/items/${wantId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: ['wants'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      void queryClient.invalidateQueries({ queryKey: ['wants'] });
     },
   });
 }
@@ -969,17 +919,19 @@ export function useRemoveWantItem(listId: string) {
     mutationFn: (wantId: string) =>
       api<void>(`/v1/wants/lists/${listId}/items/${wantId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
-      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
     },
   });
 }
 
 function refreshTrades(queryClient: ReturnType<typeof useQueryClient>, tradeId?: string) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.trades });
-  if (tradeId) queryClient.invalidateQueries({ queryKey: queryKeys.trade(tradeId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.trades });
+  if (tradeId) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.trade(tradeId) });
+  }
 }
 
 export function useTrades(enabled: boolean) {

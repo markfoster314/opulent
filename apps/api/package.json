@@ -11,19 +11,18 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
-    "@hono/zod-validator": "^0.4.2",
+    "@hono/zod-validator": "^0.9.1",
     "@opulent/db": "workspace:*",
     "@opulent/shared": "workspace:*",
-    "drizzle-orm": "^0.38.3",
-    "hono": "^4.6.16",
+    "drizzle-orm": "catalog:",
+    "hono": "^4.13.14",
     "jose": "^5.9.6",
-    "zod": "^3.24.1"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.147",
-    "@types/node": "^24.0.0",
-    "esbuild": "^0.24.2",
-    "tsx": "^4.19.2",
-    "typescript": "^6.0.2"
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
   }
 }

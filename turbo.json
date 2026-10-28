@@ -2,17 +2,34 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
   "globalDependencies": ["tsconfig.base.json"],
-  "globalEnv": ["NODE_ENV"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "AUTH0_DOMAIN",
+    "AUTH0_AUDIENCE",
+    "CORS_ORIGIN",
+    "WEB_ORIGIN",
+    "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "PORT",
+    "STAGE",
+    "CDK_DEFAULT_ACCOUNT",
+    "CDK_DEFAULT_REGION",
+    "SCRYFALL_USER_AGENT",
+    "SCRYFALL_BULK_TYPE",
+    "DB_SECRET_ARN",
+    "DB_HOST",
+    "DB_NAME",
+    "DB_PORT",
+    "DB_LOG",
+    "VITE_*"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "cdk.out/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
-    },
-    "lint": {},
-    "test": {
       "dependsOn": ["^build"]
     },
     "dev": {

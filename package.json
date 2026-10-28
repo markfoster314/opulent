@@ -5,14 +5,14 @@
   "description": "Trade binders for Magic: The Gathering players and collectors",
   "packageManager": "pnpm@10.26.1",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24 <25"
   },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
+    "typecheck": "tsc -p tsconfig.tools.json --noEmit && turbo run typecheck",
+    "lint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js . --cache --max-warnings=0",
+    "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:bootstrap": "pnpm --filter @opulent/db run bootstrap",
@@ -24,12 +24,44 @@
     "places:sync": "pnpm --filter @opulent/db run places:sync",
     "db:seed": "pnpm --filter @opulent/db run seed",
     "db:reset": "pnpm --filter @opulent/db run reset",
-    "smoke": "pnpm --filter @opulent/api run smoke"
+    "smoke": "pnpm --filter @opulent/api run smoke",
+    "lint:fix": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js . --fix --cache",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "check:packages": "manypkg check",
+    "knip": "knip",
+    "infra:synth": "pnpm --filter @opulent/infra run synth",
+    "db:drift": "pnpm db:generate && git diff --exit-code -- packages/db/migrations",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "prettier": "^3.4.2",
-    "turbo": "^2.3.3",
-    "typescript": "^6.0.2"
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@eslint/js": "^10.0.1",
+    "@manypkg/cli": "^0.25.1",
+    "@playwright/test": "^1.64.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "^5.0.5",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-boundaries": "^7.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "eslint-plugin-turbo": "^2.11.10",
+    "globals": "^17.13.0",
+    "husky": "^9.1.7",
+    "jsdom": "^30.1.3",
+    "knip": "^6.43.0",
+    "lint-staged": "^17.6.0",
+    "prettier": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

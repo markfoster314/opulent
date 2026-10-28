@@ -19,3 +19,13 @@ pnpm-debug.log*
 tmp/
 *.jsonl
 *.jsonl.gz
+.eslintcache
+playwright-report/
+test-results/
+
+infra/cdk.context.json
+.dsh-worktrees/
+playwright/.auth/
+
+# Turborepo
+.turbo

@@ -132,6 +132,8 @@ export function WantCardDetail({
     setDraftQuantity(item.quantity);
     dirtyQuantity.current = false;
     requestedQuantity.current = null;
+    // Reset only when the selected want changes; quantity updates must not overwrite the draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
   useEffect(() => {

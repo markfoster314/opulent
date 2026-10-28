@@ -82,7 +82,7 @@ export function ProfilePage() {
 
   function finishEdit(saved: Me) {
     setEditing(false);
-    if (saved.username !== page.username) navigate(`/u/${saved.username}`);
+    if (saved.username !== page.username) void navigate(`/u/${saved.username}`);
   }
 
   return (

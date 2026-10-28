@@ -19,7 +19,7 @@ export function TopMovers({ enabled }: { enabled: boolean }) {
   const { data, isLoading, isFetching, error } = useCollectionMovers(enabled, range, changeMode);
 
   function openList(dir: SortDirection, cardId?: string) {
-    navigate('/collection/cards', {
+    void navigate('/collection/cards', {
       state: {
         sort: 'change',
         dir,

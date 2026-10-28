@@ -125,6 +125,8 @@ export function GroupPage() {
     if (!group) return;
     setName(group.name);
     setDescription(group.description ?? '');
+    // Reset the fields only when the group changes; a refetch must not overwrite edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group?.id]);
 
   useEffect(() => {
@@ -181,7 +183,7 @@ export function GroupPage() {
   }
 
   function refreshAfterMembership() {
-    queryClient.invalidateQueries({ queryKey: queryKeys.collection });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.collection });
   }
 
   function removeFromGroup(itemId: string, close = false) {
@@ -706,11 +708,13 @@ export function GroupPage() {
             color="error"
             variant="contained"
             disabled={deleteGroup.isPending}
-            onClick={() =>
+            onClick={() => {
               deleteGroup.mutate(group.id, {
-                onSuccess: () => navigate('/collection'),
-              })
-            }
+                onSuccess: () => {
+                  void navigate('/collection');
+                },
+              });
+            }}
           >
             {deleteGroup.isPending ? 'Deleting…' : 'Delete group'}
           </Button>

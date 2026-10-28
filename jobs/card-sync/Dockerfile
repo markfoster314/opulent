@@ -5,11 +5,14 @@ WORKDIR /repo
 
 RUN corepack enable
 
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
 COPY jobs/card-sync/package.json jobs/card-sync/
-RUN pnpm install --frozen-lockfile=false --filter @opulent/card-sync...
+COPY infra/package.json infra/
+RUN pnpm install --frozen-lockfile --filter @opulent/card-sync...
 
 COPY tsconfig.base.json ./
 COPY packages ./packages

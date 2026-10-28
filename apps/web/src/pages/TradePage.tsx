@@ -247,7 +247,9 @@ function TradeSide({
                 <Button
                   variant="outlined"
                   color="secondary"
-                  onClick={() => onChange(cards.filter((row) => row.scryfallId !== card.scryfallId))}
+                  onClick={() =>
+                    onChange(cards.filter((row) => row.scryfallId !== card.scryfallId))
+                  }
                   sx={{ width: { xs: '100%', sm: 'auto' }, alignSelf: { sm: 'center' } }}
                 >
                   Remove

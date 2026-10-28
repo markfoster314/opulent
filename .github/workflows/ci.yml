@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      VITE_AUTH0_DOMAIN: ci.invalid
+      VITE_AUTH0_CLIENT_ID: ci-client
+      VITE_AUTH0_AUDIENCE: https://api.invalid
+      VITE_API_BASE_URL: http://127.0.0.1:8787
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:coverage
+      - run: pnpm build
+      - run: pnpm check:packages
+      - run: pnpm knip
+      - run: pnpm infra:synth
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage
+          if-no-files-found: ignore
+      - uses: raven-actions/actionlint@v2
+
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5-alpine
+        env:
+          POSTGRES_USER: opulent
+          POSTGRES_PASSWORD: opulent
+          POSTGRES_DB: opulent_tutor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opulent -d opulent_tutor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://opulent:opulent@localhost:5432/opulent_tutor
+      AUTH0_DOMAIN: ci.invalid
+      AUTH0_AUDIENCE: https://api.invalid
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:bootstrap
+      - run: pnpm db:migrate
+      - run: pnpm db:bootstrap
+      - run: pnpm db:drift
+      - run: pnpm smoke
+
+  e2e:
+    name: Browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_AUTH0_DOMAIN: ${{ vars.E2E_AUTH0_DOMAIN || 'ci.invalid' }}
+      VITE_AUTH0_CLIENT_ID: ${{ vars.E2E_AUTH0_CLIENT_ID || 'ci-client' }}
+      VITE_AUTH0_AUDIENCE: ${{ vars.E2E_AUTH0_AUDIENCE || 'https://api.invalid' }}
+      VITE_API_BASE_URL: http://127.0.0.1:8787
+      E2E_AUTH0_EMAIL: ${{ secrets.E2E_AUTH0_EMAIL }}
+      E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+
+  pr-title:
+    name: PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

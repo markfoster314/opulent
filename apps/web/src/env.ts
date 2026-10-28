@@ -9,9 +9,11 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+const raw = import.meta.env as Record<string, string | undefined>;
+
 export const env = {
-  auth0Domain: required('VITE_AUTH0_DOMAIN', import.meta.env.VITE_AUTH0_DOMAIN),
-  auth0ClientId: required('VITE_AUTH0_CLIENT_ID', import.meta.env.VITE_AUTH0_CLIENT_ID),
-  auth0Audience: required('VITE_AUTH0_AUDIENCE', import.meta.env.VITE_AUTH0_AUDIENCE),
-  apiBaseUrl: (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8787',
+  auth0Domain: required('VITE_AUTH0_DOMAIN', raw.VITE_AUTH0_DOMAIN),
+  auth0ClientId: required('VITE_AUTH0_CLIENT_ID', raw.VITE_AUTH0_CLIENT_ID),
+  auth0Audience: required('VITE_AUTH0_AUDIENCE', raw.VITE_AUTH0_AUDIENCE),
+  apiBaseUrl: raw.VITE_API_BASE_URL ?? 'http://localhost:8787',
 };

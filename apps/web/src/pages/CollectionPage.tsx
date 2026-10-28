@@ -224,7 +224,7 @@ function GroupsSection() {
         onSuccess: (group) => {
           setName('');
           setCreating(false);
-          navigate(`/groups/${group.id}`);
+          void navigate(`/groups/${group.id}`);
         },
       },
     );

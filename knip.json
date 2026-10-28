@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["e2e/auth.setup.ts"]
+    },
+    "infra": {
+      "entry": ["bin/app.ts"]
+    }
+  },
+  "ignoreDependencies": ["tsx"],
+  "ignore": []
+}

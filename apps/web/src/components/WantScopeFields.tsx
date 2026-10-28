@@ -240,7 +240,6 @@ function CheckMenu({
               onChange={(event) => onSearch(event.target.value)}
               onKeyDown={(event) => event.stopPropagation()}
               fullWidth
-              autoFocus
             />
           </ListSubheader>
         )}

@@ -9,7 +9,7 @@ import {
   cardLanguageSchema,
   wantScopeKey,
 } from '@opulent/shared';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
 import { parseCsv, toCsvLine } from '../collection/csv';
 
@@ -337,7 +337,7 @@ export async function importWants(
     if (!listByName.has(name.toLowerCase())) missingLists.add(name);
   }
 
-  let created: { id: string; name: string }[] = [];
+  const created: { id: string; name: string }[] = [];
   if (!input.dryRun && missingLists.size > 0) {
     for (const name of missingLists) {
       const baseSlug = slugify(name) || 'wants';

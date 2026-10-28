@@ -2,16 +2,12 @@ import { Box, type SxProps, type Theme } from '@mui/material';
 import { palette } from '../theme';
 
 export function LogoMark({ sx }: { sx?: SxProps<Theme> }) {
+  const baseSx = { width: 26, height: 32, flexShrink: 0, display: 'block' };
+  const extraSx = (Array.isArray(sx) ? sx : sx ? [sx] : []) as SxProps<Theme>[];
+  const mergedSx = [baseSx, ...extraSx] as SxProps<Theme>;
+
   return (
-    <Box
-      component="svg"
-      viewBox="0 0 32 40"
-      aria-hidden
-      sx={[
-        { width: 26, height: 32, flexShrink: 0, display: 'block' },
-        ...(sx ? (Array.isArray(sx) ? sx : [sx]) : []),
-      ]}
-    >
+    <Box component="svg" viewBox="0 0 32 40" aria-hidden sx={mergedSx}>
       <rect
         x="2"
         y="2"

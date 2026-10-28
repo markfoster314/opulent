@@ -76,6 +76,8 @@ export function CollectionCardDetail({
       requestedQuantity.current = null;
     }
     setDraftQuantity(item.quantity);
+    // Reset only when the saved quantity changes; other refetches must not overwrite the draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.quantity]);
 
   useEffect(() => {
@@ -83,6 +85,8 @@ export function CollectionCardDetail({
     setDraftQuantity(item.quantity);
     dirtyQuantity.current = false;
     requestedQuantity.current = null;
+    // Reset only on identity changes; a quantity refetch must not reset the draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id]);
 
   useEffect(() => {
@@ -102,6 +106,8 @@ export function CollectionCardDetail({
       );
     }, 450);
     return () => window.clearTimeout(timer);
+    // The timer intentionally keys on the draft and saved values, not the whole item.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftQuantity, item?.id, item?.quantity]);
 
   if (query.isLoading) {

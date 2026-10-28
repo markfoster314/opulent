@@ -100,7 +100,7 @@ export class OpulentTutorStack extends cdk.Stack {
     });
 
     dbProxy.grantConnect(apiFunction, 'opulent');
-    dbProxy.connections.allowDefaultPortFrom(apiFunction);
+    dbProxy.connections.allowFrom(apiFunction, ec2.Port.tcp(5432));
     database.secret!.grantRead(apiFunction);
 
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
@@ -136,6 +136,19 @@ export class OpulentTutorStack extends cdk.Stack {
     cardSyncTask.addContainer('card-sync', {
       image: ecs.ContainerImage.fromAsset(repoRoot, {
         file: path.join('jobs', 'card-sync', 'Dockerfile'),
+        exclude: [
+          'cdk.out',
+          'infra/cdk.out',
+          'node_modules',
+          '**/node_modules',
+          '.git',
+          '.env',
+          '.env.*',
+          '**/dist',
+          'coverage',
+          'playwright-report',
+          'test-results',
+        ],
       }),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'card-sync',
@@ -156,7 +169,7 @@ export class OpulentTutorStack extends cdk.Stack {
       vpc,
       description: 'Nightly Scryfall mirror refresh task',
     });
-    database.connections.allowDefaultPortFrom(cardSyncSecurityGroup, 'card sync task');
+    database.connections.allowFrom(cardSyncSecurityGroup, ec2.Port.tcp(5432), 'card sync task');
 
     // Scryfall rebuilds its bulk files in the evening UTC, so 06:00 UTC is safely after a fresh file.
     new events.Rule(this, 'CardSyncSchedule', {

@@ -69,6 +69,8 @@ export function WantItemForm({
     setNotes(item.notes ?? '');
     setListIds(item.lists.map((list) => list.id));
     setScope(scopeFromItem(item));
+    // Reset the form only when the edited want changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
   const quantityError = quantityIsInvalid(quantity);

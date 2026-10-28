@@ -79,7 +79,7 @@ export function CollectionCardsPage() {
   const items = flattenPages(cards.data?.pages);
 
   useEffect(() => {
-    if (location.state) navigate(location.pathname, { replace: true, state: null });
+    if (location.state) void navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {

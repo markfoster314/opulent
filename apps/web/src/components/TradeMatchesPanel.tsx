@@ -64,7 +64,11 @@ export function TradeMatchesPanel({
     if (readyItems.length === 0) return;
     openTrade.mutate(
       { username: handle, items: readyItems },
-      { onSuccess: (trade) => navigate(`/trades/${trade.id}`) },
+      {
+        onSuccess: (trade) => {
+          void navigate(`/trades/${trade.id}`);
+        },
+      },
     );
   }
 

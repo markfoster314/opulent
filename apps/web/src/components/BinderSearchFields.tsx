@@ -29,7 +29,7 @@ import {
 } from '@opulent/shared';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { binderSearchIsActive, clearBinderFilters, type BinderSearch } from '../binderSearch';
+import { clearBinderFilters, type BinderSearch } from '../binderSearch';
 import { palette } from '../theme';
 import { ChangeControls } from './ChangeControls';
 

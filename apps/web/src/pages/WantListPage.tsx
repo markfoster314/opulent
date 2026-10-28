@@ -335,7 +335,9 @@ export function WantListPage() {
             disabled={deleteList.isPending}
             onClick={() =>
               deleteList.mutate(list.id, {
-                onSuccess: () => navigate('/wants'),
+                onSuccess: () => {
+                  void navigate('/wants');
+                },
               })
             }
           >
