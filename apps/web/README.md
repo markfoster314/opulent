@@ -1,186 +1,94 @@
 # @opulent/web
 
-**This is the React single-page app.** It is the browser UI for collection, wants, matches, trades, and public share links. Clone and install from the [repository root](../../README.md). Do not treat this folder as a stand-alone npm project.
+React SPA. Install and run from the repo root. Not a standalone package.
 
-Stack: React 18, Vite 8, MUI 6, React Router 7, TanStack Query 5, Auth0 SPA SDK, Recharts. Types and request bodies come from `@opulent/shared`.
+React 18, Vite 8, MUI 6, React Router 7, TanStack Query 5, Auth0 SPA SDK, Recharts. Contracts from `@opulent/shared`.
 
-## Run it
-
-From the repository root, with `.env` filled and the API on port 8787:
+## Run
 
 ```bash
 pnpm dev
 ```
 
-- Web: http://localhost:5173
-- API: http://localhost:8787
+Web http://localhost:5173. API http://localhost:8787. Vite reads `.env` from the repo root (`envDir`). Missing `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, or `VITE_AUTH0_AUDIENCE` throws at boot. `VITE_API_BASE_URL` defaults to `http://localhost:8787`.
 
-Vite reads `.env` from the **repository root** (`envDir` in `vite.config.ts`). Restart the dev server after you change a `VITE_` variable. The app throws at boot if `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, or `VITE_AUTH0_AUDIENCE` is missing. `VITE_API_BASE_URL` defaults to `http://localhost:8787`.
-
-Signed-in work needs Auth0: [docs/auth0-development.md](../../docs/auth0-development.md). Public routes still render without a token.
-
-## UI only
-
-Screens, with no database, API, or Auth0 tenant:
+UI only, no database or Auth0:
 
 ```bash
 pnpm --filter @opulent/web dev:mock
 ```
 
-Open http://localhost:5173. The app is already signed in. Fake `/v1` answers come from fixtures in `src/mocks`. A **Mocks** button in the bottom corner sets **Ok**, **Empty**, **Slow**, **401**, **404**, **500**, or **Offline** for every `/v1` call on the open screen.
+Signed-in session, fixtures in `src/mocks`. **Mocks** (bottom left) sets Ok, Empty, Slow, 401, 404, 500, or Offline for every `/v1` call. `pnpm dev` has no panel.
 
-`pnpm dev` still uses the real API. The button is absent there.
+| Command                                | Use                            |
+| -------------------------------------- | ------------------------------ |
+| `pnpm --filter @opulent/web build`     | `apps/web/dist`                |
+| `pnpm --filter @opulent/web typecheck` | This package                   |
+| `pnpm test` / `pnpm test:e2e`          | Vitest here, Playwright `/e2e` |
 
-| Command                                | Use                                     |
-| -------------------------------------- | --------------------------------------- |
-| `pnpm dev`                             | API and web through Turbo               |
-| `pnpm --filter @opulent/web build`     | Production bundle to `apps/web/dist`    |
-| `pnpm --filter @opulent/web typecheck` | TypeScript for this package             |
-| `pnpm test`                            | Unit tests, including `src/**/*.test.*` |
-| `pnpm test:e2e`                        | Playwright in `/e2e` (not this folder)  |
-| `pnpm lint`                            | ESLint for the whole tree               |
-
-Lint, test, and format run at the repository root. They are not Turbo tasks on this package.
+Lint, test, and format are root commands.
 
 ## Tree
 
 ```text
-apps/web/
-  index.html
-  vite.config.ts          # @ alias, envDir ../../, port 5173
-  public/                 # logo, manifest
-  src/
-    app/                  # main.tsx, App.tsx routes, env.ts
-    layout/               # shell, logo, not-found
-    api/                  # fetch client, query keys, places
-    theme/                # MUI theme
-    shared/
-      cards/              # card chrome used by more than one feature
-      binder/             # binder search and filter
-      ui/                 # widgets with no product meaning
-      hooks/
-    features/
-      home/
-      auth/
-      collection/
-      groups/
-      wants/
-      matches/
-      trades/
-      profile/
-    test/setup.ts
+src/
+  app/       routes, providers, env
+  layout/    shell
+  api/       fetch client, query keys
+  theme/
+  shared/    cards, binder, ui, hooks
+  features/  home, auth, collection, groups, wants, matches, trades, profile
 ```
 
-`index.html` loads `src/app/main.tsx`. Providers (Auth0, API client, Query, theme, router) wrap `App`. Routes live in `src/app/App.tsx`.
+`@/` is `src/`. Providers wrap `App` in `src/app/main.tsx`. Routes are in `src/app/App.tsx`.
 
-### Features
+| Feature      | Owns                                     |
+| ------------ | ---------------------------------------- |
+| `home`       | Signed-in hub. Signed-out visitors land. |
+| `auth`       | Landing, welcome, pending add            |
+| `collection` | Overview, binder, table, import          |
+| `groups`     | One private group                        |
+| `wants`      | Lists, global wants, shared URLs, import |
+| `matches`    | Match owners                             |
+| `trades`     | Open, past, one trade                    |
+| `profile`    | Public profile, followers, trade binder  |
 
-| Folder       | Owns                                                        |
-| ------------ | ----------------------------------------------------------- |
-| `home`       | Signed-in hub. Unsigned visitors see the landing page.      |
-| `auth`       | Landing, welcome/username, pending-add after login          |
-| `collection` | Collection overview, binder, table, import, stats           |
-| `groups`     | One private group page. Reuses the collection binder stack. |
-| `wants`      | Want lists, global wants, shared list URLs, import          |
-| `matches`    | Match owners and generic matches                            |
-| `trades`     | Open trades, past trades, one trade                         |
-| `profile`    | Public profile, followers, public trade binder              |
-
-Each feature stays flat. If a feature grows past about 15 files, add one inner folder then.
-
-## Where a new file goes
-
-Use this order:
-
-1. **One feature owns it** — put it in that feature. Example: `WantSortSelect` → `features/wants`.
-2. **Two or more features use it and it has no product meaning** — `shared/ui` or `shared/hooks`. Example: `PlusMinusButton`, `useDebounced`.
-3. **Card chrome used by more than one feature** — `shared/cards`. Example: `CardTile`, `AddCardPanel`, `CardArtSquare`.
-4. **Binder search used by collection, groups, and the public trade binder** — `shared/binder`.
-
-Do **not** add `utils/`, `helpers/`, `common/`, `lib/`, `pages/`, or `components/`. Name the thing.
-
-Tests sit next to the file they cover (`wantBrowser.ts` + `wantBrowser.test.ts`).
+Features stay flat. No `utils/`, `pages/`, or `components/`. Tests sit next to source.
 
 ## Imports
 
-Path alias `@/` maps to `src/` (`@/shared/cards/CardTile`). Same-feature imports may stay relative.
+Feature `index.ts` exports pages and the few components other layers need. No `export *`. `app/` and `layout/` import from that barrel.
 
-Each feature has a thin `index.ts`. Export only the public pages and the few components other layers need. Do not `export *`.
+ESLint `boundaries`:
 
-Rules, enforced by ESLint `boundaries` in the repository `eslint.config.mjs`:
+- `shared/` does not import `features/`.
+- Features do not import each other, except `groups` → `collection`, `home` → `matches` and `auth`, `collection` → `profile` and `auth`, `profile` → `matches`.
+- `queries.ts` may be imported across features.
 
-- `shared/` must not import `features/`.
-- A feature must not import another feature, except:
-  - `groups` → `collection` (same binder UI)
-  - `home` → `matches` and `auth`
-  - `collection` → `profile` (trade binder preview) and `auth` (pending add after login)
-  - `profile` → `matches` (matches on a public binder)
-- `app/` and `layout/` may import features and shared.
-- Query modules (`queries.ts`) may be imported across features.
+## Data
 
-`app/` and `layout/` should import feature UI from that feature’s `index.ts`, not from a deep file path.
+`src/api/client.ts` sends `Authorization: Bearer` when a session exists. Share links pass `t`. Query keys: `src/api/queryKeys.ts`. Hooks live in the owning feature. Server state is TanStack Query. No client store.
 
-## Data fetching
-
-One HTTP client: `src/api/client.ts`, provided by `ApiProvider`. It attaches `Authorization: Bearer <token>` when Auth0 has a session. Public pages omit the token. Unlisted binders can pass a share token as `t`.
-
-- **Query keys** live in `src/api/queryKeys.ts`. Mutations must invalidate those keys so screens stay in sync.
-- **Hooks** live in the owning feature (`features/collection/queries.ts`, …). Shared card and group-list hooks used by `AddCardPanel` live in `shared/cards/queries.ts`. Place search lives in `src/api/places.ts`.
-- Do not add a second fetch wrapper. Do not put React Query hooks back into one `api/queries.ts` file.
-- Do not add a client store (Zustand, Redux, Jotai). Server data stays in TanStack Query. Dialogs and view toggles stay in local `useState`.
-
-TanStack Query defaults (see `src/app/main.tsx`): `staleTime` 60s, one retry, no refetch on window focus. Card data changes at most once a day. In local development, Query Devtools open from the corner of the page.
-
-## Auth and shell
-
-`AppLayout` owns the bar, phone drawer, login/logout, and the `/welcome` gate. A signed-in user without a username is sent to `/welcome` and then back to the page they aimed for.
-
-A card picked on the landing page before sign-up is stored by `features/auth/pendingAdd.ts`. After onboarding, the collection page consumes it.
-
-Auth0 uses `cacheLocation="localstorage"` and refresh tokens so a page refresh on a share link does not force a new login.
-
-`ErrorBoundary` in `src/layout` wraps the route outlet so a render crash does not take down the shell. Use Reload to try again.
-
-## Layout and copy
-
-Write styles for a phone first. Use `sm` and `md` only to add space on a wider window.
-
-- Rows of buttons, fields, or bar items must wrap or stack.
-- Titles, binder names, and usernames must wrap or shorten. Do not give them a fixed width.
-- Do not shrink a tap target so a row fits.
-- Do not add helper sentences under a section title. The title, controls, and data must be enough.
-
-The owner checks the screen in a browser. Do not open a browser to verify layout.
+Query defaults in `main.tsx`: `staleTime` 60s, one retry, no refetch on focus.
 
 ## Routes
 
-Defined in `src/app/App.tsx`:
+| Path                                                         | Screen            |
+| ------------------------------------------------------------ | ----------------- |
+| `/`                                                          | Home, or landing  |
+| `/welcome`                                                   | Username and city |
+| `/collection`, `/collection/cards`, `/collection/import`     | Collection        |
+| `/groups/:groupId`                                           | One group         |
+| `/wants`, `/wants/all`, `/wants/:listId`, `/wants/import`    | Wants             |
+| `/matches`                                                   | Matches           |
+| `/trades`, `/trades/past`, `/trades/:tradeId`                | Trades            |
+| `/u/:handle` and `/trade-binder`, `/followers`, `/following` | Profile           |
+| `/u/:handle/wants/all`, `/u/:handle/wants/:slug`             | Shared wants      |
 
-| Path                                                                                    | Screen                           |
-| --------------------------------------------------------------------------------------- | -------------------------------- |
-| `/`                                                                                     | Home, or landing when signed out |
-| `/welcome`                                                                              | Username and city                |
-| `/collection`, `/collection/cards`, `/collection/import`                                | Collection                       |
-| `/groups/:groupId`                                                                      | One private group                |
-| `/wants`, `/wants/all`, `/wants/:listId`, `/wants/import`                               | Wants                            |
-| `/matches`                                                                              | Matches                          |
-| `/trades`, `/trades/past`, `/trades/:tradeId`                                           | Trades                           |
-| `/u/:handle`, `/u/:handle/trade-binder`, `/u/:handle/followers`, `/u/:handle/following` | Public profile                   |
-| `/u/:handle/wants/all`, `/u/:handle/wants/:slug`                                        | Shared wants                     |
-| `/binders`, `/binders/all`, `/u/:handle/all`                                            | Redirects                        |
+`/binders`, `/binders/all`, and `/u/:handle/all` redirect. Nav treats groups as part of collection.
 
-Nav treats `/groups` as part of collection.
+Phone first. `sm` and `md` only add space. Rows wrap. No helper sentence under a section title.
 
 ## Tests
 
-Vitest + Testing Library. Web tests are the `web` project in the root `vitest.config.mts` (`jsdom`, setup file `src/test/setup.ts`). Screen tests that need Query, theme, router, or the API stub use `renderWithProviders` from `src/test/render.tsx`.
-
-VS Code: `.vscode/launch.json` starts the API watch process and Vite on port 5173. Use **API + Web** to run both.
-
-Playwright lives in `/e2e`, not here. Public tests hit `/` and an unknown route. Authenticated tests need `E2E_AUTH0_EMAIL` and `E2E_AUTH0_PASSWORD` at the repository root.
-
-## Related docs
-
-- [Root README](../../README.md) — clone, database, Auth0, ship process
-- [docs/monorepo.md](../../docs/monorepo.md) — workspace packages and the same folder rules
-- [docs/auth0-development.md](../../docs/auth0-development.md) — SPA application settings
+Vitest project `web` in the root `vitest.config.mts`. `renderWithProviders` in `src/test/render.tsx`. `.vscode/launch.json` compound **API + Web**. Authenticated Playwright needs `E2E_AUTH0_EMAIL` and `E2E_AUTH0_PASSWORD`.

@@ -1,79 +1,39 @@
 # Monorepo
 
-The repository is a pnpm workspace with Turborepo. Libraries ship TypeScript source. Apps and jobs compile that source when they build.
+pnpm workspace, Turborepo. `@opulent/shared` and `@opulent/db` export TypeScript source. Consumers compile it. Do not add a `build` script to those packages or to `@opulent/infra`. Turbo `build` emits `dist/**` for api, web, and card-sync. Infra uses `synth`.
 
-## Packages
+| Package              | Path              | Role                          |
+| -------------------- | ----------------- | ----------------------------- |
+| `@opulent/shared`    | `packages/shared` | Zod schemas and shared types  |
+| `@opulent/db`        | `packages/db`     | Drizzle schema and DB scripts |
+| `@opulent/web`       | `apps/web`        | Vite React app                |
+| `@opulent/api`       | `apps/api`        | Hono API                      |
+| `@opulent/card-sync` | `jobs/card-sync`  | Scryfall job                  |
+| `@opulent/infra`     | `infra`           | AWS CDK                       |
 
-| Package              | Path              | Role                                         |
-| -------------------- | ----------------- | -------------------------------------------- |
-| `@opulent/shared`    | `packages/shared` | Zod schemas and shared types                 |
-| `@opulent/db`        | `packages/db`     | Drizzle schema, client, and database scripts |
-| `@opulent/web`       | `apps/web`        | Vite React app                               |
-| `@opulent/api`       | `apps/api`        | Hono API                                     |
-| `@opulent/card-sync` | `jobs/card-sync`  | Scryfall nightly job                         |
-| `@opulent/infra`     | `infra`           | AWS CDK                                      |
+`shared` is used by web, api, db, and card-sync. `db` is used by api and card-sync. Infra depends on no workspace package.
 
-`@opulent/shared` is used by web, api, db, and card-sync. `@opulent/db` is used by api and card-sync. Infra has no workspace package dependencies.
+GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 
-The GitHub repository is `opulent`. A local folder may use the product name `opulentTutor`.
+| Command            | Use                                                  |
+| ------------------ | ---------------------------------------------------- |
+| `pnpm check`       | Format, lint, types, unit tests. No Docker or Auth0. |
+| `pnpm check:ci`    | Quality job, except actionlint                       |
+| `pnpm dev`         | API and web. Needs `.env` and Postgres               |
+| `pnpm build`       | API, web, and card-sync artifacts                    |
+| `pnpm infra:synth` | CDK synth                                            |
 
-## Why shared and db have no `build`
+Lint, test, and format run at the repo root. They are not per-package Turbo tasks.
 
-These are Just-in-Time packages. Their `package.json` `exports` point at `.ts` files. Vite, `tsx`, and the API esbuild bundle compile that source.
+## Boundaries
 
-Do not add a `build` script to `@opulent/shared`, `@opulent/db`, or `@opulent/infra`. Turbo `typecheck` depends on `^typecheck`. Turbo `build` stays on `^build` and only writes `dist/**` for api, web, and card-sync. Infra uses `synth`, not `build`.
+ESLint `boundaries` in `eslint.config.mjs`:
 
-## Root commands
+- An app does not import another app, a job, or infra.
+- A package does not import an app, a job, or infra.
+- A job does not import an app or infra.
+- Infra does not import an app, a package, or a job.
 
-| Command            | Use                                                          |
-| ------------------ | ------------------------------------------------------------ |
-| `pnpm check`       | Format, lint, typecheck, and unit tests. No Docker or Auth0. |
-| `pnpm check:ci`    | Same gates as the Quality job, except actionlint.            |
-| `pnpm dev`         | API and web. Needs `.env` and PostgreSQL.                    |
-| `pnpm build`       | API, web, and card-sync artifacts.                           |
-| `pnpm infra:synth` | CDK synth through Turbo.                                     |
+Web folder and feature import rules: [apps/web/README.md](../apps/web/README.md).
 
-Lint, test, and format stay at the repository root. They scan the whole tree. They are not per-package Turbo tasks.
-
-## Web app folders
-
-`apps/web/src` is split by feature. Do not add a `utils/` folder.
-
-| Folder             | Put here                                    |
-| ------------------ | ------------------------------------------- |
-| `app/`             | Route table, providers, env                 |
-| `layout/`          | Shell, logo, not-found                      |
-| `features/<name>/` | Screens and logic owned by one product area |
-| `shared/cards/`    | Card chrome used by more than one feature   |
-| `shared/binder/`   | Binder search and filter controls           |
-| `shared/ui/`       | Small widgets with no product meaning       |
-| `shared/hooks/`    | Hooks used by more than one feature         |
-| `api/`             | HTTP client, query keys, places search      |
-| `theme/`           | MUI theme                                   |
-
-A new file goes in this order:
-
-1. The feature that owns it.
-2. `shared/ui` or `shared/hooks` if two features use it and it has no product meaning.
-3. `shared/cards` if it is card chrome.
-4. `shared/binder` if it is binder search used by collection, groups, and the public trade binder.
-
-Features must not import each other, except:
-
-- `groups` may import `collection` (same binder UI)
-- `home` may import `matches` and `auth`
-- `collection` may import `profile` (trade binder preview) and `auth` (pending add after login)
-- `profile` may import `matches` (matches on a public binder)
-
-Query modules (`queries.ts`) may be imported across features. `shared/` must not import `features/`.
-
-## Package boundaries
-
-ESLint `boundaries` rules in `eslint.config.mjs`:
-
-- An app must not import another app, a job, or infra.
-- A package must not import an app, a job, or infra.
-- A job must not import an app or infra.
-- Infra must not import an app, a package, or a job.
-
-Shared versions that must stay paired live in the pnpm catalog in `pnpm-workspace.yaml`.
+Paired dependency versions live in the pnpm catalog in `pnpm-workspace.yaml`.

@@ -3,17 +3,15 @@
 ## Verification
 
 - [ ] `pnpm check`
-- [ ] Relevant tests added or updated
-- [ ] No secrets, `.env` files, or generated artifacts committed
+- [ ] Tests updated if behavior changed
+- [ ] No secrets or generated artifacts
 
-## Data and deployment
+## Data
 
-- [ ] Migration generated and committed, if the schema changed
-- [ ] Environment variables added to `.env.example`, if needed
-- [ ] No direct production data or infrastructure change without review
+- [ ] Migration committed if the schema changed
+- [ ] New env vars in `.env.example`
 
 ## UI
 
-- [ ] Phone layout checked
-- [ ] Desktop layout checked
-- [ ] Screenshots or recording added for visible changes
+- [ ] Phone and desktop checked
+- [ ] Screenshot for visible changes
