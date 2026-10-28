@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { AppEnv } from '../../lib/context';
+import { errorText, log } from '../../lib/log';
 
 export const healthRoutes = new Hono<AppEnv>();
 
@@ -12,7 +13,9 @@ healthRoutes.get('/ready', async (c) => {
   try {
     await c.get('db').execute(sql`SELECT 1`);
     return c.json({ status: 'ok', database: 'up' });
-  } catch {
+  } catch (error) {
+    log.error({ message: errorText(error) }, 'health_ready_failed');
+    c.set('failure', { code: 'internal_error', message: 'database down' });
     return c.json({ status: 'degraded', database: 'down' }, 503);
   }
 });

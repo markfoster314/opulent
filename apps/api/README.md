@@ -36,6 +36,8 @@ src/
   middleware/    auth, errors
   lib/           http, csv, log
   modules/       users, places, cards, collection, groups, wants, matches, trades, health
+  smoke/         service checks, run by smoke-test.ts
+  smoke-test.ts  entry for pnpm smoke
 ```
 
 A module owns `routes.ts` and `service.ts`. Routes own HTTP. Services own the database.
@@ -44,11 +46,11 @@ Collection also has `browse.ts`, `items.ts`, `binder.ts`, `rows.ts`, `value.ts`,
 
 ## Imports
 
-A module may import another module's `service.ts` only. Not its tables, and not a sibling such as `csv.ts` or `value.ts`.
+A module may import another module's `service.ts` only. Not its tables, and not a sibling such as `csv.ts` or `value.ts`. Lint rejects that import.
 
 ## Logs
 
-One JSON line per request on stdout: `requestId`, `method`, `path`, `status`, `duration`. Lambda stdout is CloudWatch. Logs stay two weeks. `pnpm dev` pretty-prints that line. The Lambda bundle stays JSON.
+One JSON line per request on stdout: `requestId`, `method`, `path`, `status`, `duration`. A failed response also has `code` and `message`. Lambda stdout is CloudWatch. Logs stay two weeks. `pnpm dev` pretty-prints that line. The Lambda bundle stays JSON.
 
 `LOG_LEVEL` sets the level. Default `info` when `NODE_ENV` is `production`, otherwise `debug`.
 
@@ -56,6 +58,6 @@ No `Authorization` header, request body, or email.
 
 ## Tests
 
-`pnpm smoke` calls services against the local database. It is not a Vitest file.
+`pnpm smoke` calls services against the local database. The checks live in `src/smoke/`. The entry is still `src/smoke-test.ts`. It is not a Vitest file.
 
 Vitest covers routes that do not need Postgres. Those tests use Hono `app.request` (`src/app.test.ts`).

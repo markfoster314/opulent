@@ -1,4 +1,4 @@
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../lib/validate';
 import { placeSearchQuerySchema } from '@opulent/shared';
 import { Hono } from 'hono';
 import { requireAuth, requireUser } from '../../middleware/auth';

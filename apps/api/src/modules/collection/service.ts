@@ -1,4 +1,9 @@
-export { getGroupValues } from './value';
+export {
+  getCollectionValueBreakdown,
+  getCollectionValueHistory,
+  getGroupValues,
+  snapshotCollectionValues,
+} from './value';
 
 export {
   assertCanViewTradeBinder,

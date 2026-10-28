@@ -1,4 +1,4 @@
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../lib/validate';
 import { createTradeSchema, tradeLinesSchema } from '@opulent/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';

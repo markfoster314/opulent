@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { BODY_MAX_BYTES, limitBody } from './app';
 import type { AppEnv } from './lib/context';
+import { zValidator } from './lib/validate';
 import { requireAuth } from './middleware/auth';
 import { onError, onNotFound } from './middleware/error';
 
@@ -40,6 +42,18 @@ describe('http edges', () => {
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'bad_request', message: 'Request is too large' },
+    });
+  });
+
+  it('returns bad_request when the query fails validation', async () => {
+    const app = testApp();
+    app.get('/search', zValidator('query', z.object({ q: z.string().min(1) })), (c) =>
+      c.json({ q: c.req.valid('query').q }),
+    );
+    const response = await app.request('/search');
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'bad_request', message: 'Request validation failed' },
     });
   });
 });

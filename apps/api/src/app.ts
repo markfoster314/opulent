@@ -23,7 +23,10 @@ export const BODY_MAX_BYTES = 3_000_000;
 
 export const limitBody = bodyLimit({
   maxSize: BODY_MAX_BYTES,
-  onError: (c) => c.json({ error: { code: 'bad_request', message: 'Request is too large' } }, 413),
+  onError: (c) => {
+    c.set('failure', { code: 'bad_request', message: 'Request is too large' });
+    return c.json({ error: { code: 'bad_request', message: 'Request is too large' } }, 413);
+  },
 });
 
 /** A module may import another module's service.ts only. */
@@ -35,12 +38,14 @@ export function createApp() {
   app.use('*', async (c, next) => {
     const started = performance.now();
     await next();
+    const failure = c.get('failure');
     log.info({
       requestId: c.get('requestId'),
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,
       duration: Math.round(performance.now() - started),
+      ...(failure ? { code: failure.code, message: failure.message } : {}),
     });
   });
   app.use('*', limitBody);

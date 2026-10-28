@@ -7,6 +7,25 @@ import turbo from 'eslint-plugin-turbo';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+const apiModules = [
+  'users',
+  'places',
+  'cards',
+  'collection',
+  'groups',
+  'wants',
+  'matches',
+  'trades',
+  'health',
+];
+
+/** Another module's files, except service.ts. Same-folder imports stay allowed. */
+const apiModuleImportGroup = apiModules.flatMap((name) => [
+  `../${name}/*`,
+  `!../${name}/service`,
+  `!../${name}/service.ts`,
+]);
+
 const boundaryPolicy = [
   'error',
   {
@@ -130,6 +149,38 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'error',
       ...reactRefresh.configs.vite.rules,
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['apps/api/src/modules/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: apiModuleImportGroup,
+              message: 'Import another module through service.ts only.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['apps/api/src/smoke/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../modules/*/*', '!../modules/*/service', '!../modules/*/service.ts'],
+              message: 'Import a module through service.ts only.',
+            },
+          ],
+        },
+      ],
     },
   },
   {
