@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { WantItem } from '@opulent/shared';
 import { describe, expect, it } from 'vitest';
+import { renderWithProviders } from '@/test/render';
 import { WantBinderView } from './WantBinderView';
 
 function want(id: string, quantity: number): WantItem {
@@ -22,7 +23,7 @@ function want(id: string, quantity: number): WantItem {
 
 describe('WantBinderView', () => {
   it('shows the quantity sticker only above one copy', () => {
-    render(<WantBinderView items={[want('one', 1), want('two', 2)]} />);
+    renderWithProviders(<WantBinderView items={[want('one', 1), want('two', 2)]} />);
     expect(screen.queryByText('×1')).not.toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
   });

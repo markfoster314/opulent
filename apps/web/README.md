@@ -115,8 +115,9 @@ One HTTP client: `src/api/client.ts`, provided by `ApiProvider`. It attaches `Au
 - **Query keys** live in `src/api/queryKeys.ts`. Mutations must invalidate those keys so screens stay in sync.
 - **Hooks** live in the owning feature (`features/collection/queries.ts`, …). Shared card and group-list hooks used by `AddCardPanel` live in `shared/cards/queries.ts`. Place search lives in `src/api/places.ts`.
 - Do not add a second fetch wrapper. Do not put React Query hooks back into one `api/queries.ts` file.
+- Do not add a client store (Zustand, Redux, Jotai). Server data stays in TanStack Query. Dialogs and view toggles stay in local `useState`.
 
-TanStack Query defaults (see `src/app/main.tsx`): `staleTime` 60s, one retry, no refetch on window focus. Card data changes at most once a day.
+TanStack Query defaults (see `src/app/main.tsx`): `staleTime` 60s, one retry, no refetch on window focus. Card data changes at most once a day. In local development, Query Devtools open from the corner of the page.
 
 ## Auth and shell
 
@@ -125,6 +126,8 @@ TanStack Query defaults (see `src/app/main.tsx`): `staleTime` 60s, one retry, no
 A card picked on the landing page before sign-up is stored by `features/auth/pendingAdd.ts`. After onboarding, the collection page consumes it.
 
 Auth0 uses `cacheLocation="localstorage"` and refresh tokens so a page refresh on a share link does not force a new login.
+
+`ErrorBoundary` in `src/layout` wraps the route outlet so a render crash does not take down the shell. Use Reload to try again.
 
 ## Layout and copy
 
@@ -158,7 +161,9 @@ Nav treats `/groups` as part of collection.
 
 ## Tests
 
-Vitest + Testing Library. Web tests are the `web` project in the root `vitest.config.mts` (`jsdom`, setup file `src/test/setup.ts`).
+Vitest + Testing Library. Web tests are the `web` project in the root `vitest.config.mts` (`jsdom`, setup file `src/test/setup.ts`). Screen tests that need Query, theme, router, or the API stub use `renderWithProviders` from `src/test/render.tsx`.
+
+VS Code: `.vscode/launch.json` starts the API watch process and Vite on port 5173. Use **API + Web** to run both.
 
 Playwright lives in `/e2e`, not here. Public tests hit `/` and an unknown route. Authenticated tests need `E2E_AUTH0_EMAIL` and `E2E_AUTH0_PASSWORD` at the repository root.
 

@@ -114,7 +114,7 @@ export default tseslint.config(
     },
     rules: {
       'boundaries/dependencies': boundaryPolicy,
-      'turbo/no-undeclared-env-vars': ['error', { allowList: ['^CI$', '^E2E_AUTH0_'] }],
+      'turbo/no-undeclared-env-vars': ['error', { allowList: ['^CI$', '^DEV$', '^E2E_AUTH0_'] }],
       '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     },
   },

@@ -14,7 +14,12 @@ import {
   Typography,
 } from '@mui/material';
 import type { CollectionItem } from '@opulent/shared';
-import { cardConditionLabels, cardFinishLabels, cardLanguageLabels } from '@opulent/shared';
+import {
+  cardConditionLabels,
+  cardFinishLabels,
+  cardLanguageLabels,
+  parsePhotoLink,
+} from '@opulent/shared';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useCard } from '@/shared/cards/queries';
@@ -65,6 +70,7 @@ export function BinderCardDialog({
     item.artistProof ? 'Artist proof' : '',
   ].filter((mark) => mark !== '');
   const price = collectionTilePrice(item);
+  const photoHref = item.photoUrl ? parsePhotoLink(item.photoUrl) : null;
   const facts = [
     fact(
       'Set',
@@ -140,9 +146,9 @@ export function BinderCardDialog({
                 {row.value}
               </Typography>
             ))}
-            {item.photoUrl && (
+            {photoHref && (
               <Link
-                href={item.photoUrl}
+                href={photoHref}
                 target="_blank"
                 rel="noreferrer"
                 sx={{ overflowWrap: 'anywhere' }}

@@ -29,7 +29,7 @@ export function useTrade(tradeId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.trade(tradeId ?? ''),
-    queryFn: () => api<TradeDetail>(`/v1/trades/${tradeId}`),
+    queryFn: () => api<TradeDetail>(`/v1/trades/${encodeURIComponent(tradeId ?? '')}`),
     enabled: Boolean(tradeId),
   });
 }
@@ -38,7 +38,7 @@ export function useTradeChoices(tradeId: string | undefined, enabled: boolean) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.tradeChoices(tradeId ?? ''),
-    queryFn: () => api<TradeChoices>(`/v1/trades/${tradeId}/choices`),
+    queryFn: () => api<TradeChoices>(`/v1/trades/${encodeURIComponent(tradeId ?? '')}/choices`),
     enabled: Boolean(tradeId) && enabled,
   });
 }
@@ -58,7 +58,10 @@ export function useProposeTrade(tradeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TradeLinesInput) =>
-      api<TradeDetail>(`/v1/trades/${tradeId}/propose`, { method: 'POST', body: input }),
+      api<TradeDetail>(`/v1/trades/${encodeURIComponent(tradeId)}/propose`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => refreshTrades(queryClient, tradeId),
   });
 }
@@ -68,7 +71,10 @@ export function useFinalizeTrade(tradeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TradeLinesInput) =>
-      api<TradeDetail>(`/v1/trades/${tradeId}/finalize`, { method: 'POST', body: input }),
+      api<TradeDetail>(`/v1/trades/${encodeURIComponent(tradeId)}/finalize`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => refreshTrades(queryClient, tradeId),
   });
 }
@@ -77,7 +83,8 @@ export function useCancelTrade(tradeId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api<TradeDetail>(`/v1/trades/${tradeId}/cancel`, { method: 'POST' }),
+    mutationFn: () =>
+      api<TradeDetail>(`/v1/trades/${encodeURIComponent(tradeId)}/cancel`, { method: 'POST' }),
     onSuccess: () => refreshTrades(queryClient, tradeId),
   });
 }

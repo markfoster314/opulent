@@ -25,7 +25,6 @@ export function useImportWants() {
       if (result.dryRun) return;
       void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
       void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      void queryClient.invalidateQueries({ queryKey: ['wants'] });
     },
   });
 }
@@ -35,9 +34,14 @@ export function useExportWants(listId?: string) {
   const api = useApi();
   return useMutation({
     mutationFn: () =>
-      api<string>(listId ? `/v1/wants/lists/${listId}/export.csv` : '/v1/wants/export.csv', {
-        asText: true,
-      }),
+      api<string>(
+        listId
+          ? `/v1/wants/lists/${encodeURIComponent(listId)}/export.csv`
+          : '/v1/wants/export.csv',
+        {
+          asText: true,
+        },
+      ),
   });
 }
 
@@ -64,7 +68,8 @@ export function useDeleteGenericWant() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (wantId: string) => api<void>(`/v1/wants/generic/${wantId}`, { method: 'DELETE' }),
+    mutationFn: (wantId: string) =>
+      api<void>(`/v1/wants/generic/${encodeURIComponent(wantId)}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.genericWants }),
   });
 }
@@ -82,7 +87,7 @@ export function useWantList(listId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.wantList(listId ?? 'none'),
-    queryFn: () => api<WantList>(`/v1/wants/lists/${listId}`),
+    queryFn: () => api<WantList>(`/v1/wants/lists/${encodeURIComponent(listId ?? '')}`),
     enabled: Boolean(listId),
   });
 }
@@ -91,7 +96,8 @@ export function useWantItems(listId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.wantItems(listId ?? 'none'),
-    queryFn: () => api<{ items: WantItem[] }>(`/v1/wants/lists/${listId}/items`),
+    queryFn: () =>
+      api<{ items: WantItem[] }>(`/v1/wants/lists/${encodeURIComponent(listId ?? '')}/items`),
     enabled: Boolean(listId),
   });
 }
@@ -109,7 +115,8 @@ export function usePublicWantItems(handle: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.publicWantItems(handle ?? ''),
-    queryFn: () => api<{ items: WantItem[] }>(`/v1/wants/by/${handle}/public-items`),
+    queryFn: () =>
+      api<{ items: WantItem[] }>(`/v1/wants/by/${encodeURIComponent(handle ?? '')}/public-items`),
     enabled: Boolean(handle),
   });
 }
@@ -121,11 +128,14 @@ export function useSharedWantList(
 ) {
   const api = useApi();
   return useQuery({
-    queryKey: queryKeys.sharedWantList(handle ?? '', slug ?? ''),
+    queryKey: [...queryKeys.sharedWantList(handle ?? '', slug ?? ''), shareToken ?? ''],
     queryFn: () =>
-      api<WantList>(`/v1/wants/by/${handle}/${slug}`, {
-        ...(shareToken ? { shareToken } : {}),
-      }),
+      api<WantList>(
+        `/v1/wants/by/${encodeURIComponent(handle ?? '')}/${encodeURIComponent(slug ?? '')}`,
+        {
+          ...(shareToken ? { shareToken } : {}),
+        },
+      ),
     enabled: Boolean(handle && slug),
   });
 }
@@ -137,11 +147,14 @@ export function useSharedWantItems(
 ) {
   const api = useApi();
   return useQuery({
-    queryKey: queryKeys.sharedWantItems(handle ?? '', slug ?? ''),
+    queryKey: [...queryKeys.sharedWantItems(handle ?? '', slug ?? ''), shareToken ?? ''],
     queryFn: () =>
-      api<{ items: WantItem[] }>(`/v1/wants/by/${handle}/${slug}/items`, {
-        ...(shareToken ? { shareToken } : {}),
-      }),
+      api<{ items: WantItem[] }>(
+        `/v1/wants/by/${encodeURIComponent(handle ?? '')}/${encodeURIComponent(slug ?? '')}/items`,
+        {
+          ...(shareToken ? { shareToken } : {}),
+        },
+      ),
     enabled: Boolean(handle && slug),
   });
 }
@@ -151,7 +164,10 @@ export function useUpdateWantList(listId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateWantListInput) =>
-      api<WantList>(`/v1/wants/lists/${listId}`, { method: 'PATCH', body: input }),
+      api<WantList>(`/v1/wants/lists/${encodeURIComponent(listId)}`, {
+        method: 'PATCH',
+        body: input,
+      }),
     onSuccess: (list) => {
       queryClient.setQueryData(queryKeys.wantList(listId), list);
       void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
@@ -164,9 +180,10 @@ export function useRotateWantShareToken(listId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      api<{ shareToken: string }>(`/v1/wants/lists/${listId}/share-token/rotate`, {
-        method: 'POST',
-      }),
+      api<{ shareToken: string }>(
+        `/v1/wants/lists/${encodeURIComponent(listId)}/share-token/rotate`,
+        { method: 'POST' },
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) }),
   });
 }
@@ -185,7 +202,8 @@ export function useDeleteWantList() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (listId: string) => api<void>(`/v1/wants/lists/${listId}`, { method: 'DELETE' }),
+    mutationFn: (listId: string) =>
+      api<void>(`/v1/wants/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.wants }),
   });
 }
@@ -208,7 +226,7 @@ export function useUpdateWantItem(listId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ wantId, input }: { wantId: string; input: UpdateWantItemInput }) =>
-      api<WantItem>(`/v1/wants/items/${wantId}`, {
+      api<WantItem>(`/v1/wants/items/${encodeURIComponent(wantId)}`, {
         method: 'PATCH',
         body: input,
       }),
@@ -227,10 +245,11 @@ export function useDeleteWantItem() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (wantId: string) => api<void>(`/v1/wants/items/${wantId}`, { method: 'DELETE' }),
+    mutationFn: (wantId: string) =>
+      api<void>(`/v1/wants/items/${encodeURIComponent(wantId)}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
-      void queryClient.invalidateQueries({ queryKey: ['wants'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wants });
     },
   });
 }
@@ -241,7 +260,10 @@ export function useRemoveWantItem(listId: string) {
   return useMutation({
     // Removing from a list leaves the want in All wants.
     mutationFn: (wantId: string) =>
-      api<void>(`/v1/wants/lists/${listId}/items/${wantId}`, { method: 'DELETE' }),
+      api<void>(
+        `/v1/wants/lists/${encodeURIComponent(listId)}/items/${encodeURIComponent(wantId)}`,
+        { method: 'DELETE' },
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wants });

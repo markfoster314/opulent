@@ -366,50 +366,29 @@ function DetailsStep({
           </Box>
 
           <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-            {printing.scryfallUri && (
-              <Link
-                href={printing.scryfallUri}
-                target="_blank"
-                rel="noreferrer"
-                variant="caption"
-                color="text.secondary"
-              >
-                View on Scryfall
-              </Link>
-            )}
-            {printing.purchaseUris?.tcgplayer ? (
-              <Link
-                href={printing.purchaseUris.tcgplayer}
-                target="_blank"
-                rel="noreferrer"
-                variant="caption"
-                color="text.secondary"
-              >
-                View on TCGPlayer
-              </Link>
-            ) : null}
-            {printing.purchaseUris?.cardmarket ? (
-              <Link
-                href={printing.purchaseUris.cardmarket}
-                target="_blank"
-                rel="noreferrer"
-                variant="caption"
-                color="text.secondary"
-              >
-                View on Cardmarket
-              </Link>
-            ) : null}
-            {printing.purchaseUris?.cardhoarder ? (
-              <Link
-                href={printing.purchaseUris.cardhoarder}
-                target="_blank"
-                rel="noreferrer"
-                variant="caption"
-                color="text.secondary"
-              >
-                View on Cardhoarder
-              </Link>
-            ) : null}
+            {(
+              [
+                ['View on Scryfall', printing.scryfallUri],
+                ['View on TCGPlayer', printing.purchaseUris?.tcgplayer],
+                ['View on Cardmarket', printing.purchaseUris?.cardmarket],
+                ['View on Cardhoarder', printing.purchaseUris?.cardhoarder],
+              ] as const
+            ).map(([label, url]) => {
+              const href = url ? parsePhotoLink(url) : null;
+              if (!href) return null;
+              return (
+                <Link
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </Stack>
         </Stack>
       </Stack>

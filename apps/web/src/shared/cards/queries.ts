@@ -24,7 +24,10 @@ export function useCardPriceSeries(scryfallId: string | undefined, range: PriceR
   const api = useApi();
   return useQuery({
     queryKey: ['cards', 'price-series', scryfallId ?? 'none', range] as const,
-    queryFn: () => api<CardPriceSeries>(`/v1/cards/${scryfallId}/prices?range=${range}`),
+    queryFn: () =>
+      api<CardPriceSeries>(
+        `/v1/cards/${encodeURIComponent(scryfallId ?? '')}/prices?range=${encodeURIComponent(range)}`,
+      ),
     enabled: Boolean(scryfallId),
   });
 }
@@ -33,7 +36,7 @@ export function useCard(scryfallId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.card(scryfallId ?? ''),
-    queryFn: () => api<Card>(`/v1/cards/${scryfallId}`),
+    queryFn: () => api<Card>(`/v1/cards/${encodeURIComponent(scryfallId ?? '')}`),
     enabled: Boolean(scryfallId),
   });
 }
@@ -57,7 +60,8 @@ export function useCardSets(oracleId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.cardSets(oracleId ?? 'none'),
-    queryFn: () => api<{ items: CardSet[] }>(`/v1/cards/oracle/${oracleId}/sets`),
+    queryFn: () =>
+      api<{ items: CardSet[] }>(`/v1/cards/oracle/${encodeURIComponent(oracleId ?? '')}/sets`),
     enabled: Boolean(oracleId),
     staleTime: 5 * 60 * 1000,
   });
@@ -78,7 +82,9 @@ export function useCardPrintings(
       const params = new URLSearchParams({ limit: String(limit) });
       if (term) params.set('q', term);
       if (cursor) params.set('cursor', cursor);
-      return api<Page<Card>>(`/v1/cards/oracle/${oracleId}/printings?${params.toString()}`);
+      return api<Page<Card>>(
+        `/v1/cards/oracle/${encodeURIComponent(oracleId ?? '')}/printings?${params.toString()}`,
+      );
     },
     enabled: Boolean(oracleId),
     staleTime: 5 * 60 * 1000,
@@ -91,7 +97,8 @@ export function useCardLanguages(scryfallId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.cardLanguages(scryfallId ?? 'none'),
-    queryFn: () => api<{ items: Card[] }>(`/v1/cards/${scryfallId}/languages`),
+    queryFn: () =>
+      api<{ items: Card[] }>(`/v1/cards/${encodeURIComponent(scryfallId ?? '')}/languages`),
     enabled: Boolean(scryfallId),
     staleTime: 5 * 60 * 1000,
   });
@@ -111,7 +118,8 @@ export function useOracleChoices(oracleId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.cardChoices(oracleId ?? 'none'),
-    queryFn: () => api<CardChoices>(`/v1/cards/oracle/${oracleId}/choices`),
+    queryFn: () =>
+      api<CardChoices>(`/v1/cards/oracle/${encodeURIComponent(oracleId ?? '')}/choices`),
     enabled: Boolean(oracleId),
     staleTime: 5 * 60 * 1000,
   });

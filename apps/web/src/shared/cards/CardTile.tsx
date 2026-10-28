@@ -6,7 +6,7 @@ import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import { Box, Chip, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import type { CollectionItem, Card } from '@opulent/shared';
-import { askingPriceForFinish, cardFinishLabels, formatUsd } from '@opulent/shared';
+import { askingPriceForFinish, cardFinishLabels, formatUsd, parsePhotoLink } from '@opulent/shared';
 import type { ReactNode } from 'react';
 import { palette } from '@/theme';
 import { FoilSheen } from './FoilSheen';
@@ -144,6 +144,7 @@ export function CardTile({
   onClick,
 }: CardTileProps) {
   const image = card.imageUris?.normal ?? card.imageUris?.small;
+  const photoHref = photoUrl ? parsePhotoLink(photoUrl) : null;
   const marks = [
     ...cardMarks({ notes, signed, altered, misprint, miscut, artistProof }),
     ...(extraMarks ?? []),
@@ -151,7 +152,19 @@ export function CardTile({
 
   return (
     <Paper
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       sx={{
         position: 'relative',
         p: 1,
@@ -163,6 +176,9 @@ export function CardTile({
         transition: 'border-color 120ms ease, transform 120ms ease',
         '&:hover': onClick
           ? { borderColor: palette.gold, transform: 'translateY(-2px)' }
+          : undefined,
+        '&:focus-visible': onClick
+          ? { outline: `2px solid ${palette.goldLight}`, outlineOffset: 2 }
           : undefined,
       }}
     >
@@ -283,9 +299,9 @@ export function CardTile({
           </Typography>
         )}
         {!nameOnly &&
-          (photoUrl ? (
+          (photoHref ? (
             <Link
-              href={photoUrl}
+              href={photoHref}
               target="_blank"
               rel="noreferrer"
               variant="caption"

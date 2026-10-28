@@ -18,7 +18,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { askingPriceForFinish, formatUsd, priceForFinish } from '@opulent/shared';
+import { askingPriceForFinish, formatUsd, parsePhotoLink, priceForFinish } from '@opulent/shared';
 import type { CollectionItem, PriceRange } from '@opulent/shared';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -129,6 +129,8 @@ export function CollectionCardDetail({
 
   const detail = item;
   const card = item.card;
+  const scryfallHref = card?.scryfallUri ? parsePhotoLink(card.scryfallUri) : null;
+  const photoHref = item.photoUrl ? parsePhotoLink(item.photoUrl) : null;
   const asking = askingPriceForFinish(card?.prices, item.finish, item.price);
   const marks = [
     item.signed ? 'signed' : '',
@@ -294,8 +296,8 @@ export function CollectionCardDetail({
                   Released {card.releasedAt}
                 </Typography>
               )}
-              {card?.scryfallUri && (
-                <Link href={card.scryfallUri} target="_blank" rel="noreferrer" variant="caption">
+              {scryfallHref && (
+                <Link href={scryfallHref} target="_blank" rel="noreferrer" variant="caption">
                   Scryfall page
                 </Link>
               )}
@@ -388,11 +390,11 @@ export function CollectionCardDetail({
               }
             />
             {item.notes && <DetailRow label="Notes" value={item.notes} />}
-            {item.photoUrl && (
+            {photoHref && (
               <DetailRow
                 label="Photos"
                 value={
-                  <Link href={item.photoUrl} target="_blank" rel="noreferrer">
+                  <Link href={photoHref} target="_blank" rel="noreferrer">
                     Open photos
                   </Link>
                 }

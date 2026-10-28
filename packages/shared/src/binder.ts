@@ -118,7 +118,10 @@ export const collectionItemSchema = z.object({
   condition: cardConditionSchema,
   language: cardLanguageSchema,
   notes: z.string().nullable(),
-  photoUrl: z.string().nullable(),
+  photoUrl: z
+    .string()
+    .nullable()
+    .transform((value) => (value ? parsePhotoLink(value) : null)),
   forTrade: z.boolean(),
   signed: z.boolean(),
   altered: z.boolean(),

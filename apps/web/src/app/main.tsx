@@ -2,6 +2,7 @@ import { Auth0Provider } from '@auth0/auth0-react';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -45,6 +46,7 @@ createRoot(container).render(
             <BrowserRouter>
               <App />
             </BrowserRouter>
+            {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
           </ThemeProvider>
         </QueryClientProvider>
       </ApiProvider>

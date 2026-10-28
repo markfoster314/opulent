@@ -5,6 +5,16 @@ import { createApiClient, type ApiClient } from './client';
 
 const ApiContext = createContext<ApiClient | null>(null);
 
+export function ApiClientProvider({
+  client,
+  children,
+}: {
+  client: ApiClient;
+  children: ReactNode;
+}) {
+  return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;
+}
+
 export function ApiProvider({ children }: { children: ReactNode }) {
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
 
@@ -25,7 +35,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     [getAccessTokenSilently, isAuthenticated],
   );
 
-  return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;
+  return <ApiClientProvider client={client}>{children}</ApiClientProvider>;
 }
 
 export function useApi(): ApiClient {

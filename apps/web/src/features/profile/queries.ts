@@ -37,6 +37,7 @@ export function useUpdateProfile() {
     onSuccess: (me) => {
       queryClient.setQueryData(queryKeys.me, me);
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['trade-binder'] });
     },
   });
 }
@@ -48,7 +49,7 @@ export function useProfile(username: string | undefined) {
   const viewer = isAuthenticated ? (me.data?.id ?? 'signed-in') : 'guest';
   return useQuery({
     queryKey: [...queryKeys.profile(username ?? ''), viewer],
-    queryFn: () => api<Profile>(`/v1/users/${username}`),
+    queryFn: () => api<Profile>(`/v1/users/${encodeURIComponent(username ?? '')}`),
     enabled: Boolean(username) && (!isAuthenticated || me.isFetched),
   });
 }
@@ -57,7 +58,8 @@ export function useFollowers(username: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.followers(username ?? ''),
-    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/followers`),
+    queryFn: () =>
+      api<{ items: Friend[] }>(`/v1/users/${encodeURIComponent(username ?? '')}/followers`),
     enabled: Boolean(username),
   });
 }
@@ -66,7 +68,8 @@ export function useFollowing(username: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.following(username ?? ''),
-    queryFn: () => api<{ items: Friend[] }>(`/v1/users/${username}/following`),
+    queryFn: () =>
+      api<{ items: Friend[] }>(`/v1/users/${encodeURIComponent(username ?? '')}/following`),
     enabled: Boolean(username),
   });
 }
@@ -91,7 +94,7 @@ export function useRemoveFriend() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (username: string) =>
-      api<void>(`/v1/users/me/friends/${username}`, { method: 'DELETE' }),
+      api<void>(`/v1/users/me/friends/${encodeURIComponent(username)}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.friends });
       void queryClient.invalidateQueries({ queryKey: ['followers'] });
@@ -109,7 +112,10 @@ export function useTradeBinder(handle: string | undefined, shareToken?: string) 
   const api = useApi();
   return useQuery({
     queryKey: [...queryKeys.tradeBinder(handle ?? ''), shareToken ?? ''],
-    queryFn: () => api<TradeBinder>(`/v1/users/${handle}/trade-binder${tokenQuery(shareToken)}`),
+    queryFn: () =>
+      api<TradeBinder>(
+        `/v1/users/${encodeURIComponent(handle ?? '')}/trade-binder${tokenQuery(shareToken)}`,
+      ),
     enabled: Boolean(handle),
   });
 }
@@ -127,7 +133,7 @@ export function useTradeBinderItems(
       const params = binderSearchParams(filters, pageParam, BINDER_PAGE_SIZE);
       if (shareToken) params.set('t', shareToken);
       return api<Page<CollectionItem>>(
-        `/v1/users/${handle}/trade-binder/items?${params.toString()}`,
+        `/v1/users/${encodeURIComponent(handle ?? '')}/trade-binder/items?${params.toString()}`,
       );
     },
     initialPageParam: null as string | null,
@@ -147,7 +153,7 @@ export function useTradeBinderMatches(
     queryKey: [...queryKeys.tradeBinderMatches(handle ?? ''), shareToken ?? ''],
     queryFn: () =>
       api<{ items: TradeMatch[] }>(
-        `/v1/users/${handle}/trade-binder/matches${tokenQuery(shareToken)}`,
+        `/v1/users/${encodeURIComponent(handle ?? '')}/trade-binder/matches${tokenQuery(shareToken)}`,
       ),
     enabled: Boolean(handle) && enabled,
   });
@@ -161,6 +167,9 @@ export function useRotateTradeBinderToken() {
       api<{ shareToken: string }>('/v1/users/me/trade-binder/share-token/rotate', {
         method: 'POST',
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      void queryClient.invalidateQueries({ queryKey: ['trade-binder'] });
+    },
   });
 }

@@ -90,7 +90,7 @@ export function useCollectionItem(itemId: string | undefined) {
   const api = useApi();
   return useQuery({
     queryKey: [...queryKeys.collection, 'item', itemId ?? 'none'] as const,
-    queryFn: () => api<CollectionItem>(`/v1/collection/items/${itemId}`),
+    queryFn: () => api<CollectionItem>(`/v1/collection/items/${encodeURIComponent(itemId ?? '')}`),
     enabled: Boolean(itemId),
   });
 }
@@ -136,7 +136,10 @@ export function useUpdateCollectionItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: UpdateCollectionItemInput }) =>
-      api<CollectionItem>(`/v1/collection/items/${itemId}`, { method: 'PATCH', body: input }),
+      api<CollectionItem>(`/v1/collection/items/${encodeURIComponent(itemId)}`, {
+        method: 'PATCH',
+        body: input,
+      }),
     onSuccess: () => refreshStacks(queryClient),
   });
 }
@@ -152,7 +155,7 @@ export function useSetTradeFlag() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, forTrade }: { itemId: string; forTrade: boolean }) =>
-      api<CollectionItem>(`/v1/collection/items/${itemId}`, {
+      api<CollectionItem>(`/v1/collection/items/${encodeURIComponent(itemId)}`, {
         method: 'PATCH',
         body: { forTrade },
       }),
@@ -190,7 +193,10 @@ export function useSplitCollectionItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: SplitCollectionItemInput }) =>
-      api<void>(`/v1/collection/items/${itemId}/split`, { method: 'POST', body: input }),
+      api<void>(`/v1/collection/items/${encodeURIComponent(itemId)}/split`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => refreshStacks(queryClient),
   });
 }
@@ -200,7 +206,7 @@ export function useRemoveCollectionItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) =>
-      api<void>(`/v1/collection/items/${itemId}`, { method: 'DELETE' }),
+      api<void>(`/v1/collection/items/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
     onSuccess: () => refreshStacks(queryClient),
   });
 }

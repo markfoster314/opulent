@@ -34,6 +34,12 @@ export default defineConfig({
             '@': webSrc,
           },
         },
+        define: {
+          'import.meta.env.VITE_AUTH0_DOMAIN': JSON.stringify('test.auth0.example'),
+          'import.meta.env.VITE_AUTH0_CLIENT_ID': JSON.stringify('test-client'),
+          'import.meta.env.VITE_AUTH0_AUDIENCE': JSON.stringify('test-audience'),
+          'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://127.0.0.1:8787'),
+        },
         test: {
           name: 'web',
           environment: 'jsdom',

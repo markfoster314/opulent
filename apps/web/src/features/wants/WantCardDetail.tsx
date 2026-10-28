@@ -20,6 +20,7 @@ import {
   cardLanguageLabels,
   cardLanguageOrEnglish,
   describeWantScope,
+  parsePhotoLink,
   wantPriorityLabels,
 } from '@opulent/shared';
 import type { ReactNode } from 'react';
@@ -93,6 +94,9 @@ export function WantCardDetail({
   const specificSet = item.wantedSets.length === 1;
   const printingsQuery = useCardPrintings(item.oracleId, specificSet ? item.wantedSets[0] : '', 60);
   const chosenPrinting = pickPrinting(printingsQuery.data?.items ?? [], item);
+  const scryfallHref = chosenPrinting?.scryfallUri
+    ? parsePhotoLink(chosenPrinting.scryfallUri)
+    : null;
   const specificPrinting =
     specificSet && chosenPrinting && chosenPrinting.setCode.toLowerCase() === item.wantedSets[0]
       ? chosenPrinting
@@ -292,13 +296,8 @@ export function WantCardDetail({
                   Released {chosenPrinting.releasedAt}
                 </Typography>
               )}
-              {chosenPrinting?.scryfallUri && (
-                <Link
-                  href={chosenPrinting.scryfallUri}
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="caption"
-                >
+              {scryfallHref && (
+                <Link href={scryfallHref} target="_blank" rel="noreferrer" variant="caption">
                   Scryfall page
                 </Link>
               )}

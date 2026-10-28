@@ -26,6 +26,12 @@ const STEPS = ['Username', 'City'] as const;
 
 const FILL_MS = 520;
 
+function appPath(value: unknown): string {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
+    ? value
+    : '/collection';
+}
+
 /** Shown once after first sign-in; a generated username would otherwise leak into every shared link. */
 export function WelcomePage() {
   const { isAuthenticated, isLoading } = useAuth0();
@@ -81,7 +87,7 @@ function WelcomeForm({ me }: { me: Me }) {
   const origin = window.location.origin;
 
   /** Where the user was heading before being stopped, such as a shared binder. */
-  const returnTo = (location.state as { from?: string } | null)?.from ?? '/collection';
+  const returnTo = appPath((location.state as { from?: string } | null)?.from);
 
   // Do not focus on phones: keep their keyboard down; only focus after the splash on desktop.
   useEffect(() => {

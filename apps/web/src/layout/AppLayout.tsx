@@ -22,6 +22,7 @@ import { useMe } from '@/features/auth/queries';
 import { useTrades } from '@/features/trades/queries';
 import { hasPendingAdd } from '@/features/auth';
 import { palette } from '@/theme';
+import { ErrorBoundary } from './ErrorBoundary';
 import { LogoMark } from './LogoMark';
 
 export function AppLayout() {
@@ -201,7 +202,7 @@ export function AppLayout() {
             replace
           />
         )}
-        {showLoader ? <FullPageLoader /> : <Outlet />}
+        <ErrorBoundary>{showLoader ? <FullPageLoader /> : <Outlet />}</ErrorBoundary>
       </Container>
 
       <Box

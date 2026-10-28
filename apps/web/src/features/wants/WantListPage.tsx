@@ -45,8 +45,8 @@ export function WantListPage() {
   const [description, setDescription] = useState('');
   const me = useMe(isAuthenticated);
 
-  const listQuery = useWantList(listId);
-  const itemsQuery = useWantItems(listId);
+  const listQuery = useWantList(isAuthenticated ? listId : undefined);
+  const itemsQuery = useWantItems(isAuthenticated ? listId : undefined);
   const listsQuery = useWantLists(isAuthenticated);
   const deleteList = useDeleteWantList();
   const exportWants = useExportWants(listId);
