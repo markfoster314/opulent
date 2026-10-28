@@ -29,6 +29,13 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: 'api',
+          environment: 'node',
+          include: ['apps/api/src/**/*.test.ts'],
+        },
+      },
+      {
         resolve: {
           alias: {
             '@': webSrc,
