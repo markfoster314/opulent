@@ -46,6 +46,8 @@ import {
 import { ApiError } from '../../lib/http';
 import { snapshotUserValue } from './value';
 
+export { getGroupValues } from './value';
+
 /** Scryfall may publish finishes we do not model yet, so unknown values drop out. */
 function isCardFinish(value: string): value is CardFinish {
   return cardFinishSchema.safeParse(value).success;

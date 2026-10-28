@@ -10,8 +10,8 @@ import {
   wantScopeKey,
 } from '@opulent/shared';
 import { and, eq, sql } from 'drizzle-orm';
+import { parseCsv, toCsvLine } from '../../lib/csv';
 import { ApiError, slugify } from '../../lib/http';
-import { parseCsv, toCsvLine } from '../collection/csv';
 
 const PREVIEW_ROWS = 200;
 const BATCH = 200;

@@ -7,13 +7,9 @@ import { findMatchOwners } from './service';
 
 export const matchRoutes = new Hono<AppEnv>();
 
-matchRoutes.get(
-  '/',
-  requireAuth,
-  requireUser,
-  zValidator('query', matchesQuerySchema),
-  async (c) => {
-    const items = await findMatchOwners(c.get('db'), c.get('user').id, c.req.valid('query').limit);
-    return c.json({ items });
-  },
-);
+matchRoutes.use('*', requireAuth, requireUser);
+
+matchRoutes.get('/', zValidator('query', matchesQuerySchema), async (c) => {
+  const items = await findMatchOwners(c.get('db'), c.get('user').id, c.req.valid('query').limit);
+  return c.json({ items });
+});

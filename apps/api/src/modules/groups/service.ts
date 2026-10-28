@@ -10,8 +10,7 @@ import type {
 } from '@opulent/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
-import { listItemsInGroup } from '../collection/service';
-import { getGroupValues } from '../collection/value';
+import { getGroupValues, listItemsInGroup } from '../collection/service';
 
 type GroupItemQuery = Partial<CollectionItemQuery> & { limit: number };
 

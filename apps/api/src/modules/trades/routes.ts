@@ -16,43 +16,31 @@ import {
 
 export const tradeRoutes = new Hono<AppEnv>();
 
+tradeRoutes.use('*', requireAuth, requireUser);
+
 const tradeIdParam = z.object({ id: z.string().uuid() });
 
-tradeRoutes.get('/', requireAuth, requireUser, async (c) => {
+tradeRoutes.get('/', async (c) => {
   const items = await listTrades(c.get('db'), c.get('user').id);
   return c.json({ items });
 });
 
-tradeRoutes.post(
-  '/',
-  requireAuth,
-  requireUser,
-  zValidator('json', createTradeSchema),
-  async (c) => {
-    const trade = await openTrade(c.get('db'), c.get('user').id, c.req.valid('json'));
-    return c.json(trade, 201);
-  },
-);
+tradeRoutes.post('/', zValidator('json', createTradeSchema), async (c) => {
+  const trade = await openTrade(c.get('db'), c.get('user').id, c.req.valid('json'));
+  return c.json(trade, 201);
+});
 
-tradeRoutes.get(
-  '/:id/choices',
-  requireAuth,
-  requireUser,
-  zValidator('param', tradeIdParam),
-  async (c) => {
-    return c.json(await listChoices(c.get('db'), c.get('user').id, c.req.valid('param').id));
-  },
-);
+tradeRoutes.get('/:id/choices', zValidator('param', tradeIdParam), async (c) => {
+  return c.json(await listChoices(c.get('db'), c.get('user').id, c.req.valid('param').id));
+});
 
-tradeRoutes.get('/:id', requireAuth, requireUser, zValidator('param', tradeIdParam), async (c) => {
+tradeRoutes.get('/:id', zValidator('param', tradeIdParam), async (c) => {
   const trade = await getTrade(c.get('db'), c.get('user').id, c.req.valid('param').id);
   return c.json(trade);
 });
 
 tradeRoutes.post(
   '/:id/propose',
-  requireAuth,
-  requireUser,
   zValidator('param', tradeIdParam),
   zValidator('json', tradeLinesSchema),
   async (c) => {
@@ -68,8 +56,6 @@ tradeRoutes.post(
 
 tradeRoutes.post(
   '/:id/finalize',
-  requireAuth,
-  requireUser,
   zValidator('param', tradeIdParam),
   zValidator('json', tradeLinesSchema),
   async (c) => {
@@ -83,13 +69,7 @@ tradeRoutes.post(
   },
 );
 
-tradeRoutes.post(
-  '/:id/cancel',
-  requireAuth,
-  requireUser,
-  zValidator('param', tradeIdParam),
-  async (c) => {
-    const trade = await cancelTrade(c.get('db'), c.get('user').id, c.req.valid('param').id);
-    return c.json(trade);
-  },
-);
+tradeRoutes.post('/:id/cancel', zValidator('param', tradeIdParam), async (c) => {
+  const trade = await cancelTrade(c.get('db'), c.get('user').id, c.req.valid('param').id);
+  return c.json(trade);
+});

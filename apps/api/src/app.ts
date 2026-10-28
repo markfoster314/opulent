@@ -17,7 +17,7 @@ import { tradeRoutes } from './modules/trades/routes';
 import { userRoutes } from './modules/users/routes';
 import { wantRoutes } from './modules/wants/routes';
 
-/** Modules share service functions, never tables, so each can be split out later. */
+/** A module may import another module's service.ts only. */
 export function createApp() {
   const env = getEnv();
   const app = new Hono<AppEnv>();
