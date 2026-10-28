@@ -23,7 +23,7 @@ pnpm check
 pnpm test:e2e
 ```
 
-`pnpm check` runs formatting, ESLint, TypeScript, and unit tests. Run the relevant E2E tests when the change affects the browser.
+`pnpm check` runs formatting, ESLint, TypeScript, and unit tests. `pnpm check:ci` adds the remaining CI gates: workspace validation, unused code, and CDK synth. Run the relevant E2E tests when the change affects the browser.
 
 ## Branches and commits
 

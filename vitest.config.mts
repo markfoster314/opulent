@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    reporters: process.env.CI ? ['default', 'github-actions'] : ['default'],
     projects: [
       {
         test: {
@@ -37,6 +38,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       reportsDirectory: 'coverage',
+      // Regression floor for the current suite. Raise these numbers as coverage grows.
+      thresholds: {
+        statements: 2,
+        branches: 0.5,
+        functions: 1,
+        lines: 2,
+      },
       include: ['apps/*/src/**/*.{ts,tsx}', 'jobs/*/src/**/*.ts', 'packages/*/src/**/*.ts'],
       exclude: ['**/*.test.{ts,tsx}', '**/test/**', '**/*.d.ts'],
     },

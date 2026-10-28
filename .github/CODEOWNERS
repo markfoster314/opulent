@@ -1,1 +1,13 @@
-* @markfoster314
+# Owners are asked for review on pull requests that touch these paths.
+# Replace the personal handle with team handles as the team grows.
+# The last matching pattern wins, so keep `*` first.
+
+*                     @markfoster314
+
+/apps/api/            @markfoster314
+/apps/web/            @markfoster314
+/packages/            @markfoster314
+/jobs/                @markfoster314
+/infra/               @markfoster314
+/.github/             @markfoster314
+/docs/                @markfoster314
