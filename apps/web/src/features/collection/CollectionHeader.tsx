@@ -43,8 +43,10 @@ export function CollectionHeader({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        justifyContent="space-between"
-        alignItems={{ sm: 'center' }}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: { sm: 'center' },
+        }}
       >
         <Typography variant="h1">{title}</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
@@ -81,7 +83,14 @@ export function CollectionHeader({
       </Stack>
       {exportCsv.error && <Alert severity="error">{exportCsv.error.message}</Alert>}
       {showTotals && totals && (
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            flexWrap: 'wrap',
+          }}
+        >
           <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
           <Chip label={`${money.format(Number(totals.marketValue))} collection value`} />
           <Chip

@@ -79,11 +79,13 @@ export function PriceHistoryChart({
     <Stack spacing={1.5} sx={{ minWidth: 0 }}>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
         spacing={1}
         useFlexGap
-        flexWrap="wrap"
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
       >
         <Typography variant="h4">Price history</Typography>
         <ToggleButtonGroup
@@ -104,7 +106,12 @@ export function PriceHistoryChart({
       {isLoading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error.message}</Alert>}
       {!isLoading && !error && points.length < 2 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Not enough price history for this card yet.
         </Typography>
       )}
@@ -187,11 +194,24 @@ function Reading({
         } over ${windowLabel}`;
 
   return (
-    <Stack direction="row" spacing={1.25} alignItems="baseline" useFlexGap flexWrap="wrap">
+    <Stack
+      direction="row"
+      spacing={1.25}
+      useFlexGap
+      sx={{
+        alignItems: 'baseline',
+        flexWrap: 'wrap',
+      }}
+    >
       <Typography variant="h3" sx={{ fontVariantNumeric: 'tabular-nums' }}>
         {money.format(point.value)}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {formatDay(point.date)}
       </Typography>
       <Typography

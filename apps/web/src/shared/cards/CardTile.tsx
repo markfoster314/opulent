@@ -250,8 +250,19 @@ export function CardTile({
             sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />
         ) : (
-          <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
-            <Typography variant="caption" color="text.secondary">
+          <Stack
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               No image
             </Typography>
           </Stack>
@@ -294,7 +305,13 @@ export function CardTile({
           {card.name}
         </Typography>
         {!nameOnly && (
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {caption ?? `${card.setCode.toUpperCase()} · ${card.collectorNumber}`}
           </Typography>
         )}

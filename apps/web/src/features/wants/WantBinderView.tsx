@@ -119,10 +119,14 @@ function WantBinderCard({
           />
         ) : (
           <Stack
-            alignItems="center"
-            justifyContent="center"
             spacing={0.5}
-            sx={{ height: '100%', p: 1.5, textAlign: 'center' }}
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              p: 1.5,
+              textAlign: 'center',
+            }}
           >
             <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
               {item.cardName ?? 'Card'}
@@ -140,8 +144,8 @@ function WantBinderCard({
                 key={sticker.key}
                 direction="row"
                 spacing={0.5}
-                alignItems="center"
                 sx={{
+                  alignItems: 'center',
                   px: 0.75,
                   py: 0.35,
                   color: palette.background,

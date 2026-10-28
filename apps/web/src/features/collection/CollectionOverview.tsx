@@ -153,10 +153,12 @@ export function CollectionOverview({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
               useFlexGap
-              flexWrap="wrap"
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h3">Value over time</Typography>
               <ChangeControls
@@ -171,7 +173,13 @@ export function CollectionOverview({
 
             <Box sx={{ height: 260, minWidth: 0 }}>
               {history.isLoading ? (
-                <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
+                <Stack
+                  sx={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                  }}
+                >
                   <CircularProgress size={28} />
                 </Stack>
               ) : history.error ? (
@@ -230,10 +238,12 @@ export function CollectionOverview({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
               useFlexGap
-              flexWrap="wrap"
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h3">Value by</Typography>
               <TextField
@@ -254,7 +264,13 @@ export function CollectionOverview({
 
             <Box sx={{ height: 260, minWidth: 0 }}>
               {breakdown.isLoading ? (
-                <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
+                <Stack
+                  sx={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                  }}
+                >
                   <CircularProgress size={28} />
                 </Stack>
               ) : breakdown.error ? (
@@ -308,8 +324,10 @@ export function CollectionOverview({
                           key={bucket.key}
                           direction="row"
                           spacing={0.5}
-                          alignItems="center"
-                          sx={{ minWidth: 0 }}
+                          sx={{
+                            alignItems: 'center',
+                            minWidth: 0,
+                          }}
                         >
                           <Box
                             sx={{
@@ -322,8 +340,10 @@ export function CollectionOverview({
                           />
                           <Typography
                             variant="caption"
-                            color="text.secondary"
-                            sx={{ overflowWrap: 'anywhere' }}
+                            sx={{
+                              color: 'text.secondary',
+                              overflowWrap: 'anywhere',
+                            }}
                           >
                             {bucket.label} · {share.toFixed(1)}%
                           </Typography>

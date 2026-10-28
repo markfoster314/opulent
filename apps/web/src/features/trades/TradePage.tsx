@@ -67,7 +67,13 @@ function TradeEditor({ trade }: { trade: TradeDetail }) {
         <Typography variant="h1" sx={{ overflowWrap: 'anywhere' }}>
           Trade with @{trade.partnerUsername}
         </Typography>
-        <Typography color="text.secondary">{statusLine(trade)}</Typography>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
+          {statusLine(trade)}
+        </Typography>
       </Stack>
 
       {draft && (
@@ -193,15 +199,24 @@ function TradeSide({
         direction="row"
         spacing={1}
         useFlexGap
-        flexWrap="wrap"
-        alignItems="baseline"
-        justifyContent="space-between"
+        sx={{
+          flexWrap: 'wrap',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+        }}
       >
         <Typography variant="h2">{title}</Typography>
         <Typography variant="h3" component="span" sx={{ color: palette.gold }}>
           {formatUsd(total.toFixed(2)) ?? '$0.00'}
           {unpriced > 0 && (
-            <Typography variant="caption" color="text.secondary" component="span" sx={{ ml: 1 }}>
+            <Typography
+              variant="caption"
+              component="span"
+              sx={{
+                color: 'text.secondary',
+                ml: 1,
+              }}
+            >
               {unpriced} unpriced
             </Typography>
           )}
@@ -214,8 +229,10 @@ function TradeSide({
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1.5}
-            alignItems={{ sm: 'center' }}
-            justifyContent="space-between"
+            sx={{
+              alignItems: { sm: 'center' },
+              justifyContent: 'space-between',
+            }}
           >
             <CardFace
               name={card.name}
@@ -275,7 +292,12 @@ function TradeSide({
           {choicesState.isLoading && <CircularProgress size={24} />}
           {choicesState.error && <Alert severity="error">{choicesState.error.message}</Alert>}
           {choicesState.isSuccess && found.length === 0 && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               No more cards match that search.
             </Typography>
           )}
@@ -285,8 +307,10 @@ function TradeSide({
                 key={card.scryfallId}
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={1.5}
-                alignItems={{ sm: 'center' }}
-                justifyContent="space-between"
+                sx={{
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                }}
               >
                 <CardFace
                   name={card.name}
@@ -342,7 +366,14 @@ function CardFace({
   detail: string;
 }) {
   return (
-    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{
+        alignItems: 'center',
+        minWidth: 0,
+      }}
+    >
       {imageUris?.small && (
         <Box
           component="img"
@@ -353,7 +384,12 @@ function CardFace({
       )}
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ overflowWrap: 'anywhere', fontWeight: 600 }}>{name}</Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {setCode.toUpperCase()} · {detail}
         </Typography>
       </Box>

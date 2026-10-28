@@ -53,7 +53,12 @@ function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
     <Stack spacing={3}>
       <Stack spacing={1}>
         <Typography variant="h1">{title}</Typography>
-        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            overflowWrap: 'anywhere',
+          }}
+        >
           {detail}
         </Typography>
       </Stack>
@@ -69,14 +74,16 @@ function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={1.5}
-                justifyContent="space-between"
-                alignItems={{ sm: 'center' }}
+                sx={{
+                  justifyContent: 'space-between',
+                  alignItems: { sm: 'center' },
+                }}
               >
                 <Typography
                   component={RouterLink}
                   to={`/u/${person.username}`}
-                  fontWeight={600}
                   sx={{
+                    fontWeight: 600,
                     minWidth: 0,
                     overflowWrap: 'anywhere',
                     color: 'inherit',
@@ -104,7 +111,13 @@ function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
               to={`/u/${person.username}`}
               sx={{ p: 2, display: 'block', overflowWrap: 'anywhere', ...clickableSurfaceSx }}
             >
-              <Typography fontWeight={600}>@{person.username}</Typography>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
+                @{person.username}
+              </Typography>
             </Paper>
           ),
         )}

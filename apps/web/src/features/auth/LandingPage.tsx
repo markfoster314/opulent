@@ -67,8 +67,11 @@ function Hero({ onSignUp }: { onSignUp: () => void }) {
         </Typography>
         <Typography
           variant="h6"
-          color="text.secondary"
-          sx={{ fontWeight: 400, overflowWrap: 'anywhere' }}
+          sx={{
+            color: 'text.secondary',
+            fontWeight: 400,
+            overflowWrap: 'anywhere',
+          }}
         >
           List the cards you will trade. Share one link. See which of those cards your group is
           hunting right now.
@@ -81,13 +84,23 @@ function Hero({ onSignUp }: { onSignUp: () => void }) {
         >
           Create your binder
         </Button>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Free. About a minute to set up. Already have a list? You can import a CSV.
         </Typography>
       </Stack>
 
       <Stack spacing={1}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           What a match looks like
         </Typography>
         <MatchExamplePaper />
@@ -109,7 +122,12 @@ function PainSection() {
       <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
         The card is often already in the room.
       </Typography>
-      <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+      <Typography
+        sx={{
+          color: 'text.secondary',
+          overflowWrap: 'anywhere',
+        }}
+      >
         You hand a vendor $10 for a mythic. After the event you flip through your friend’s binder
         and there it is, marked for trade. Stings every time.
       </Typography>
@@ -161,7 +179,12 @@ function HowItWorks() {
             <Typography variant="h3" sx={{ mt: 1, mb: 1, overflowWrap: 'anywhere' }}>
               {beat.title}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {beat.body}
             </Typography>
           </Paper>
@@ -216,7 +239,12 @@ function WhatYouGet() {
         <BinderPage title="Your binder" items={binderBenefits} />
         <BinderPage title="The table" items={tableBenefits} />
       </Box>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         Collection tracking comes with it.
       </Typography>
     </Stack>
@@ -287,7 +315,12 @@ function Pocket({ benefit }: { benefit: Benefit }) {
       <Typography variant="h3" sx={{ mb: 0.5, overflowWrap: 'anywhere' }}>
         {benefit.title}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {benefit.body}
       </Typography>
     </Box>
@@ -312,7 +345,12 @@ function StartBinder() {
           <Typography variant="h2" sx={{ overflowWrap: 'anywhere' }}>
             Start your binder
           </Typography>
-          <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          <Typography
+            sx={{
+              color: 'text.secondary',
+              overflowWrap: 'anywhere',
+            }}
+          >
             Search any card in Magic. Choose the set and the details. We take you to sign up, then
             put that card in your collection.
           </Typography>
@@ -350,7 +388,12 @@ function ClosingAsk({ onSignUp }: { onSignUp: () => void }) {
       >
         Create your binder
       </Button>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         Free. Card data comes from Scryfall.
       </Typography>
     </Stack>

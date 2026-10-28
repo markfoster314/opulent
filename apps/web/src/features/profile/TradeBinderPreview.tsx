@@ -193,7 +193,15 @@ export function TradeBinderPreview(props: OwnerProps | VisitorProps) {
       </Box>
 
       <Stack spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           <Typography
             variant="h3"
             sx={{ color: palette.goldLight, textShadow: '0 1px 0 rgba(0, 0, 0, 0.6)' }}

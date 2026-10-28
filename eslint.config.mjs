@@ -5,7 +5,10 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import turbo from 'eslint-plugin-turbo';
 import globals from 'globals';
+import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
+
+const importResolver = fileURLToPath(new URL('./eslint/import-resolver.cjs', import.meta.url));
 
 const apiModules = [
   'users',
@@ -52,6 +55,11 @@ const boundaryPolicy = [
         disallow: { to: { element: { type: 'web-feature' } } },
       },
       {
+        from: { element: { type: 'web-feature' } },
+        disallow: { to: { element: { type: 'web-feature' } } },
+      },
+      // The last match wins, so these exceptions sit after the feature ban.
+      {
         from: { element: { type: 'web-feature', captured: { elementName: 'groups' } } },
         allow: {
           to: { element: { type: 'web-feature', captured: { elementName: 'collection' } } },
@@ -61,7 +69,7 @@ const boundaryPolicy = [
         from: { element: { type: 'web-feature', captured: { elementName: 'home' } } },
         allow: {
           to: {
-            element: { type: 'web-feature', captured: { names: { anyOf: ['matches', 'auth'] } } },
+            element: { type: 'web-feature', captured: { elementName: ['matches', 'auth'] } },
           },
         },
       },
@@ -69,7 +77,7 @@ const boundaryPolicy = [
         from: { element: { type: 'web-feature', captured: { elementName: 'collection' } } },
         allow: {
           to: {
-            element: { type: 'web-feature', captured: { names: { anyOf: ['profile', 'auth'] } } },
+            element: { type: 'web-feature', captured: { elementName: ['profile', 'auth'] } },
           },
         },
       },
@@ -78,8 +86,7 @@ const boundaryPolicy = [
         allow: { to: { element: { type: 'web-feature', captured: { elementName: 'matches' } } } },
       },
       {
-        from: { element: { type: 'web-feature' } },
-        disallow: { to: { element: { type: 'web-feature' } } },
+        allow: { to: { file: { categories: 'web-queries' } } },
       },
     ],
   },
@@ -100,6 +107,7 @@ export default tseslint.config(
       'apps/web/public/mockServiceWorker.js',
       '*.jsonl',
       'eslint.config.mjs',
+      'eslint/**',
       'commitlint.config.mjs',
     ],
   },
@@ -114,23 +122,19 @@ export default tseslint.config(
     },
     plugins: { boundaries, turbo },
     settings: {
+      'import/resolver': {
+        [importResolver]: {},
+      },
       'boundaries/elements': [
-        {
-          type: 'web-queries',
-          pattern: 'apps/web/src/**/queries.ts',
-          partialMatch: false,
-        },
         { type: 'web-shared', pattern: 'apps/web/src/shared/*' },
-        { type: 'web-feature', pattern: 'apps/web/src/features/*' },
+        { type: 'web-feature', pattern: 'apps/web/src/features/*', capture: ['elementName'] },
         { type: 'app', pattern: 'apps/*' },
         { type: 'package', pattern: 'packages/*' },
         { type: 'job', pattern: 'jobs/*' },
         { type: 'infra', pattern: 'infra' },
       ],
+      'boundaries/files': [{ category: 'web-queries', pattern: 'apps/web/src/**/queries.ts' }],
       'boundaries/elements-single-match': true,
-      'boundaries/alias': {
-        '@': './apps/web/src',
-      },
     },
     rules: {
       'boundaries/dependencies': boundaryPolicy,

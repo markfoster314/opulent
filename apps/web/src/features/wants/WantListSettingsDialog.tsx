@@ -123,7 +123,9 @@ export function WantListSettingsDialog({
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
-                    alignItems={{ sm: 'center' }}
+                    sx={{
+                      alignItems: { sm: 'center' },
+                    }}
                   >
                     <TextField
                       value={shareUrl}
@@ -150,7 +152,9 @@ export function WantListSettingsDialog({
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
+                    sx={{
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                    }}
                   >
                     <Button
                       size="small"
@@ -160,7 +164,12 @@ export function WantListSettingsDialog({
                     >
                       Rotate share token
                     </Button>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       Makes every link you have already sent stop working.
                     </Typography>
                   </Stack>

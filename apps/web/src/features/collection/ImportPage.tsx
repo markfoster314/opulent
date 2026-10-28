@@ -81,7 +81,11 @@ export function ImportPage() {
 
       <Stack spacing={1}>
         <Typography variant="h1">Import cards</Typography>
-        <Typography color="text.secondary">
+        <Typography
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Bring a CSV from ManaBox, Moxfield, or our own export. Preview first. Nothing is saved
           until you press Import.
         </Typography>
@@ -93,9 +97,11 @@ export function ImportPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            alignItems={{ sm: 'center' }}
             useFlexGap
-            flexWrap="wrap"
+            sx={{
+              alignItems: { sm: 'center' },
+              flexWrap: 'wrap',
+            }}
           >
             <Button
               variant="outlined"
@@ -112,7 +118,13 @@ export function ImportPage() {
               onChange={(event) => void pickFile(event)}
             />
             {fileName && (
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                }}
+              >
                 {fileName}
               </Typography>
             )}
@@ -143,7 +155,12 @@ export function ImportPage() {
             }
             label="Mark every card For trade when the file does not say"
           />
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Rows match on set code, collector number, and language. When a row has no number, the
             card name plus set is used instead.
           </Typography>
@@ -172,7 +189,12 @@ export function ImportPage() {
       <Paper sx={{ p: 3, borderColor: preview ? palette.gold : undefined }}>
         <Stack spacing={2}>
           <Typography variant="h3">3. Import</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Matched rows are added to your collection. A card you already have gets a higher count.
             Unmatched rows are left out.
           </Typography>
@@ -203,7 +225,15 @@ export function ImportPage() {
 
 function ResultSummary({ result }: { result: CollectionImportResult }) {
   return (
-    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      sx={{
+        flexWrap: 'wrap',
+        alignItems: 'center',
+      }}
+    >
       <Chip size="small" variant="outlined" label={`Format: ${formatLabel[result.format]}`} />
       <Chip size="small" label={`${result.total} rows`} />
       <Chip size="small" color="primary" label={`${result.matched} matched`} />
@@ -219,7 +249,12 @@ function ResultSummary({ result }: { result: CollectionImportResult }) {
         <Chip size="small" variant="outlined" label={`${result.skipped} skipped`} />
       )}
       {result.rows.length < result.total && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Showing the first {result.rows.length}.
         </Typography>
       )}
@@ -259,7 +294,13 @@ function RowTable({ rows }: { rows: ImportRow[] }) {
             <Typography sx={{ overflowWrap: 'anywhere', fontWeight: 600 }}>
               {row.name || '(no name)'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                overflowWrap: 'anywhere',
+              }}
+            >
               Line {row.line} · {row.setCode.toUpperCase() || '—'}
               {row.collectorNumber ? ` #${row.collectorNumber}` : ''} ·{' '}
               {cardConditionLabels[row.condition]} · {cardFinishLabels[row.finish]} ·{' '}
@@ -267,7 +308,12 @@ function RowTable({ rows }: { rows: ImportRow[] }) {
               {row.forTrade ? ' · For trade' : ''}
             </Typography>
             {row.reason && (
-              <Typography variant="body2" color="warning.main">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'warning.main',
+                }}
+              >
                 {row.reason}
               </Typography>
             )}

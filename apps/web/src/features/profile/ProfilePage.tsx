@@ -82,8 +82,10 @@ export function ProfilePage() {
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={2}
-                alignItems={{ sm: 'center' }}
-                justifyContent="space-between"
+                sx={{
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                }}
               >
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -92,14 +94,21 @@ export function ProfilePage() {
                   {page.city && (
                     <Typography
                       variant="body2"
-                      color="text.secondary"
-                      sx={{ overflowWrap: 'anywhere' }}
+                      sx={{
+                        color: 'text.secondary',
+                        overflowWrap: 'anywhere',
+                      }}
                     >
                       {page.city.label}
                     </Typography>
                   )}
                   {page.visibility === 'private' && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {profileVisibilityLabels.private}
                     </Typography>
                   )}
@@ -293,10 +302,21 @@ function Stat({ value, label, to }: { value: number; label: string; to?: string 
         ...(to ? { '&:hover, &:focus-visible': { color: 'primary.main' } } : {}),
       }}
     >
-      <Typography variant="h3" component="span" display="block">
+      <Typography
+        variant="h3"
+        component="span"
+        sx={{
+          display: 'block',
+        }}
+      >
         {value}
       </Typography>
-      <Typography variant="caption" color="inherit">
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'inherit',
+        }}
+      >
         {label}
       </Typography>
     </Box>
@@ -355,7 +375,13 @@ function ProfileLinks({
             {lead.name}
           </Typography>
           {lead.detail && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 0.5,
+              }}
+            >
               {lead.detail}
             </Typography>
           )}
@@ -382,8 +408,11 @@ function ProfileLinks({
             {item.description && (
               <Typography
                 variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5, overflowWrap: 'anywhere' }}
+                sx={{
+                  color: 'text.secondary',
+                  mt: 0.5,
+                  overflowWrap: 'anywhere',
+                }}
               >
                 {item.description}
               </Typography>

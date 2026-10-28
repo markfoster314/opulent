@@ -25,7 +25,15 @@ export function SharedWantListPage() {
           {list?.name}
         </Typography>
         <Typography color="secondary">Shared by @{handle}</Typography>
-        {list?.description && <Typography color="text.secondary">{list.description}</Typography>}
+        {list?.description && (
+          <Typography
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
+            {list.description}
+          </Typography>
+        )}
         <Typography variant="body2" color="secondary">
           {items.length} card{items.length === 1 ? '' : 's'}
         </Typography>

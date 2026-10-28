@@ -77,15 +77,22 @@ export function TradeMatchesPanel({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1.5}
-        alignItems={{ sm: 'center' }}
-        justifyContent="space-between"
-        sx={{ mb: 2 }}
+        sx={{
+          alignItems: { sm: 'center' },
+          justifyContent: 'space-between',
+          mb: 2,
+        }}
       >
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h3">
             {matches.length} match{matches.length === 1 ? '' : 'es'} for your want list
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Cards you are hunting that {sourceLabel} is holding for trade.
           </Typography>
         </Box>
@@ -100,7 +107,14 @@ export function TradeMatchesPanel({
         )}
       </Stack>
       {!picking && (
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            flexWrap: 'wrap',
+          }}
+        >
           {matches.map((match) => (
             <Chip
               key={match.wantId}
@@ -123,8 +137,10 @@ export function TradeMatchesPanel({
                 key={match.wantId}
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={1}
-                alignItems={{ sm: 'center' }}
-                justifyContent="space-between"
+                sx={{
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                }}
               >
                 <FormControlLabel
                   sx={{ minWidth: 0, alignItems: 'flex-start', mr: 0 }}

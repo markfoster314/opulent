@@ -63,12 +63,13 @@ export function CitySearchField({
           placeholder="Austin, Texas, United States"
           helperText={helperText}
           slotProps={{
+            ...params.slotProps,
             input: {
-              ...params.InputProps,
+              ...params.slotProps.input,
               endAdornment: (
                 <>
                   {isFetching && !value ? <CircularProgress size={18} /> : null}
-                  {params.InputProps.endAdornment}
+                  {params.slotProps.input.endAdornment}
                 </>
               ),
             },

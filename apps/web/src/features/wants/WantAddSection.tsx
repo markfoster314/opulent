@@ -48,7 +48,13 @@ export function WantAddSection({
         <Stack spacing={2} id="add-want-section">
           <Paper sx={{ p: { xs: 2, sm: 3 } }}>
             <Stack spacing={2}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack
+                direction="row"
+                sx={{
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
                 <Typography
                   variant="overline"
                   sx={{ color: palette.goldLight, letterSpacing: '0.14em' }}

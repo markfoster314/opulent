@@ -25,8 +25,13 @@ const failures: string[] = [];
 const alarms = resources.filter((resource) => resource.Type === 'AWS::CloudWatch::Alarm');
 if (alarms.length < 3) failures.push(`expected at least 3 alarms, found ${alarms.length}`);
 
-if (!resources.some((resource) => resource.id.includes('MigrateFunction'))) {
-  failures.push('expected a migrate function');
+const migrateFunctions = resources.filter(
+  (resource) =>
+    resource.Type === 'AWS::Lambda::Function' && resource.id.includes('MigrateFunction'),
+);
+if (migrateFunctions.length === 0) failures.push('expected a migrate function');
+if (!JSON.stringify(migrateFunctions).includes('nodejs26.x')) {
+  failures.push('the migrate Lambda must use the Node 26 runtime');
 }
 
 if (!resources.some((resource) => resource.Type === 'Custom::CDKBucketDeployment')) {
@@ -57,6 +62,7 @@ if (!apiJson.includes('Endpoint.Address')) {
 }
 if (!apiJson.includes('WEB_ORIGIN')) failures.push('the API Lambda is missing WEB_ORIGIN');
 if (!apiJson.includes('arm64')) failures.push('the API Lambda must use the ARM processor');
+if (!apiJson.includes('nodejs26.x')) failures.push('the API Lambda must use the Node 26 runtime');
 if (!apiJson.includes('1024')) failures.push('the API Lambda must use 1024 MB');
 if (!apiJson.includes('ReservedConcurrentExecutions')) {
   failures.push('the API Lambda is missing a concurrency cap');

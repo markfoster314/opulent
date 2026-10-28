@@ -113,7 +113,13 @@ export function CollectionPage() {
             <Stack spacing={2} id="add-card-section">
               <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={2}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Stack
+                    direction="row"
+                    sx={{
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
                     <Typography
                       variant="overline"
                       sx={{ color: palette.goldLight, letterSpacing: '0.14em' }}
@@ -230,7 +236,13 @@ function GroupsSection() {
   return (
     <Stack spacing={2}>
       <Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             Groups
           </Typography>
@@ -275,7 +287,12 @@ function GroupsSection() {
       {isLoading && <CircularProgress />}
       {error && <Alert severity="error">{error.message}</Alert>}
       {data && data.items.length === 0 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           No groups yet. They are optional. Use them to mark a pile, like a deck box or a trade
           stack.
         </Typography>
@@ -307,11 +324,13 @@ function GroupsSection() {
           >
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
               useFlexGap
-              flexWrap="wrap"
               spacing={1}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 {group.name}
@@ -320,8 +339,10 @@ function GroupsSection() {
                 direction="row"
                 spacing={0.5}
                 useFlexGap
-                flexWrap="wrap"
-                sx={{ justifyContent: 'flex-end' }}
+                sx={{
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end',
+                }}
               >
                 <Chip label={`${group.itemCount ?? 0} cards`} size="small" variant="outlined" />
                 <Chip
@@ -333,7 +354,13 @@ function GroupsSection() {
               </Stack>
             </Stack>
             {group.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mt: 0.5,
+                }}
+              >
                 {group.description}
               </Typography>
             )}

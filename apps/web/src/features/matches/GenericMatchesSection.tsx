@@ -47,9 +47,11 @@ export function GenericMatchesSection() {
                 direction="row"
                 spacing={1}
                 useFlexGap
-                flexWrap="wrap"
-                alignItems="center"
-                justifyContent="space-between"
+                sx={{
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
               >
                 <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                   @{owner.username}
@@ -60,7 +62,12 @@ export function GenericMatchesSection() {
                   label={`${owner.matchCount} match${owner.matchCount === 1 ? '' : 'es'}`}
                 />
               </Stack>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {owner.city ?? 'No city'} · {distanceLabel(owner.distanceMeters)}
               </Typography>
               <Stack spacing={0.5}>

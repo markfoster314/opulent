@@ -107,16 +107,20 @@ export function WantsPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            justifyContent="space-between"
-            alignItems={{ sm: 'center' }}
+            sx={{
+              justifyContent: 'space-between',
+              alignItems: { sm: 'center' },
+            }}
           >
             <Typography variant="h1">My wants</Typography>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               useFlexGap
-              flexWrap="wrap"
-              sx={{ flexShrink: 0 }}
+              sx={{
+                flexWrap: 'wrap',
+                flexShrink: 0,
+              }}
             >
               <Button
                 variant="contained"
@@ -148,7 +152,14 @@ export function WantsPage() {
             </Stack>
           </Stack>
           {exportWants.error && <Alert severity="error">{exportWants.error.message}</Alert>}
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{
+              flexWrap: 'wrap',
+            }}
+          >
             <Chip label={`${totalCopies} card${totalCopies === 1 ? '' : 's'}`} />
             <Chip label={`${highPriority} high priority`} />
             <Chip label={`${lists.length} list${lists.length === 1 ? '' : 's'}`} />
@@ -218,7 +229,13 @@ export function WantsPage() {
       <Divider />
 
       <Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             Lists
           </Typography>
@@ -278,11 +295,13 @@ export function WantsPage() {
           >
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
               useFlexGap
-              flexWrap="wrap"
               spacing={1}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 {list.name}
@@ -297,8 +316,11 @@ export function WantsPage() {
             {list.description && (
               <Typography
                 variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5, overflowWrap: 'anywhere' }}
+                sx={{
+                  color: 'text.secondary',
+                  mt: 0.5,
+                  overflowWrap: 'anywhere',
+                }}
               >
                 {list.description}
               </Typography>
@@ -317,7 +339,14 @@ export function WantsPage() {
       <Divider />
 
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <Typography variant="h2">All wants</Typography>
           <Button component={RouterLink} to="/wants/all" variant="outlined">
             View all wants

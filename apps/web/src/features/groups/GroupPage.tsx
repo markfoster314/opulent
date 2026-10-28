@@ -158,10 +158,18 @@ export function GroupPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            justifyContent="space-between"
-            alignItems={{ xs: 'stretch', sm: 'center' }}
+            sx={{
+              justifyContent: 'space-between',
+              alignItems: { xs: 'stretch', sm: 'center' },
+            }}
           >
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Typography variant="h2">Cards</Typography>
               <Chip size="small" label={group.itemCount ?? 0} />
             </Stack>
@@ -169,8 +177,10 @@ export function GroupPage() {
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               useFlexGap
-              flexWrap="wrap"
-              justifyContent={{ sm: 'flex-end' }}
+              sx={{
+                flexWrap: 'wrap',
+                justifyContent: { sm: 'flex-end' },
+              }}
             >
               <Button
                 variant="contained"
@@ -222,7 +232,13 @@ export function GroupPage() {
               <Stack spacing={2} id="add-card-section">
                 <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                   <Stack spacing={2}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack
+                      direction="row"
+                      sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
                       <Typography
                         variant="overline"
                         sx={{ color: palette.goldLight, letterSpacing: '0.14em' }}

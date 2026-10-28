@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "aws-cdk-lib": "catalog:",
-    "constructs": "^10.4.2"
+    "constructs": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

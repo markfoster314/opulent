@@ -31,16 +31,20 @@ function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: s
       <Stack
         direction={{ xs: 'row', sm: 'column' }}
         spacing={1}
-        alignItems={{ xs: 'center', sm: 'stretch' }}
-        justifyContent={{ xs: 'space-between', sm: 'flex-start' }}
+        sx={{
+          alignItems: { xs: 'center', sm: 'stretch' },
+          justifyContent: { xs: 'space-between', sm: 'flex-start' },
+        }}
       >
         <Stack
           direction="row"
           spacing={0.75}
-          alignItems="center"
           useFlexGap
-          flexWrap="wrap"
-          sx={{ minWidth: 0 }}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            minWidth: 0,
+          }}
         >
           <Box sx={{ display: 'inline-flex', color: palette.steel }}>{icon}</Box>
           <Typography sx={labelSx}>{label}</Typography>

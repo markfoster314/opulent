@@ -167,8 +167,10 @@ export function WantCardsBrowser({
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={1}
-        justifyContent="flex-end"
-        sx={{ width: '100%' }}
+        sx={{
+          justifyContent: 'flex-end',
+          width: '100%',
+        }}
       >
         <WantSortSelect
           sort={sort}
@@ -353,7 +355,13 @@ export function WantCardsBrowser({
                   : `${deleteItem.cardName ?? 'This card'} will be removed from All wants.`}
               </Typography>
               {mutationError && <Alert severity="error">{mutationError}</Alert>}
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{
+                  justifyContent: 'flex-end',
+                }}
+              >
                 <Button
                   onClick={() => setDeleteId(null)}
                   disabled={saving}

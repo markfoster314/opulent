@@ -41,7 +41,12 @@ export function WelcomePage() {
 
   if (!me.data) {
     return (
-      <Stack alignItems="center" sx={{ py: 8 }}>
+      <Stack
+        sx={{
+          alignItems: 'center',
+          py: 8,
+        }}
+      >
         <CircularProgress />
       </Stack>
     );
@@ -162,7 +167,12 @@ function WelcomeForm({ me }: { me: Me }) {
                   </>
                 )}
               </Typography>
-              <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                sx={{
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                }}
+              >
                 {onCity
                   ? 'Optional. It sorts the closest trades first, and you can change it later on your profile.'
                   : 'This is the name people see, and the name in every binder link you share.'}
@@ -216,8 +226,10 @@ function WelcomeForm({ me }: { me: Me }) {
                 {normalized.length > 0 && shape.success && !reserved && (
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ overflowWrap: 'anywhere' }}
+                    sx={{
+                      color: 'text.secondary',
+                      overflowWrap: 'anywhere',
+                    }}
                   >
                     Your profile link: {origin}/u/{normalized}
                   </Typography>
@@ -234,8 +246,10 @@ function WelcomeForm({ me }: { me: Me }) {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
-          justifyContent={{ sm: 'flex-end' }}
-          sx={{ '& .MuiButton-root': { width: { xs: '100%', sm: 'auto' } } }}
+          sx={{
+            justifyContent: { sm: 'flex-end' },
+            '& .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
+          }}
         >
           {onCity && (
             <Button color="secondary" onClick={() => setStep(0)} disabled={saving}>
@@ -261,8 +275,20 @@ function WelcomeForm({ me }: { me: Me }) {
 function StepBar({ step }: { step: number }) {
   return (
     <Stack spacing={1}>
-      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="baseline">
-        <Typography variant="caption" color="text.secondary">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Account setup · step {step + 1} of {STEPS.length}
         </Typography>
         <Typography variant="caption" sx={{ color: palette.goldLight }}>

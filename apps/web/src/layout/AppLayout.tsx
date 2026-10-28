@@ -85,10 +85,15 @@ export function AppLayout() {
           <Stack
             direction="row"
             spacing={1.25}
-            alignItems="center"
             component={RouterLink}
             to="/"
-            sx={{ textDecoration: 'none', color: 'inherit', minWidth: 0, mr: { sm: 2 } }}
+            sx={{
+              alignItems: 'center',
+              textDecoration: 'none',
+              color: 'inherit',
+              minWidth: 0,
+              mr: { sm: 2 },
+            }}
           >
             <LogoMark />
             <Typography variant="h6" noWrap sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
@@ -163,7 +168,14 @@ export function AppLayout() {
           },
         }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            mb: 2,
+          }}
+        >
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
             Menu
           </Typography>
@@ -213,7 +225,12 @@ export function AppLayout() {
           textAlign: 'center',
         }}
       >
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Card data and images courtesy of Scryfall. Opulent Tutor is unofficial Fan Content
           permitted under the Wizards of the Coast Fan Content Policy, and is not produced or
           endorsed by Wizards of the Coast or Scryfall.
@@ -237,7 +254,7 @@ interface BarActionsProps {
   pathname: string;
   onSignIn: () => void;
   onSignOut: () => void;
-  sx?: SxProps<Theme>;
+  sx?: Exclude<SxProps<Theme>, readonly unknown[]>;
 }
 
 /** The same links: a row in a wide bar, stacked in the phone menu. */
@@ -266,8 +283,12 @@ function BarActions({
     <Stack
       direction={stacked ? 'column' : 'row'}
       spacing={stacked ? 1 : part === 'account' ? 2 : 1}
-      alignItems={stacked ? 'stretch' : 'center'}
-      sx={sx}
+      sx={[
+        {
+          alignItems: stacked ? 'stretch' : 'center',
+        },
+        ...(sx === undefined ? [] : [sx]),
+      ]}
     >
       {showLinks && (
         <>

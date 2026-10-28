@@ -24,7 +24,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <Stack spacing={3} alignItems="flex-start">
+      <Stack
+        spacing={3}
+        sx={{
+          alignItems: 'flex-start',
+        }}
+      >
         <Typography variant="h1">Something went wrong</Typography>
         <Button variant="outlined" onClick={() => window.location.reload()}>
           Reload

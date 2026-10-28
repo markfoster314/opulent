@@ -48,7 +48,14 @@ export function CollectionItemDialog({
       slotProps={{ paper: { sx: { borderColor: palette.goldBorder } } }}
     >
       <DialogTitle component="div" sx={{ pr: 1.5 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+          }}
+        >
           <Stack spacing={0.25} sx={{ minWidth: 0 }}>
             <Typography
               variant="overline"
@@ -63,7 +70,13 @@ export function CollectionItemDialog({
             >
               {item.card?.name ?? 'Card'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                overflowWrap: 'anywhere',
+              }}
+            >
               {[item.card?.setName, item.card?.setCode?.toUpperCase(), item.card?.collectorNumber]
                 .filter(Boolean)
                 .join(' · ')}

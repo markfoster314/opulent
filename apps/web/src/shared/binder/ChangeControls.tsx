@@ -29,12 +29,27 @@ export function ChangeControls({
     <Stack
       direction={{ xs: 'column', md: 'row' }}
       spacing={1.5}
-      alignItems={{ md: 'center' }}
       useFlexGap
-      flexWrap="wrap"
+      sx={{
+        alignItems: { md: 'center' },
+        flexWrap: 'wrap',
+      }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-        <Typography variant="caption" color="text.secondary">
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {rangeLabel}
         </Typography>
         <ToggleButtonGroup
@@ -53,8 +68,21 @@ export function ChangeControls({
       </Stack>
 
       {showMode && (
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-          <Typography variant="caption" color="text.secondary">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Show as
           </Typography>
           <ToggleButtonGroup

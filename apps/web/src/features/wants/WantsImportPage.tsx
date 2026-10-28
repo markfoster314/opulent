@@ -85,9 +85,11 @@ export function WantsImportPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            alignItems={{ sm: 'center' }}
             useFlexGap
-            flexWrap="wrap"
+            sx={{
+              alignItems: { sm: 'center' },
+              flexWrap: 'wrap',
+            }}
           >
             <Button
               variant="outlined"
@@ -104,7 +106,13 @@ export function WantsImportPage() {
               onChange={(event) => void pickFile(event)}
             />
             {fileName && (
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                }}
+              >
                 {fileName}
               </Typography>
             )}
@@ -160,14 +168,26 @@ export function WantsImportPage() {
         <Paper sx={{ p: { xs: 2, sm: 3 } }}>
           <Stack spacing={2}>
             <Typography variant="h3">2. Preview</Typography>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               <Chip label={`${preview.total} rows`} />
               <Chip color="primary" label={`${preview.matched} matched`} />
               {preview.unmatched > 0 && <Chip label={`${preview.unmatched} unmatched`} />}
               {preview.skipped > 0 && <Chip label={`${preview.skipped} skipped`} />}
             </Stack>
             {preview.listsCreated.length > 0 && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 New lists: {preview.listsCreated.join(', ')}
               </Typography>
             )}
@@ -182,18 +202,37 @@ export function WantsImportPage() {
                     minWidth: 0,
                   }}
                 >
-                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
                     <Typography variant="body2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                       {row.line}. {row.name || 'No name'}
                     </Typography>
                     <Chip size="small" label={row.status} />
                     {row.setCode && <Chip size="small" variant="outlined" label={row.setCode} />}
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {row.quantity} copies
                     </Typography>
                   </Stack>
                   {row.reason && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                        mt: 0.5,
+                      }}
+                    >
                       {row.reason}
                     </Typography>
                   )}

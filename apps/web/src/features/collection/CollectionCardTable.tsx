@@ -149,11 +149,23 @@ export function CollectionCardRow({
         <Stack
           direction="row"
           spacing={1.25}
-          alignItems="center"
-          sx={{ flex: 1, minWidth: 0, pl: 1.25, pr: expandable ? 0.5 : { xs: 1.25, sm: 1.75 } }}
+          sx={{
+            alignItems: 'center',
+            flex: 1,
+            minWidth: 0,
+            pl: 1.25,
+            pr: expandable ? 0.5 : { xs: 1.25, sm: 1.75 },
+          }}
         >
           <Stack sx={{ minWidth: 0, flex: 1 }}>
-            <Stack direction="row" spacing={0.75} alignItems="baseline" sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{
+                alignItems: 'baseline',
+                minWidth: 0,
+              }}
+            >
               <Typography variant="body2" noWrap title={item.name} sx={{ minWidth: 0 }}>
                 {item.name}
               </Typography>
@@ -166,7 +178,13 @@ export function CollectionCardRow({
                 </Typography>
               )}
             </Stack>
-            <Typography variant="caption" color="text.secondary" noWrap>
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {item.setCode.toUpperCase()}
               {finishNote}
             </Typography>

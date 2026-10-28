@@ -113,7 +113,9 @@ export function BinderCardDialog({
         <Stack
           spacing={2}
           direction={{ xs: 'column', sm: 'row' }}
-          alignItems={{ sm: 'flex-start' }}
+          sx={{
+            alignItems: { sm: 'flex-start' },
+          }}
         >
           <Box
             sx={{
@@ -131,7 +133,12 @@ export function BinderCardDialog({
                 sx={{ width: '100%', height: 'auto', display: 'block', borderRadius: 1 }}
               />
             ) : (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 No image
               </Typography>
             )}
@@ -168,7 +175,11 @@ export function BinderCardDialog({
                   : `Added to your trade with @${ownerUsername}.`}
               </Alert>
             ) : (
-              <Typography color="text.secondary">
+              <Typography
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {!isAuthenticated
                   ? `Sign in to trade this card with @${ownerUsername}.`
                   : trades.isLoading

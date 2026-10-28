@@ -65,7 +65,15 @@ export function TradeBinderSettings({ me }: { me: Me }) {
   return (
     <Paper sx={{ p: { xs: 2, sm: 3 }, borderColor: palette.goldBorder }}>
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           <Typography variant="h3">Binder settings</Typography>
           <Chip
             size="small"
@@ -96,7 +104,14 @@ export function TradeBinderSettings({ me }: { me: Me }) {
 
         {shareUrl && (
           <Stack spacing={0.5}>
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
               <Typography
                 variant="body2"
                 sx={{

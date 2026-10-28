@@ -170,8 +170,10 @@ export function CollectionItemForm({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        justifyContent={editingOne ? 'flex-end' : 'space-between'}
-        sx={{ pt: 1 }}
+        sx={{
+          justifyContent: editingOne ? 'flex-end' : 'space-between',
+          pt: 1,
+        }}
       >
         {!editingOne && (
           <Button

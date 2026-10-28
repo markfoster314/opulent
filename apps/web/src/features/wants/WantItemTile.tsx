@@ -127,11 +127,13 @@ export function WantItemTile({
       {!readOnly && (
         <Stack
           direction="row"
-          alignItems="center"
-          justifyContent="center"
           spacing={0.25}
           useFlexGap
-          flexWrap="wrap"
+          sx={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+          }}
         >
           <IconButton
             size="small"

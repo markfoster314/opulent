@@ -107,14 +107,25 @@ function WantCardRow({
         <Stack
           direction="row"
           spacing={1.25}
-          alignItems="center"
-          sx={{ flex: 1, minWidth: 0, pl: 1.25, pr: expandable ? 0.5 : { xs: 1.25, sm: 1.75 } }}
+          sx={{
+            alignItems: 'center',
+            flex: 1,
+            minWidth: 0,
+            pl: 1.25,
+            pr: expandable ? 0.5 : { xs: 1.25, sm: 1.75 },
+          }}
         >
           <Stack sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="body2" noWrap title={item.cardName ?? 'Card'} sx={{ minWidth: 0 }}>
               {item.cardName ?? 'Card'}
             </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {describeWantScope(item)}
             </Typography>
           </Stack>

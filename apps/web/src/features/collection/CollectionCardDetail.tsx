@@ -1,5 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RemoveIcon from '@mui/icons-material/Remove';
 import {
@@ -200,15 +200,24 @@ export function CollectionCardDetail({
             <Stack
               direction="row"
               spacing={1}
-              justifyContent="space-between"
-              alignItems="flex-start"
               useFlexGap
-              flexWrap="wrap"
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h3" sx={{ overflowWrap: 'anywhere', flex: 1, minWidth: 150 }}>
                 {card?.name ?? 'Card'}
               </Typography>
-              <Stack direction="row" spacing={0.25} alignItems="center" sx={{ flexShrink: 0 }}>
+              <Stack
+                direction="row"
+                spacing={0.25}
+                sx={{
+                  alignItems: 'center',
+                  flexShrink: 0,
+                }}
+              >
                 <Tooltip title="Remove one copy">
                   <span>
                     <IconButton
@@ -263,7 +272,12 @@ export function CollectionCardDetail({
                 </Tooltip>
               </Stack>
             </Stack>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {[
                 card?.setName,
                 card?.setCode.toUpperCase(),
@@ -276,7 +290,12 @@ export function CollectionCardDetail({
             </Typography>
             {card?.typeLine && <Typography variant="body2">{card.typeLine}</Typography>}
             {card?.manaCost && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 Mana cost: {card.manaCost}
               </Typography>
             )}
@@ -285,14 +304,31 @@ export function CollectionCardDetail({
                 {card.oracleText}
               </Typography>
             )}
-            <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               {card?.artist && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   Art by {card.artist}
                 </Typography>
               )}
               {card?.releasedAt && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   Released {card.releasedAt}
                 </Typography>
               )}
@@ -311,16 +347,25 @@ export function CollectionCardDetail({
           <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
               spacing={1}
               useFlexGap
-              flexWrap="wrap"
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
             >
               <Typography variant="h4">
                 {item.quantity > 1 ? 'Your copies' : 'Your copy'}
               </Typography>
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                sx={{
+                  flexWrap: 'wrap',
+                }}
+              >
                 {item.quantity > 1 ? (
                   <>
                     <Button
@@ -477,8 +522,21 @@ export function CollectionCardDetail({
 
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <Stack direction="row" spacing={1.5} justifyContent="space-between" sx={{ minWidth: 0 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{
+        justifyContent: 'space-between',
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          flexShrink: 0,
+        }}
+      >
         {label}
       </Typography>
       <Typography

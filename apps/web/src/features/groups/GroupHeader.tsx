@@ -52,14 +52,21 @@ export function GroupHeader({
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
-          justifyContent="space-between"
-          alignItems={{ sm: 'flex-start' }}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: { sm: 'flex-start' },
+          }}
         >
           <Stack spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
             {editing ? (
               <Stack spacing={1.25}>
                 <Stack spacing={0.25}>
-                  <Typography variant="overline" color="text.secondary">
+                  <Typography
+                    variant="overline"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     Group name
                   </Typography>
                   <TextField
@@ -82,7 +89,12 @@ export function GroupHeader({
                   />
                 </Stack>
                 <Stack spacing={0.25}>
-                  <Typography variant="overline" color="text.secondary">
+                  <Typography
+                    variant="overline"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     Description
                   </Typography>
                   <TextField
@@ -109,7 +121,12 @@ export function GroupHeader({
                   {group.name}
                 </Typography>
                 {group.description && (
-                  <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                  <Typography
+                    sx={{
+                      color: 'text.secondary',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
                     {group.description}
                   </Typography>
                 )}
@@ -121,8 +138,10 @@ export function GroupHeader({
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
             useFlexGap
-            flexWrap="wrap"
-            sx={{ flexShrink: 0 }}
+            sx={{
+              flexWrap: 'wrap',
+              flexShrink: 0,
+            }}
           >
             {editing ? (
               <>

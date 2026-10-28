@@ -163,14 +163,26 @@ export function AddCardPanel({
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          mb: 2,
+        }}
+      >
         <Stack spacing={1} sx={{ minWidth: 0 }}>
           <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
             {card.name}
           </Typography>
           {step === 'details' ? (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {printing.setName ?? printing.setCode.toUpperCase()} · #{printing.collectorNumber}
                 {printing.rarity ? ` · ${printing.rarity}` : ''}
               </Typography>
@@ -333,8 +345,19 @@ function DetailsStep({
               sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
             />
           ) : (
-            <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
-              <Typography variant="caption" color="text.secondary">
+            <Stack
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 No image
               </Typography>
             </Stack>
@@ -354,12 +377,22 @@ function DetailsStep({
             {formattedUnitPrice ? (
               <>
                 <Typography variant="h3">{formattedUnitPrice}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {priceCaption}
                 </Typography>
               </>
             ) : priceKind === 'custom' ? null : (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 No market price is stored for this finish.
               </Typography>
             )}
@@ -383,7 +416,9 @@ function DetailsStep({
                   target="_blank"
                   rel="noreferrer"
                   variant="caption"
-                  color="text.secondary"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
                 >
                   {label}
                 </Link>

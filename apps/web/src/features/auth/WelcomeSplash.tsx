@@ -63,8 +63,11 @@ export function WelcomeSplash({ onDone }: WelcomeSplashProps) {
     >
       <Stack
         spacing={{ xs: 3, sm: 4 }}
-        alignItems="center"
-        sx={{ maxWidth: 520, textAlign: 'center' }}
+        sx={{
+          alignItems: 'center',
+          maxWidth: 520,
+          textAlign: 'center',
+        }}
       >
         <Box sx={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
           {!reduced && (

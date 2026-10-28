@@ -24,6 +24,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
+/** CDK 2.275 has no NODEJS_26_X member yet. This name is the runtime Lambda keeps after the general release. */
+const nodeRuntime = new lambda.Runtime('nodejs26.x', lambda.RuntimeFamily.NODEJS);
+
 export interface OpulentTutorStackProps extends cdk.StackProps {
   stage: string;
   auth0Domain: string;
@@ -86,7 +89,7 @@ export class OpulentTutorStack extends cdk.Stack {
     // API: the whole backend in one Lambda function
 
     const apiFunction = new lambda.Function(this, 'ApiFunction', {
-      runtime: lambda.Runtime.NODEJS_24_X,
+      runtime: nodeRuntime,
       architecture: lambda.Architecture.ARM_64,
       handler: 'lambda.handler',
       // Built by `pnpm --filter @opulent/api run build` before deploying.
@@ -131,7 +134,7 @@ export class OpulentTutorStack extends cdk.Stack {
       entry: path.join(repoRoot, 'packages', 'db', 'src', 'migrate-aws.ts'),
       projectRoot: repoRoot,
       depsLockFilePath: path.join(repoRoot, 'pnpm-lock.yaml'),
-      runtime: lambda.Runtime.NODEJS_24_X,
+      runtime: nodeRuntime,
       architecture: lambda.Architecture.ARM_64,
       handler: 'handler',
       vpc,

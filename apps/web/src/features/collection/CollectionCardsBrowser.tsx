@@ -231,7 +231,13 @@ export function CollectionCardsBrowser({
               >
                 {editItem.card?.name ?? 'Card'}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                }}
+              >
                 {[
                   editItem.card?.setName,
                   editItem.card?.setCode?.toUpperCase(),
@@ -263,7 +269,13 @@ export function CollectionCardsBrowser({
                 Remove all {deleteItem.quantity} copies of {deleteItem.card?.name ?? 'this card'}?
               </Typography>
               {removeItem.error && <Alert severity="error">{removeItem.error.message}</Alert>}
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{
+                  justifyContent: 'flex-end',
+                }}
+              >
                 <Button
                   onClick={() => setDeleteItem(null)}
                   disabled={removeItem.isPending}

@@ -44,7 +44,13 @@ export function TradesPage() {
         sx={{ p: 2.5, display: 'block', minWidth: 0, ...clickableSurfaceSx }}
       >
         <Typography variant="h2">Completed trades</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+          }}
+        >
           Open the full list of your past trades.
         </Typography>
       </Paper>
@@ -66,7 +72,13 @@ export function PastTradesPage() {
     <Stack spacing={3}>
       <Stack spacing={1}>
         <Typography variant="h1">Past trades</Typography>
-        <Typography color="text.secondary">Completed and cancelled trades.</Typography>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
+          Completed and cancelled trades.
+        </Typography>
       </Stack>
       {items.length === 0 && <Alert severity="info">No past trades yet.</Alert>}
       {items.map((trade) => (
@@ -106,7 +118,13 @@ function TradeCard({ trade }: { trade: TradeSummary }) {
       <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
         @{trade.partnerUsername}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+        }}
+      >
         {tradeCaption(trade)}
       </Typography>
       <Typography variant="body2" sx={{ mt: 1 }}>

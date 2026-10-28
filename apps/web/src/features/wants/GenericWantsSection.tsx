@@ -151,7 +151,15 @@ export function GenericWantsSection() {
   return (
     <Stack spacing={2}>
       <Box>
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             Generic wants
           </Typography>
@@ -311,8 +319,10 @@ export function GenericWantsSection() {
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1.5}
-              justifyContent="space-between"
-              alignItems={{ xs: 'stretch', sm: 'center' }}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: { xs: 'stretch', sm: 'center' },
+              }}
             >
               <Typography sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 {describeGenericWant(item)}

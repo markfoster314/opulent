@@ -39,12 +39,21 @@ export function MineAllWantsPage() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
-          justifyContent="space-between"
-          alignItems={{ sm: 'flex-start' }}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: { sm: 'flex-start' },
+          }}
         >
           <Stack spacing={1}>
             <Typography variant="h1">All wants</Typography>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               <Chip label={`${totalCopies} card${totalCopies === 1 ? '' : 's'}`} />
               <Chip label={`${highPriority} high priority`} />
               <Chip label={`${listItems.length} list${listItems.length === 1 ? '' : 's'}`} />
@@ -68,7 +77,13 @@ export function MineAllWantsPage() {
       <Divider />
 
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Typography variant="h2">Cards</Typography>
           <Chip size="small" label={items.length} />
         </Stack>

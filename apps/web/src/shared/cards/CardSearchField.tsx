@@ -60,7 +60,12 @@ export function CardSearchField({
           <Box>
             <Typography variant="body2">{card.name}</Typography>
             {showSet && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {card.setName ?? card.setCode.toUpperCase()}
               </Typography>
             )}
@@ -74,12 +79,13 @@ export function CardSearchField({
           label={label}
           placeholder="Lightning Bolt"
           slotProps={{
+            ...params.slotProps,
             input: {
-              ...params.InputProps,
+              ...params.slotProps.input,
               endAdornment: (
                 <>
                   {isFetching ? <CircularProgress size={18} /> : null}
-                  {params.InputProps.endAdornment}
+                  {params.slotProps.input.endAdornment}
                 </>
               ),
             },

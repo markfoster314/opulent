@@ -10,16 +10,24 @@ export function MatchExamplePaper() {
           direction="row"
           spacing={1}
           useFlexGap
-          flexWrap="wrap"
-          alignItems="center"
-          justifyContent="space-between"
+          sx={{
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
         >
           <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             @jamie
           </Typography>
           <Chip size="small" color="primary" label="3 matches" />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            overflowWrap: 'anywhere',
+          }}
+        >
           Portland · 2.4 mi away
         </Typography>
         <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>

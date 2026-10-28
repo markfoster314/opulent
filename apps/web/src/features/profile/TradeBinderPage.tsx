@@ -113,10 +113,17 @@ export function TradeBinderPage() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          justifyContent="space-between"
+          sx={{
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'space-between',
+          }}
         >
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Viewing as owner
           </Typography>
           <Button
@@ -145,8 +152,10 @@ export function TradeBinderPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            justifyContent="space-between"
+            sx={{
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              justifyContent: 'space-between',
+            }}
           >
             <Typography variant="body2">Previewing as a visitor</Typography>
             <Button
@@ -190,7 +199,13 @@ export function TradeBinderPage() {
 
       {itemsQuery.isLoading && <CircularProgress />}
       {itemsQuery.isFetching && !itemsQuery.isFetchingNextPage && itemsQuery.isPlaceholderData && (
-        <Typography color="text.secondary">Updating the list.</Typography>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
+          Updating the list.
+        </Typography>
       )}
       {itemsQuery.error && <Alert severity="error">{itemsQuery.error.message}</Alert>}
       {itemsQuery.isSuccess &&

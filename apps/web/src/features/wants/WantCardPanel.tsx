@@ -114,7 +114,14 @@ export function WantCardPanel({
 
   return (
     <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+        }}
+      >
         <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
           {card.name}
         </Typography>

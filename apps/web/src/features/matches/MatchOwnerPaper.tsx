@@ -22,9 +22,11 @@ export function MatchOwnerPaper({ owner }: { owner: MatchOwner }) {
           direction="row"
           spacing={1}
           useFlexGap
-          flexWrap="wrap"
-          alignItems="center"
-          justifyContent="space-between"
+          sx={{
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
         >
           <Typography variant="h3" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             @{owner.username}
@@ -35,7 +37,13 @@ export function MatchOwnerPaper({ owner }: { owner: MatchOwner }) {
             label={`${owner.matchCount} match${owner.matchCount === 1 ? '' : 'es'}`}
           />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            overflowWrap: 'anywhere',
+          }}
+        >
           {describePlace(owner)}
         </Typography>
         <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>

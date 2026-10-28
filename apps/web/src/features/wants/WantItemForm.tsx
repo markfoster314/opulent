@@ -152,8 +152,10 @@ export function WantItemForm({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        justifyContent="space-between"
-        sx={{ pt: 1 }}
+        sx={{
+          justifyContent: 'space-between',
+          pt: 1,
+        }}
       >
         <Button
           color="error"

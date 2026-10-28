@@ -90,14 +90,21 @@ export function WantListPage() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
-          justifyContent="space-between"
-          alignItems={{ sm: 'flex-start' }}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: { sm: 'flex-start' },
+          }}
         >
           <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
             {editing ? (
               <Stack spacing={1.25}>
                 <Stack spacing={0.25}>
-                  <Typography variant="overline" color="text.secondary">
+                  <Typography
+                    variant="overline"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     List name
                   </Typography>
                   <TextField
@@ -120,7 +127,12 @@ export function WantListPage() {
                   />
                 </Stack>
                 <Stack spacing={0.25}>
-                  <Typography variant="overline" color="text.secondary">
+                  <Typography
+                    variant="overline"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     Description
                   </Typography>
                   <TextField
@@ -143,7 +155,15 @@ export function WantListPage() {
               </Stack>
             ) : (
               <Stack spacing={1}>
-                <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap">
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  useFlexGap
+                  sx={{
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <Typography variant="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                     {list.name}
                   </Typography>
@@ -155,7 +175,12 @@ export function WantListPage() {
                   />
                 </Stack>
                 {list.description && (
-                  <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                  <Typography
+                    sx={{
+                      color: 'text.secondary',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
                     {list.description}
                   </Typography>
                 )}
@@ -171,9 +196,11 @@ export function WantListPage() {
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
             useFlexGap
-            flexWrap="wrap"
-            justifyContent={{ sm: 'flex-end' }}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            sx={{
+              flexWrap: 'wrap',
+              justifyContent: { sm: 'flex-end' },
+              width: { xs: '100%', sm: 'auto' },
+            }}
           >
             {editing ? (
               <>
@@ -244,10 +271,18 @@ export function WantListPage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
-            justifyContent="space-between"
-            alignItems={{ xs: 'stretch', sm: 'center' }}
+            sx={{
+              justifyContent: 'space-between',
+              alignItems: { xs: 'stretch', sm: 'center' },
+            }}
           >
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Typography variant="h2">Cards</Typography>
               <Chip size="small" label={list.itemCount ?? items.length} />
             </Stack>
@@ -255,8 +290,10 @@ export function WantListPage() {
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               useFlexGap
-              flexWrap="wrap"
-              justifyContent={{ sm: 'flex-end' }}
+              sx={{
+                flexWrap: 'wrap',
+                justifyContent: { sm: 'flex-end' },
+              }}
             >
               <Button
                 variant="contained"

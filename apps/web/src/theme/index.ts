@@ -139,33 +139,42 @@ const themeOptions: ThemeOptions = {
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        containedPrimary: {
-          // Hover stays a gradient: a flat background-color would flash through MUI's fade, and && stops that fade.
-          '&&': {
-            transition:
-              'color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-            backgroundColor: palette.gold,
-            backgroundImage: `linear-gradient(180deg, ${palette.goldLight} 0%, ${palette.gold} 100%)`,
-          },
-          '&&:hover': {
-            backgroundColor: palette.goldLight,
-            backgroundImage: `linear-gradient(180deg, ${palette.goldHighlight} 0%, ${palette.goldLight} 100%)`,
-          },
-        },
-        outlinedPrimary: {
-          borderColor: palette.goldBorder,
-          '&:hover': { borderColor: palette.goldLight, backgroundColor: palette.goldTint },
-        },
-        outlinedSecondary: {
-          borderColor: palette.steelBorder,
-          '&:hover': { borderColor: palette.steel, backgroundColor: palette.steelWash },
-        },
+        root: ({ ownerState }) => ({
+          ...(ownerState.variant === 'contained' &&
+            ownerState.color === 'primary' && {
+              // Hover stays a gradient: a flat background-color would flash through MUI's fade, and && stops that fade.
+              '&&': {
+                transition:
+                  'color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                backgroundColor: palette.gold,
+                backgroundImage: `linear-gradient(180deg, ${palette.goldLight} 0%, ${palette.gold} 100%)`,
+              },
+              '&&:hover': {
+                backgroundColor: palette.goldLight,
+                backgroundImage: `linear-gradient(180deg, ${palette.goldHighlight} 0%, ${palette.goldLight} 100%)`,
+              },
+            }),
+          ...(ownerState.variant === 'outlined' &&
+            ownerState.color === 'primary' && {
+              borderColor: palette.goldBorder,
+              '&:hover': { borderColor: palette.goldLight, backgroundColor: palette.goldTint },
+            }),
+          ...(ownerState.variant === 'outlined' &&
+            ownerState.color === 'secondary' && {
+              borderColor: palette.steelBorder,
+              '&:hover': { borderColor: palette.steel, backgroundColor: palette.steelWash },
+            }),
+        }),
       },
     },
     MuiChip: {
       styleOverrides: {
-        outlinedPrimary: { borderColor: palette.goldBorder },
-        outlinedSecondary: { borderColor: palette.steelBorder },
+        root: ({ ownerState }) => ({
+          ...(ownerState.variant === 'outlined' &&
+            ownerState.color === 'primary' && { borderColor: palette.goldBorder }),
+          ...(ownerState.variant === 'outlined' &&
+            ownerState.color === 'secondary' && { borderColor: palette.steelBorder }),
+        }),
       },
     },
     MuiTooltip: {

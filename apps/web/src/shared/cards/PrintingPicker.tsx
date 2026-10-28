@@ -73,8 +73,10 @@ export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPicke
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        justifyContent="space-between"
-        alignItems={{ sm: 'center' }}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: { sm: 'center' },
+        }}
       >
         <Typography variant="h3">Choose a set</Typography>
         <SetFilter
@@ -119,7 +121,14 @@ export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPicke
       </Box>
 
       {hasPagination && (
-        <Stack direction="row" spacing={1.5} justifyContent="center" alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
           <Button
             size="small"
             variant="outlined"
@@ -128,7 +137,12 @@ export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPicke
           >
             Previous
           </Button>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Page {pageIndex + 1}
           </Typography>
           <Button
@@ -203,8 +217,19 @@ function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
             sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />
         ) : (
-          <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
-            <Typography variant="caption" color="text.secondary">
+          <Stack
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               No image
             </Typography>
           </Stack>
@@ -214,9 +239,13 @@ function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
       <Stack
         direction="row"
         spacing={0.75}
-        alignItems="center"
-        justifyContent="center"
-        sx={{ p: 0.75, minWidth: 0, overflow: 'hidden' }}
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 0.75,
+          minWidth: 0,
+          overflow: 'hidden',
+        }}
       >
         <Box
           aria-hidden
@@ -328,7 +357,12 @@ function SetFilter({
       inputValue={value}
       loading={loading}
       getOptionLabel={(option) => (typeof option === 'string' ? option : setLabel(option))}
-      isOptionEqualToValue={(a, b) => a.setCode === b.setCode && a.setName === b.setName}
+      isOptionEqualToValue={(a, b) =>
+        typeof a !== 'string' &&
+        typeof b !== 'string' &&
+        a.setCode === b.setCode &&
+        a.setName === b.setName
+      }
       filterOptions={(options, state) => {
         const term = state.inputValue.trim().toLowerCase();
         return options.filter((set) => {
@@ -353,12 +387,13 @@ function SetFilter({
           label="Filter by set"
           placeholder="Modern Horizons, or MH3"
           slotProps={{
+            ...params.slotProps,
             input: {
-              ...params.InputProps,
+              ...params.slotProps.input,
               endAdornment: (
                 <>
                   {loading ? <CircularProgress size={16} /> : null}
-                  {params.InputProps.endAdornment}
+                  {params.slotProps.input.endAdornment}
                 </>
               ),
             },

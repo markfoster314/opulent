@@ -54,7 +54,11 @@ function SignedInHome() {
           Welcome back{me.data ? `, @${me.data.username}` : ''}
         </Typography>
         {me.data && me.data.city === null && (
-          <Typography color="text.secondary">
+          <Typography
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Add your city on your{' '}
             <Box
               component={RouterLink}
@@ -121,7 +125,14 @@ function SignedInHome() {
         <Typography variant="h2">Your collection</Typography>
         {summary.error && <Alert severity="error">{summary.error.message}</Alert>}
         {totals && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{
+              flexWrap: 'wrap',
+            }}
+          >
             <Chip label={`${totals.cardCount} card${totals.cardCount === 1 ? '' : 's'}`} />
             <Chip color="primary" variant="outlined" label={`${totals.forTradeCount} for trade`} />
             <Chip label={`${money.format(Number(totals.marketValue))} collection value`} />
@@ -185,7 +196,13 @@ function HomeTradePaper({ trade }: { trade: TradeSummary }) {
       <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
         @{trade.partnerUsername}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+        }}
+      >
         Your turn. You get {trade.youReceiveCount}. You give {trade.youGiveCount}.
       </Typography>
     </Paper>
@@ -198,7 +215,13 @@ function ComingSlot({ title, body }: { title: string; body: string }) {
       <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
         {title}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+        }}
+      >
         {body}
       </Typography>
       <Typography variant="caption" color="secondary" sx={{ mt: 1, display: 'block' }}>

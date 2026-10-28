@@ -84,7 +84,13 @@ export function BinderSearchFields({
 
   return (
     <Stack spacing={1.5}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{
+          alignItems: { sm: 'center' },
+        }}
+      >
         <TextField
           value={value.q}
           onChange={(event) => patch({ q: event.target.value })}
@@ -126,10 +132,12 @@ export function BinderSearchFields({
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ md: 'center' }}
-          justifyContent={{ md: 'space-between' }}
           useFlexGap
-          flexWrap="wrap"
+          sx={{
+            alignItems: { md: 'center' },
+            justifyContent: { md: 'space-between' },
+            flexWrap: 'wrap',
+          }}
         >
           <ChangeControls
             range={value.range}
