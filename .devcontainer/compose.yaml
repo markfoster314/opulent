@@ -2,7 +2,7 @@ services:
   dev:
     image: mcr.microsoft.com/devcontainers/base:bookworm
     volumes:
-      - ..:/workspaces/${localWorkspaceFolderBasename}:cached
+      - ..:/workspaces/${localWorkspaceFolderBasename}
     command: sleep infinity
     # The app keeps using localhost from .env. Sharing this network makes that address the database.
     network_mode: service:postgres
@@ -11,6 +11,7 @@ services:
         condition: service_healthy
 
   postgres:
+    # The dev service shares this network, so the app ports are published here.
     ports:
       - '5173:5173'
       - '8787:8787'
