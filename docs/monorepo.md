@@ -35,6 +35,38 @@ Do not add a `build` script to `@opulent/shared`, `@opulent/db`, or `@opulent/in
 
 Lint, test, and format stay at the repository root. They scan the whole tree. They are not per-package Turbo tasks.
 
+## Web app folders
+
+`apps/web/src` is split by feature. Do not add a `utils/` folder.
+
+| Folder             | Put here                                    |
+| ------------------ | ------------------------------------------- |
+| `app/`             | Route table, providers, env                 |
+| `layout/`          | Shell, logo, not-found                      |
+| `features/<name>/` | Screens and logic owned by one product area |
+| `shared/cards/`    | Card chrome used by more than one feature   |
+| `shared/binder/`   | Binder search and filter controls           |
+| `shared/ui/`       | Small widgets with no product meaning       |
+| `shared/hooks/`    | Hooks used by more than one feature         |
+| `api/`             | HTTP client, query keys, places search      |
+| `theme/`           | MUI theme                                   |
+
+A new file goes in this order:
+
+1. The feature that owns it.
+2. `shared/ui` or `shared/hooks` if two features use it and it has no product meaning.
+3. `shared/cards` if it is card chrome.
+4. `shared/binder` if it is binder search used by collection, groups, and the public trade binder.
+
+Features must not import each other, except:
+
+- `groups` may import `collection` (same binder UI)
+- `home` may import `matches` and `auth`
+- `collection` may import `profile` (trade binder preview) and `auth` (pending add after login)
+- `profile` may import `matches` (matches on a public binder)
+
+Query modules (`queries.ts`) may be imported across features. `shared/` must not import `features/`.
+
 ## Package boundaries
 
 ESLint `boundaries` rules in `eslint.config.mjs`:

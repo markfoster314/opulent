@@ -1,5 +1,5 @@
 import type { ApiErrorBody } from '@opulent/shared';
-import { env } from '../env';
+import { env } from '@/app/env';
 
 export class ApiRequestError extends Error {
   readonly status: number;

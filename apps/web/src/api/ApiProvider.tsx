@@ -1,6 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { env } from '../env';
+import { env } from '@/app/env';
 import { createApiClient, type ApiClient } from './client';
 
 const ApiContext = createContext<ApiClient | null>(null);

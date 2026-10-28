@@ -139,13 +139,14 @@ Use `pnpm smoke` for database checks and `pnpm test:e2e` for browser checks.
 
 ### Web app map
 
-- `src/pages` holds route screens.
-- `src/components` holds shared UI: tables, binders, detail views, add/edit panels, trade panels.
-- `src/api/client.ts` is the typed fetch wrapper.
-- `src/api/queries.ts` holds TanStack Query hooks and cache invalidation.
-- `src/binderSearch.ts` holds collection table-binder search state.
-- `src/wantBrowser.ts` holds want sorting.
+- `src/app` holds the route table, providers, and env checks.
+- `src/layout` holds the shell, logo, and not-found screen.
+- `src/features` holds one folder per product area (collection, wants, trades, and the rest).
+- `src/shared` holds card chrome, binder search, and small UI used by more than one feature.
+- `src/api/client.ts` is the typed fetch wrapper. Query keys live in `src/api/queryKeys.ts`. Feature folders own their React Query hooks.
 - `src/theme` holds the gold-on-dark MUI theme.
+
+Where a new file goes: [apps/web/README.md](apps/web/README.md). The same rules are in [docs/monorepo.md](docs/monorepo.md).
 
 Important route groups:
 

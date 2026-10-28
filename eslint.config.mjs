@@ -28,6 +28,40 @@ const boundaryPolicy = [
         from: { element: { type: 'infra' } },
         disallow: { to: { element: { types: { anyOf: ['app', 'package', 'job'] } } } },
       },
+      {
+        from: { element: { type: 'web-shared' } },
+        disallow: { to: { element: { type: 'web-feature' } } },
+      },
+      {
+        from: { element: { type: 'web-feature', captured: { elementName: 'groups' } } },
+        allow: {
+          to: { element: { type: 'web-feature', captured: { elementName: 'collection' } } },
+        },
+      },
+      {
+        from: { element: { type: 'web-feature', captured: { elementName: 'home' } } },
+        allow: {
+          to: {
+            element: { type: 'web-feature', captured: { names: { anyOf: ['matches', 'auth'] } } },
+          },
+        },
+      },
+      {
+        from: { element: { type: 'web-feature', captured: { elementName: 'collection' } } },
+        allow: {
+          to: {
+            element: { type: 'web-feature', captured: { names: { anyOf: ['profile', 'auth'] } } },
+          },
+        },
+      },
+      {
+        from: { element: { type: 'web-feature', captured: { elementName: 'profile' } } },
+        allow: { to: { element: { type: 'web-feature', captured: { elementName: 'matches' } } } },
+      },
+      {
+        from: { element: { type: 'web-feature' } },
+        disallow: { to: { element: { type: 'web-feature' } } },
+      },
     ],
   },
 ];
@@ -61,11 +95,22 @@ export default tseslint.config(
     plugins: { boundaries, turbo },
     settings: {
       'boundaries/elements': [
+        {
+          type: 'web-queries',
+          pattern: 'apps/web/src/**/queries.ts',
+          partialMatch: false,
+        },
+        { type: 'web-shared', pattern: 'apps/web/src/shared/*' },
+        { type: 'web-feature', pattern: 'apps/web/src/features/*' },
         { type: 'app', pattern: 'apps/*' },
         { type: 'package', pattern: 'packages/*' },
         { type: 'job', pattern: 'jobs/*' },
         { type: 'infra', pattern: 'infra' },
       ],
+      'boundaries/elements-single-match': true,
+      'boundaries/alias': {
+        '@': './apps/web/src',
+      },
     },
     rules: {
       'boundaries/dependencies': boundaryPolicy,

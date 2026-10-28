@@ -1,4 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+const webSrc = fileURLToPath(new URL('./apps/web/src', import.meta.url));
 
 export default defineConfig({
   test: {
@@ -26,6 +29,11 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          alias: {
+            '@': webSrc,
+          },
+        },
         test: {
           name: 'web',
           environment: 'jsdom',
