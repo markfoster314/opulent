@@ -33,8 +33,8 @@ export async function openTrade(
   const draft = pair.find((row) => row.status === 'draft' && row.proposerId === userId);
   const open = pair.find((row) => live.has(row.status));
 
-  // Closed binder blocks new requests, but an in-progress trade keeps going.
-  if (!open && !draft && partner.tradeBinderVisibility === 'private') {
+  // A private or unlisted binder blocks new requests. An in-progress trade keeps going.
+  if (!open && !draft && partner.tradeBinderVisibility !== 'public') {
     throw ApiError.notFound('Trade binder not found');
   }
 

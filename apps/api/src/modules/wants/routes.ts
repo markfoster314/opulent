@@ -197,7 +197,7 @@ wantRoutes.post(
     const userId = c.get('user').id;
     const listId = c.req.valid('param').id;
     await getWantList(db, userId, listId);
-    return c.json({ shareToken: await rotateWantShareToken(db, listId) });
+    return c.json({ shareToken: await rotateWantShareToken(db, userId, listId) });
   },
 );
 

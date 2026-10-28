@@ -1,3 +1,4 @@
+import type { Database } from '@opulent/db';
 import {
   collectionItems,
   collectionValueSnapshots,
@@ -58,8 +59,14 @@ import {
   checkUsernameAvailability,
   completeOnboarding,
   findUsersWithinRadius,
+  getProfile,
+  listFollowers,
+  listFollowing,
   updateProfile,
 } from './modules/users/service';
+import { requireUser } from './middleware/auth';
+import { openTrade } from './modules/trades/service';
+import { createWantList, rotateWantShareToken } from './modules/wants/service';
 
 loadEnv();
 
@@ -324,6 +331,54 @@ async function main() {
       renamedUser.username === `smoke_moved_${stamp}`,
     );
     check('profile saved the city', renamedUser.placeId === NYC_ID, String(renamedUser.placeId));
+
+    check(
+      'a private profile is hidden from someone else',
+      !(await resolves(() => getProfile(db, onboarded.username, viewer.id))),
+    );
+    const ownProfile = await getProfile(db, onboarded.username, owner.id);
+    check(
+      'the owner can open a private profile',
+      ownProfile.visibility === 'private' && ownProfile.wantLists === undefined,
+    );
+    check(
+      'a private follower list is hidden',
+      !(await resolves(() => listFollowers(db, onboarded.username, viewer.id))),
+    );
+    check(
+      'a private following list is hidden',
+      !(await resolves(() => listFollowing(db, onboarded.username, viewer.id))),
+    );
+    check(
+      'the owner can open their follower list',
+      (await listFollowers(db, onboarded.username, owner.id)).length === 0,
+    );
+
+    const hiddenList = await createWantList(db, owner.id, {
+      name: `Smoke hidden ${stamp}`,
+      visibility: 'private',
+    });
+    check(
+      'someone else cannot rotate a want list link',
+      !(await resolves(() => rotateWantShareToken(db, viewer.id, hiddenList.id))),
+    );
+    const rotated = await rotateWantShareToken(db, owner.id, hiddenList.id);
+    check(
+      'the owner can rotate a want list link',
+      Boolean(rotated) && rotated !== hiddenList.shareToken,
+    );
+
+    const hiddenNearAustin = await findUsersWithinRadius(
+      db,
+      viewer.id,
+      { latitude: 30.45, longitude: -97.7431 },
+      50_000,
+    );
+    check(
+      'a private profile stays out of nearby',
+      hiddenNearAustin.every((person) => person.username !== onboarded.username),
+    );
+    await updateProfile(db, owner.id, { profileVisibility: 'public' });
 
     // About 20 km north of Austin; the farther point is hundreds of km away.
     const nearAustin = await findUsersWithinRadius(
@@ -958,6 +1013,16 @@ async function main() {
       'a trade binder starts private',
       !passes(() => assertCanViewTradeBinder(ownerRow, { userId: viewer.id })),
     );
+    await updateProfile(db, owner.id, { tradeBinderVisibility: 'unlisted' });
+    check(
+      'an unlisted binder refuses a new trade',
+      !(await resolves(() =>
+        openTrade(db, viewer.id, {
+          username: onboarded.username,
+          items: [{ scryfallId: PRINTING_A, quantity: 1 }],
+        }),
+      )),
+    );
     await updateProfile(db, owner.id, { tradeBinderVisibility: 'public' });
     const openOwner = (await db.select().from(users).where(eq(users.id, owner.id)).limit(1))[0]!;
     check(
@@ -1196,6 +1261,7 @@ async function main() {
       askingPrice(null, { kind: 'percent', percent: 90 }) === null,
     );
 
+    await checkFirstSignInRace(db, stamp);
     console.log('\nall checks passed');
   } finally {
     await db.delete(wantItems).where(eq(wantItems.oracleId, ORACLE_ID));
@@ -1224,6 +1290,30 @@ function passes(action: () => void): boolean {
   } catch {
     return false;
   }
+}
+
+/** Two first requests for one Auth0 account must land on the same row. */
+async function checkFirstSignInRace(db: Database, stamp: string): Promise<void> {
+  const sub = `smoke|race${stamp}`;
+  const contexts = [signInContext(db, sub), signInContext(db, sub)];
+  await Promise.all(contexts.map((context) => requireUser(context as never, async () => {})));
+  const ids = contexts.map((context) => (context.get('user') as { id: string } | undefined)?.id);
+  check('two first sign-ins become one user', ids[0] === ids[1] && Boolean(ids[0]));
+}
+
+function signInContext(db: Database, sub: string) {
+  const values = new Map<string, unknown>([
+    ['auth', { sub }],
+    ['db', db],
+  ]);
+  return {
+    get(key: string) {
+      return values.get(key);
+    },
+    set(key: string, value: unknown) {
+      values.set(key, value);
+    },
+  };
 }
 
 main()

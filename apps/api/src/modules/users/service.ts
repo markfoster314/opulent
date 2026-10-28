@@ -126,6 +126,7 @@ export async function findUsersWithinRadius(
     FROM users u
     JOIN places p ON p.geoname_id = u.place_id
     WHERE u.id::text <> ${callerId}
+      AND u.profile_visibility = 'public'
       AND u.onboarded_at IS NOT NULL
       AND ST_DWithin(
         p.location,
@@ -294,7 +295,7 @@ async function listedEntries(db: Database, userId: string, table: typeof wantLis
     .orderBy(asc(table.name));
 }
 
-/** Profile page; a private profile hides want lists from everyone, including the owner. */
+/** A private profile is visible to its owner only. The owner still does not get the public lists here. */
 export async function getProfile(
   db: Database,
   username: string,
@@ -317,7 +318,10 @@ export async function getProfile(
     followerCount: await countFollowers(db, user.id),
     followingCount: await countFollowing(db, user.id),
   };
-  if (user.profileVisibility !== 'public') return profile;
+  if (user.profileVisibility !== 'public') {
+    if (!isOwner) throw ApiError.notFound('User not found');
+    return profile;
+  }
 
   const wantEntries = await listedEntries(db, user.id, wantLists);
   const viewerCanMatch = viewerId !== undefined && viewerId !== user.id;
@@ -335,6 +339,20 @@ export async function getProfile(
     wantLists: withMatchCounts(wantEntries, wantMatches?.bySlug),
     genericWants: await listGenericWants(db, user.id),
   };
+}
+
+/** Private profiles answer not found, so a hidden page does not confirm the username. */
+async function requireVisibleProfile(
+  db: Database,
+  username: string,
+  viewerId?: string,
+): Promise<UserRow> {
+  const user = await getUserByUsername(db, username);
+  if (!user) throw ApiError.notFound('User not found');
+  if (user.profileVisibility !== 'public' && viewerId !== user.id) {
+    throw ApiError.notFound('User not found');
+  }
+  return user;
 }
 
 async function countFollowers(db: Database, userId: string): Promise<number> {
@@ -366,15 +384,21 @@ export async function viewerAddedFriend(
   return rows.length > 0;
 }
 
-export async function listFollowing(db: Database, username: string): Promise<Friend[]> {
-  const user = await getUserByUsername(db, username);
-  if (!user) throw ApiError.notFound('User not found');
+export async function listFollowing(
+  db: Database,
+  username: string,
+  viewerId?: string,
+): Promise<Friend[]> {
+  const user = await requireVisibleProfile(db, username, viewerId);
   return listFriends(db, user.id);
 }
 
-export async function listFollowers(db: Database, username: string): Promise<Friend[]> {
-  const user = await getUserByUsername(db, username);
-  if (!user) throw ApiError.notFound('User not found');
+export async function listFollowers(
+  db: Database,
+  username: string,
+  viewerId?: string,
+): Promise<Friend[]> {
+  const user = await requireVisibleProfile(db, username, viewerId);
   const follower = users;
   return db
     .select({

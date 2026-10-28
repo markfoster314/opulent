@@ -55,16 +55,25 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
 
   let user = existing[0];
   if (!user) {
-    const inserted = await db
-      .insert(users)
-      .values({
-        auth0Sub: auth.sub,
-        username: buildPlaceholderUsername(auth),
-        email: auth.email ?? null,
-        avatarUrl: auth.picture ?? null,
-      })
-      .returning();
-    user = inserted[0];
+    try {
+      const inserted = await db
+        .insert(users)
+        .values({
+          auth0Sub: auth.sub,
+          username: buildPlaceholderUsername(auth),
+          email: auth.email ?? null,
+          avatarUrl: auth.picture ?? null,
+        })
+        .returning();
+      user = inserted[0];
+    } catch (error) {
+      // Two first requests can insert the same account. Keep the row that won.
+      if (isUniqueViolation(error)) {
+        const again = await db.select().from(users).where(eq(users.auth0Sub, auth.sub)).limit(1);
+        user = again[0];
+      }
+      if (!user) throw error;
+    }
   }
 
   if (!user) {
@@ -87,6 +96,14 @@ export const optionalAuth = createMiddleware<AppEnv>(async (c, next) => {
   }
   await next();
 });
+
+function isUniqueViolation(error: unknown): boolean {
+  const candidates = [error, (error as { cause?: unknown } | null)?.cause];
+  return candidates.some((candidate) => {
+    if (typeof candidate !== 'object' || candidate === null) return false;
+    return (candidate as { code?: unknown }).code === '23505';
+  });
+}
 
 /** Placeholder only; unique subject suffix prevents signup races before the welcome rename. */
 function buildPlaceholderUsername(auth: Auth0Claims): string {

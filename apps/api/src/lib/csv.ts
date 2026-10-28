@@ -45,7 +45,9 @@ export function toCsvLine(cells: (string | number | boolean | null)[]): string {
   return cells
     .map((cell) => {
       const text = cell === null ? '' : String(cell);
-      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      // A leading = + - or @ is a spreadsheet formula when someone opens the file.
+      const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+      return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
     })
     .join(',');
 }

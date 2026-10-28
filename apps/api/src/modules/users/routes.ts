@@ -226,18 +226,28 @@ userRoutes.get(
 
 userRoutes.get(
   '/:username/following',
+  optionalAuth,
   zValidator('param', z.object({ username: usernameSchema })),
   async (c) => {
-    const items = await listFollowing(c.get('db'), c.req.valid('param').username);
+    const items = await listFollowing(
+      c.get('db'),
+      c.req.valid('param').username,
+      c.get('user')?.id,
+    );
     return c.json({ items });
   },
 );
 
 userRoutes.get(
   '/:username/followers',
+  optionalAuth,
   zValidator('param', z.object({ username: usernameSchema })),
   async (c) => {
-    const items = await listFollowers(c.get('db'), c.req.valid('param').username);
+    const items = await listFollowers(
+      c.get('db'),
+      c.req.valid('param').username,
+      c.get('user')?.id,
+    );
     return c.json({ items });
   },
 );

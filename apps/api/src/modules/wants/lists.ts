@@ -166,11 +166,15 @@ export async function updateWantList(
   return getWantList(db, userId, listId);
 }
 
-export async function rotateWantShareToken(db: Database, listId: string): Promise<string> {
+export async function rotateWantShareToken(
+  db: Database,
+  userId: string,
+  listId: string,
+): Promise<string> {
   const updated = await db
     .update(wantLists)
     .set({ shareToken: sql`encode(gen_random_bytes(16), 'hex')`, updatedAt: new Date() })
-    .where(eq(wantLists.id, listId))
+    .where(and(eq(wantLists.id, listId), eq(wantLists.userId, userId)))
     .returning({ shareToken: wantLists.shareToken });
   const token = updated[0]?.shareToken;
   if (!token) throw ApiError.notFound('Want list not found');
