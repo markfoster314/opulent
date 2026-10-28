@@ -121,6 +121,14 @@ export class OpulentTutorStack extends cdk.Stack {
         'ApiIntegration',
         apiFunction,
       ),
+      createDefaultStage: false,
+    });
+
+    // One throttle for the whole API. A per-user limit would need another store.
+    httpApi.addStage('DefaultStage', {
+      stageName: '$default',
+      autoDeploy: true,
+      throttle: { rateLimit: 20, burstLimit: 50 },
     });
 
     // Nightly Scryfall mirror refresh

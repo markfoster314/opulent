@@ -1,5 +1,6 @@
 import { ensureDatabaseUrl, getDatabase } from '@opulent/db';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { requestId } from 'hono/request-id';
@@ -17,12 +18,21 @@ import { tradeRoutes } from './modules/trades/routes';
 import { userRoutes } from './modules/users/routes';
 import { wantRoutes } from './modules/wants/routes';
 
+/** Above the 2,000,000 character CSV cap, and under API Gateway's 10 MB limit. */
+export const BODY_MAX_BYTES = 3_000_000;
+
+export const limitBody = bodyLimit({
+  maxSize: BODY_MAX_BYTES,
+  onError: (c) => c.json({ error: { code: 'bad_request', message: 'Request is too large' } }, 413),
+});
+
 /** A module may import another module's service.ts only. */
 export function createApp() {
   const env = getEnv();
   const app = new Hono<AppEnv>();
 
   app.use('*', requestId());
+  app.use('*', limitBody);
   app.use('*', logger());
   app.use('*', secureHeaders());
   app.use(
