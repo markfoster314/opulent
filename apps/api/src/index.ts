@@ -3,10 +3,7 @@ import { loadEnv } from '@opulent/db/env';
 import { createApp } from './app';
 import { getEnv } from './env';
 
-/**
- * Local development entry point. Production uses src/lambda.ts, where
- * configuration arrives as real environment variables rather than a .env file.
- */
+/** Local dev entry point; production uses lambda.ts and real env vars. */
 loadEnv();
 
 const env = getEnv();

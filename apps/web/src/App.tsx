@@ -15,6 +15,7 @@ import { TradeBinderPage } from './pages/TradeBinderPage';
 import { TradePage } from './pages/TradePage';
 import { PastTradesPage, TradesPage } from './pages/TradesPage';
 import { WantListPage } from './pages/WantListPage';
+import { WantsImportPage } from './pages/WantsImportPage';
 import { WantsPage } from './pages/WantsPage';
 import { WelcomePage } from './pages/WelcomePage';
 
@@ -36,6 +37,7 @@ export function App() {
         <Route path="/matches" element={<MatchesPage />} />
         <Route path="/wants" element={<WantsPage />} />
         <Route path="/wants/all" element={<MineAllWantsPage />} />
+        <Route path="/wants/import" element={<WantsImportPage />} />
         <Route path="/wants/:listId" element={<WantListPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/past" element={<PastTradesPage />} />

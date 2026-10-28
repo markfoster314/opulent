@@ -4,14 +4,7 @@ import { tradeSide, tradeStatus } from './enums';
 import { cards } from './cards';
 import { users } from './users';
 
-/**
- * One trade between two people.
- *
- * The proposer opened it. The receiver is the other person. A draft is visible
- * only to the proposer until they propose it. `turnUserId` is whose move it is.
- * A finalize time is set when that person says yes to the current cards. Both
- * times must be set before the trade is complete. Changing the cards clears both times.
- */
+/** A draft is visible only to the proposer; both finalize times must be set before completion, and changing the cards clears them. */
 export const trades = pgTable(
   'trades',
   {
@@ -24,7 +17,7 @@ export const trades = pgTable(
     receiverId: uuid('receiver_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    /** Whose move it is. Always one of the two people on the trade. */
+    /** Whose move it is; always one of the two people on the trade. */
     turnUserId: uuid('turn_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -54,7 +47,7 @@ export const tradeItems = pgTable(
       .notNull()
       .references(() => trades.id, { onDelete: 'cascade' }),
 
-    /** Which direction this card moves: offered by the proposer, or requested from the receiver. */
+    /** Which way the card moves: offered by the proposer, requested from the receiver. */
     side: tradeSide('side').notNull(),
 
     scryfallId: uuid('scryfall_id')

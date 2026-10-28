@@ -3,30 +3,22 @@ import { loadEnv } from './load-env';
 
 loadEnv();
 
-/**
- * Runs the pieces of schema that drizzle-kit cannot express: extensions, the
- * PostGIS geography column on cities, and the trigram index used for fuzzy
- * card-name search.
- *
- * Safe to run repeatedly. Run it once before the first `db:migrate`, and again
- * after migrate so the indexes that depend on tables can be built.
- */
+/** Raw SQL drizzle-kit cannot express; safe to re-run, and run again after `db:migrate`. */
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }
 
-  // This script is built to be re-run, so "already exists, skipping" notices
-  // are the expected case rather than something worth printing.
+  // Re-runnable by design, so "already exists, skipping" notices are expected noise.
   const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
 
   try {
-    // gen_random_uuid() and gen_random_bytes() come from pgcrypto.
+    // pgcrypto supplies gen_random_uuid() and gen_random_bytes().
     await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-    // pg_trgm makes "lighning bolt" still find "Lightning Bolt".
+    // pg_trgm keeps a typo like "lighning bolt" matching "Lightning Bolt".
     await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`;
-    // ST_DWithin measures radius in meters on a geography column.
+    // A geography column makes ST_DWithin measure meters, not degrees.
     try {
       await sql`CREATE EXTENSION IF NOT EXISTS postgis`;
     } catch (error) {
@@ -53,9 +45,30 @@ async function main() {
         CREATE INDEX IF NOT EXISTS cards_name_lower_idx
         ON cards (lower(name))
       `;
-      // Want tiles read the oldest picture for a card. This order lets that
-      // read stop at the first matching row instead of sorting every printing.
-      // CONCURRENTLY keeps the build from blocking card search while it runs.
+      // Set search matches fragments, so set name and code need trigrams too.
+      await sql`
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS cards_set_name_trgm_idx
+        ON cards USING gin (set_name gin_trgm_ops)
+      `;
+      await sql`
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS cards_set_code_trgm_idx
+        ON cards USING gin (set_code gin_trgm_ops)
+      `;
+      // Covering index in picker order lets DISTINCT ON walk it without sorting wide rows.
+      await sql`
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS cards_printings_order_idx
+        ON cards (
+          oracle_id,
+          set_code,
+          collector_number,
+          (lang = 'en') DESC,
+          released_at DESC NULLS LAST,
+          scryfall_id
+        )
+        WHERE jsonb_exists(raw->'games', 'paper')
+          AND layout IS DISTINCT FROM 'art_series'
+      `;
+      // Oldest-image reads for want tiles stop at the first row; CONCURRENTLY avoids blocking search.
       await sql`
         CREATE INDEX CONCURRENTLY IF NOT EXISTS cards_oracle_oldest_image_idx
         ON cards (
@@ -67,9 +80,7 @@ async function main() {
         WHERE image_uris IS NOT NULL
           AND layout IS DISTINCT FROM 'art_series'
       `;
-      console.log(
-        'indexes ready: cards_name_trgm_idx, cards_name_lower_idx, cards_oracle_oldest_image_idx',
-      );
+      console.log('indexes ready: cards name/set trigram, oracle oldest image, printings order');
     } else {
       console.log('cards table not found yet. Run db:migrate, then run bootstrap again.');
     }
@@ -82,8 +93,7 @@ async function main() {
     `;
 
     if (placesTableExists[0]?.exists) {
-      // Stored so every insert and update keeps the point in step with lat/lon.
-      // Queries ask ST_DWithin on this column and never select it.
+      // Generated so the point tracks lat/lon; queries only pass it to ST_DWithin.
       await sql`
         ALTER TABLE places
         ADD COLUMN IF NOT EXISTS location geography(Point, 4326)

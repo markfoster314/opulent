@@ -18,21 +18,7 @@ interface DailyPriceRow {
   tix: string | null;
 }
 
-/**
- * A daily price line for one printing, with the last stored price carried forward.
- *
- * History holds a row only where the price changed, so most days have no row of
- * their own. For each day in the range the lateral join takes the newest row on
- * or before that day, which is the price that was in force. Days before the first
- * stored row produce nothing, so a caller never sees a price from before the card
- * existed.
- *
- * The stored columns are numeric, which the driver returns as strings, so putting
- * the `CardPrices` object back together needs no rounding.
- *
- * The two date arguments are YYYY-MM-DD strings, which avoids any timezone
- * question about what "a day" means.
- */
+/** History holds only change rows, so each day takes the newest row on or before it; days before the first row are absent, and YYYY-MM-DD strings avoid timezone questions. */
 export async function cardPriceSeries(
   db: Database,
   scryfallId: string,

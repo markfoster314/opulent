@@ -1,15 +1,11 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Divider, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useMatchOwners, useMe } from '../api/queries';
+import { GenericMatchesSection } from '../components/GenericMatchesSection';
 import { MatchOwnerPaper } from '../components/MatchOwnerPaper';
 
-/**
- * Find trades: who has what I want, nearest city first.
- *
- * Each paper is one person. Clicking it opens their trade binder with
- * "On my want lists" already checked, so the viewer lands on the overlap.
- */
+/** Results are nearest-first; opening one prechecks "On my want lists". */
 export function MatchesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth0();
   const me = useMe(isAuthenticated);
@@ -24,9 +20,6 @@ export function MatchesPage() {
     <Stack spacing={3}>
       <Stack spacing={1}>
         <Typography variant="h1">Find trades</Typography>
-        <Typography color="text.secondary">
-          People whose trade binder holds cards on your want lists. Nearest city first.
-        </Typography>
         {me.data && me.data.city === null && (
           <Alert severity="info">
             Set your city on your{' '}
@@ -46,7 +39,7 @@ export function MatchesPage() {
       {matches.error && <Alert severity="error">{matches.error.message}</Alert>}
       {matches.isSuccess && items.length === 0 && (
         <Alert severity="info">
-          No matches yet. Add cards to a want list, then check back. Matches appear as people mark
+          No matches yet. Add cards to your wants, then check back. Matches appear as people mark
           cards for trade.
         </Alert>
       )}
@@ -58,6 +51,10 @@ export function MatchesPage() {
           <MatchOwnerPaper key={owner.username} owner={owner} />
         ))}
       </Box>
+
+      <Divider />
+
+      <GenericMatchesSection />
     </Stack>
   );
 }

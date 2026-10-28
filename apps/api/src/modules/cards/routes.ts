@@ -22,8 +22,7 @@ import {
 
 export const cardRoutes = new Hono<AppEnv>();
 
-// Card data comes from the nightly mirror, so a short shared cache is safe and
-// saves a database read on repeat searches.
+// Card data only changes nightly, so a short shared cache is safe.
 cardRoutes.use('*', async (c, next) => {
   await next();
   c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
@@ -31,10 +30,7 @@ cardRoutes.use('*', async (c, next) => {
 
 const uuidParam = z.object({ id: z.string().uuid() });
 
-/**
- * Public on purpose. The Scryfall terms require that card data stay reachable
- * without a paid account, so card lookup sits outside the auth wall.
- */
+/** Public purpose: Scryfall terms require card data without a paid account. */
 cardRoutes.get('/search', zValidator('query', cardSearchQuerySchema), async (c) => {
   const items = await searchCards(c.get('db'), c.req.valid('query'));
   return c.json({ items });

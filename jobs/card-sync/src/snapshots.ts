@@ -2,13 +2,7 @@ import { type Database } from '@opulent/db';
 import { CARD_GAME } from '@opulent/shared';
 import { sql } from 'drizzle-orm';
 
-/**
- * Freeze today's asking value for every person who owns cards.
- *
- * The pricing rule mirrors apps/api/src/modules/collection/value.ts: custom
- * amount, percent of market, or market, with the English printing as fallback.
- * The job cannot import the API, so the rule is repeated here; keep them equal.
- */
+/** Mirrors the API pricing rule; the job cannot import the API, so keep both in sync. */
 export async function snapshotCollectionValues(db: Database): Promise<number> {
   const day = new Date().toISOString().slice(0, 10);
   const rows = await db.execute(sql`

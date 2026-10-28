@@ -8,7 +8,6 @@ export interface PlacePoint extends PlaceRef {
   longitude: number;
 }
 
-/** One city, including the coordinates radius search needs and the client does not. */
 export async function getPlace(db: Database, geonameId: number): Promise<PlacePoint | undefined> {
   const rows = await db
     .select({
@@ -23,15 +22,7 @@ export async function getPlace(db: Database, geonameId: number): Promise<PlacePo
   return rows[0];
 }
 
-/**
- * Cities that match what the user typed, largest first.
- *
- * One word matches the start of the city name ("aus" means Austin). Commas
- * add the state and then the country, in that order: "Austin, Texas" or
- * "Austin, Texas, United States". A two-part phrase may also be the city and
- * the country, so "Paris, France" still works. A short state code such as
- * "TX" matches too.
- */
+/** Prefix match; comma parts add state then country, and short codes like TX work. */
 export async function searchPlaces(db: Database, term: string, limit = 8): Promise<PlaceRef[]> {
   const exact = term.trim().toLowerCase();
   const [city, state, country] = placeParts(exact);
@@ -76,7 +67,6 @@ export async function searchPlaces(db: Database, term: string, limit = 8): Promi
     .limit(limit);
 }
 
-/** "Austin, Texas, United States" becomes the city, the state, and the country. */
 function placeParts(term: string): [string, string | undefined, string | undefined] {
   const parts = term
     .split(',')
@@ -89,11 +79,7 @@ function likePrefix(value: string): string {
   return `${value.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 }
 
-/** The start of a region name, or its short code, such as Texas or TX. */
 function matchesRegion(name: AnyColumn, code: AnyColumn, value: string): SQL {
   const prefix = likePrefix(value);
-  return or(
-    sql`lower(${name}) like ${prefix} escape '\\'`,
-    sql`lower(${code}) = ${value}`,
-  ) as SQL;
+  return or(sql`lower(${name}) like ${prefix} escape '\\'`, sql`lower(${code}) = ${value}`) as SQL;
 }

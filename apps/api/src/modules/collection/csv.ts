@@ -1,10 +1,7 @@
 import type { CardCondition, CardFinish, CardLanguage } from '@opulent/shared';
 import { cardLanguageSchema } from '@opulent/shared';
 
-/**
- * A small RFC 4180 reader. Handles quoted fields, doubled quotes, and line
- * breaks inside quotes. Every export tool we care about writes this shape.
- */
+/** RFC 4180 subset: quoted fields, doubled quotes, and embedded line breaks. */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -58,7 +55,6 @@ export function toCsvLine(cells: (string | number | boolean | null)[]): string {
 
 export type ImportFormat = 'manabox' | 'moxfield' | 'plain';
 
-/** Which header names each tool uses, lower-cased. */
 const columnNames: Record<ImportFormat, Record<keyof RawRow, string[]>> = {
   manabox: {
     name: ['name'],
@@ -107,7 +103,6 @@ export interface RawRow {
   scryfallId: string;
 }
 
-/** Picks the tool by the headers that only it writes. */
 export function detectFormat(header: string[]): ImportFormat {
   const lower = new Set(header.map((cell) => cell.trim().toLowerCase()));
   if (lower.has('manabox id') || (lower.has('set code') && lower.has('scryfall id'))) {
@@ -117,8 +112,11 @@ export function detectFormat(header: string[]): ImportFormat {
   return 'plain';
 }
 
-/** Maps a header row to field positions for one format. Missing columns are -1. */
-export function columnIndexes(header: string[], format: ImportFormat): Record<keyof RawRow, number> {
+/** -1 means the column is absent; readRow treats it as blank. */
+export function columnIndexes(
+  header: string[],
+  format: ImportFormat,
+): Record<keyof RawRow, number> {
   const lower = header.map((cell) => cell.trim().toLowerCase());
   const find = (names: string[]) => {
     for (const name of names) {
@@ -244,7 +242,7 @@ export function parseQuantity(value: string): number | null {
   return amount;
 }
 
-/** Blank means "use the default". Moxfield's tradelist count is a number. */
+/** Blank uses the fallback; Moxfield tradelist counts are numeric. */
 export function parseForTrade(value: string, fallback: boolean): boolean {
   const word = value.trim().toLowerCase();
   if (!word) return fallback;

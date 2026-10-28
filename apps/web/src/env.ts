@@ -1,11 +1,4 @@
-/**
- * Vite only exposes variables prefixed with VITE_ to the browser. Anything
- * secret must stay on the server; everything here is public by design.
- *
- * These are read at module load and checked immediately. A missing value used
- * to flow through as the string "undefined" and only surface as a broken
- * redirect to https://undefined/authorize, which says nothing about the cause.
- */
+/** Vite exposes only VITE_ vars, so these are public; fail fast instead of redirecting to "undefined". */
 function required(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(

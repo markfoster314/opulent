@@ -8,7 +8,6 @@ export interface Auth0Claims {
   scope?: string;
 }
 
-/** Shared shape for every Hono handler in this service. */
 export interface AppEnv {
   Variables: {
     db: Database;

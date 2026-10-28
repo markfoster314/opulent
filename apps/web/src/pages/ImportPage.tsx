@@ -16,19 +16,16 @@ import {
 import type { CollectionImportResult, ImportRow } from '@opulent/shared';
 import { cardConditionLabels, cardFinishLabels, cardLanguageLabels } from '@opulent/shared';
 import { useRef, useState, type ChangeEvent } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useImportCollection } from '../api/queries';
 import { palette } from '../theme';
 
-/**
- * CSV import with a dry run first.
- *
- * Step 1: pick a file or paste text. Step 2: Preview. Nothing is written; the
- * screen shows what matched and what did not. Step 3: Import the matched rows.
- */
+/** Preview is a dry run; only the final Import writes. */
 export function ImportPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth0();
   const importRows = useImportCollection();
+  const [searchParams] = useSearchParams();
+  const groupId = searchParams.get('group') ?? undefined;
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [csv, setCsv] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -51,14 +48,14 @@ export function ImportPage() {
   function runPreview() {
     setDone(null);
     importRows.mutate(
-      { csv, dryRun: true, forTradeDefault },
+      { csv, dryRun: true, forTradeDefault, ...(groupId ? { groupIds: [groupId] } : {}) },
       { onSuccess: (result) => setPreview(result) },
     );
   }
 
   function runImport() {
     importRows.mutate(
-      { csv, dryRun: false, forTradeDefault },
+      { csv, dryRun: false, forTradeDefault, ...(groupId ? { groupIds: [groupId] } : {}) },
       {
         onSuccess: (result) => {
           setDone(result);
@@ -75,11 +72,11 @@ export function ImportPage() {
     <Stack spacing={3}>
       <Button
         component={RouterLink}
-        to="/collection"
+        to={groupId ? `/groups/${groupId}` : '/collection'}
         startIcon={<ArrowBackIcon />}
         sx={{ alignSelf: 'flex-start' }}
       >
-        My collection
+        {groupId ? 'Back to group' : 'My collection'}
       </Button>
 
       <Stack spacing={1}>
@@ -132,7 +129,9 @@ export function ImportPage() {
             minRows={4}
             maxRows={12}
             fullWidth
-            placeholder={'name,set,number,quantity,condition,finish,language,for trade\nLightning Bolt,m11,149,4,NM,nonfoil,en,true'}
+            placeholder={
+              'name,set,number,quantity,condition,finish,language,for trade\nLightning Bolt,m11,149,4,NM,nonfoil,en,true'
+            }
             slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: 'monospace' } } }}
           />
           <FormControlLabel
@@ -209,7 +208,12 @@ function ResultSummary({ result }: { result: CollectionImportResult }) {
       <Chip size="small" label={`${result.total} rows`} />
       <Chip size="small" color="primary" label={`${result.matched} matched`} />
       {result.unmatched > 0 && (
-        <Chip size="small" color="warning" variant="outlined" label={`${result.unmatched} unmatched`} />
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label={`${result.unmatched} unmatched`}
+        />
       )}
       {result.skipped > 0 && (
         <Chip size="small" variant="outlined" label={`${result.skipped} skipped`} />
@@ -225,7 +229,7 @@ function ResultSummary({ result }: { result: CollectionImportResult }) {
 
 const formatLabel = { manabox: 'ManaBox', moxfield: 'Moxfield', plain: 'Plain' } as const;
 
-/** One line per row. Stacks on a phone, lines up on a wider window. */
+/** Rows stack on phones and align in columns on wider screens. */
 function RowTable({ rows }: { rows: ImportRow[] }) {
   return (
     <Stack spacing={1}>

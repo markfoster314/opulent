@@ -9,7 +9,6 @@ interface PlusMinusButtonProps {
   onClick: () => void;
 }
 
-/** A plus that turns into a minus while a section opens, and back when it closes. */
 export function PlusMinusButton({ open, label, onClick }: PlusMinusButtonProps) {
   return (
     <IconButton
@@ -27,7 +26,6 @@ export function PlusMinusButton({ open, label, onClick }: PlusMinusButtonProps) 
   );
 }
 
-/** The mark that is leaving spins away. The mark that is arriving spins into place. */
 function iconMotion(leaving: boolean): SxProps<Theme> {
   return {
     position: 'absolute',

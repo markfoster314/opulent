@@ -7,6 +7,7 @@ import {
   updateWantItemSchema,
   updateWantListSchema,
   usernameSchema,
+  wantsImportSchema,
 } from '@opulent/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -14,19 +15,23 @@ import type { AppEnv } from '../../lib/context';
 import { ApiError } from '../../lib/http';
 import { optionalAuth, requireAuth, requireUser } from '../../middleware/auth';
 import { getUserByUsername } from '../users/service';
+import { exportWantsCsv, importWants } from './import';
 import {
   addWantItem,
   assertCanViewWantList,
   createGenericWant,
   createWantList,
   deleteWantList,
+  findGenericMatchOwners,
   getWantList,
   getWantListByHandleAndSlug,
+  listAllWantItems,
   listGenericWants,
   listWantItems,
   listCollectedWants,
   listWantLists,
   removeGenericWant,
+  removeWantFromList,
   removeWantItem,
   rotateWantShareToken,
   toPublicWantList,
@@ -43,6 +48,11 @@ const shareParam = z.object({ handle: usernameSchema, slug: slugSchema });
 function viewer(shareToken: string | undefined, userId: string | undefined) {
   return { userId, shareToken };
 }
+
+wantRoutes.get('/generic/matches', requireAuth, requireUser, async (c) => {
+  const items = await findGenericMatchOwners(c.get('db'), c.get('user').id, 20);
+  return c.json({ items });
+});
 
 wantRoutes.get('/generic', requireAuth, requireUser, async (c) => {
   const items = await listGenericWants(c.get('db'), c.get('user').id);
@@ -88,6 +98,23 @@ wantRoutes.get(
   },
 );
 
+wantRoutes.post(
+  '/import',
+  requireAuth,
+  requireUser,
+  zValidator('json', wantsImportSchema),
+  async (c) => {
+    return c.json(await importWants(c.get('db'), c.get('user').id, c.req.valid('json')));
+  },
+);
+
+wantRoutes.get('/export.csv', requireAuth, requireUser, async (c) => {
+  const csv = await exportWantsCsv(c.get('db'), c.get('user').id);
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', 'attachment; filename="opulent-tutor-wants.csv"');
+  return c.body(csv);
+});
+
 wantRoutes.get('/lists', requireAuth, requireUser, async (c) => {
   const items = await listWantLists(c.get('db'), c.get('user').id);
   return c.json({ items });
@@ -101,6 +128,23 @@ wantRoutes.post(
   async (c) => {
     const list = await createWantList(c.get('db'), c.get('user').id, c.req.valid('json'));
     return c.json(list, 201);
+  },
+);
+
+wantRoutes.get(
+  '/lists/:id/export.csv',
+  requireAuth,
+  requireUser,
+  zValidator('param', listIdParam),
+  async (c) => {
+    const db = c.get('db');
+    const userId = c.get('user').id;
+    const listId = c.req.valid('param').id;
+    await getWantList(db, userId, listId);
+    const csv = await exportWantsCsv(db, userId, listId);
+    c.header('Content-Type', 'text/csv; charset=utf-8');
+    c.header('Content-Disposition', 'attachment; filename="opulent-tutor-wants.csv"');
+    return c.body(csv);
   },
 );
 
@@ -157,6 +201,50 @@ wantRoutes.post(
   },
 );
 
+wantRoutes.get('/items', requireAuth, requireUser, async (c) => {
+  const items = await listAllWantItems(c.get('db'), c.get('user').id);
+  return c.json({ items });
+});
+
+wantRoutes.post(
+  '/items',
+  requireAuth,
+  requireUser,
+  zValidator('json', addWantItemSchema),
+  async (c) => {
+    const item = await addWantItem(c.get('db'), c.get('user').id, c.req.valid('json'));
+    return c.json(item, 201);
+  },
+);
+
+wantRoutes.patch(
+  '/items/:id',
+  requireAuth,
+  requireUser,
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  zValidator('json', updateWantItemSchema),
+  async (c) => {
+    const item = await updateWantItem(
+      c.get('db'),
+      c.get('user').id,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    );
+    return c.json(item);
+  },
+);
+
+wantRoutes.delete(
+  '/items/:id',
+  requireAuth,
+  requireUser,
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  async (c) => {
+    await removeWantItem(c.get('db'), c.get('user').id, c.req.valid('param').id);
+    return c.body(null, 204);
+  },
+);
+
 wantRoutes.get(
   '/lists/:id/items',
   requireAuth,
@@ -166,7 +254,7 @@ wantRoutes.get(
     const db = c.get('db');
     const listId = c.req.valid('param').id;
     await getWantList(db, c.get('user').id, listId);
-    const items = await listWantItems(db, listId);
+    const items = await listWantItems(db, listId, c.get('user').id);
     return c.json({ items });
   },
 );
@@ -178,32 +266,11 @@ wantRoutes.post(
   zValidator('param', listIdParam),
   zValidator('json', addWantItemSchema),
   async (c) => {
-    const item = await addWantItem(
-      c.get('db'),
-      c.get('user').id,
-      c.req.valid('param').id,
-      c.req.valid('json'),
-    );
+    const item = await addWantItem(c.get('db'), c.get('user').id, {
+      ...c.req.valid('json'),
+      listIds: [c.req.valid('param').id],
+    });
     return c.json(item, 201);
-  },
-);
-
-wantRoutes.patch(
-  '/lists/:id/items/:itemId',
-  requireAuth,
-  requireUser,
-  zValidator('param', itemParam),
-  zValidator('json', updateWantItemSchema),
-  async (c) => {
-    const { id, itemId } = c.req.valid('param');
-    const item = await updateWantItem(
-      c.get('db'),
-      c.get('user').id,
-      id,
-      itemId,
-      c.req.valid('json'),
-    );
-    return c.json(item);
   },
 );
 
@@ -214,12 +281,10 @@ wantRoutes.delete(
   zValidator('param', itemParam),
   async (c) => {
     const { id, itemId } = c.req.valid('param');
-    await removeWantItem(c.get('db'), c.get('user').id, id, itemId);
+    await removeWantFromList(c.get('db'), c.get('user').id, id, itemId);
     return c.body(null, 204);
   },
 );
-
-// Public share URLs: /v1/wants/by/:handle/:slug
 
 wantRoutes.get('/by/:handle/:slug', optionalAuth, zValidator('param', shareParam), async (c) => {
   const { handle, slug } = c.req.valid('param');

@@ -63,7 +63,6 @@ function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: s
   );
 }
 
-/** The two collection totals that used to sit as chips under the page title. */
 export function CollectionStats({ totals }: { totals: CollectionSummary | undefined }) {
   return (
     <Box

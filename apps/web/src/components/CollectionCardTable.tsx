@@ -23,18 +23,10 @@ import { FoilSheen } from './FoilSheen';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
-/** Height of one row, which is also the width of the square art tile. */
+/** Row height, also the art tile width. */
 const ART_SIZE = 64;
 
-/**
- * The artwork window: the fractions of the card image cut away from each edge.
- *
- * These four numbers are the ones to edit while tuning the crop. Raise `top` to
- * move the window down the card; raise `bottom` to cut more off the foot; change
- * `left` and `right` to trim the sides. The window is a square in the layout, so
- * if these numbers leave a rectangle, the longer side is trimmed evenly and the
- * centre of the artwork stays in the centre.
- */
+/** Crop fractions per edge; the layout trims the longer side evenly to keep art centred. */
 const CARD_ART_CROP = {
   top: 0.115,
   left: 0.1,
@@ -42,7 +34,7 @@ const CARD_ART_CROP = {
   bottom: 0.485,
 };
 
-/** Scryfall card images are 488 by 680 pixels, so height over width. */
+/** Scryfall images are 488x680, so this ratio is height over width. */
 const CARD_IMAGE_ASPECT = 680 / 488;
 
 const finishLabels: Record<string, string> = {
@@ -50,28 +42,19 @@ const finishLabels: Record<string, string> = {
   etched: 'etched',
 };
 
-/** Green for a rise, red for a fall, dim for no news. */
 function changeColor(change: string | null) {
   if (change === null) return 'text.disabled';
   return change.startsWith('+') ? 'success.main' : 'error.main';
 }
 
-/**
- * Places the full card image so the artwork window fills the square.
- *
- * Width and offsets are percentages of the square, which is the containing
- * block for the absolutely placed image. `maxWidth` is cleared because the
- * scaled image is wider than its box on purpose.
- */
+/** Percent offsets scale the image; maxWidth is cleared so it can overflow on purpose. */
 function artCropSx() {
   const windowWidth = 1 - CARD_ART_CROP.left - CARD_ART_CROP.right;
   const windowHeight = 1 - CARD_ART_CROP.top - CARD_ART_CROP.bottom;
 
   const scale = 1 / Math.min(windowWidth, windowHeight * CARD_IMAGE_ASPECT);
-  // Fractions of the image that the square can show, in each direction.
   const visibleWidth = 1 / scale;
   const visibleHeight = 1 / (scale * CARD_IMAGE_ASPECT);
-  // Centre whatever the window leaves over, so trimming stays symmetrical.
   const offsetX = CARD_ART_CROP.left + (windowWidth - visibleWidth) / 2;
   const offsetY = CARD_ART_CROP.top + (windowHeight - visibleHeight) / 2;
 
@@ -85,13 +68,8 @@ function artCropSx() {
   };
 }
 
-/**
- * One square of card artwork, flush with the row's left edge.
- *
- * Hovering shows the whole card to the right of the square, top-aligned with
- * the row. The preview is portalled so the table cannot clip it.
- */
-function ArtSquare({ url, foil }: { url: string | null; foil: boolean }) {
+/** Hover preview is portalled so the table cannot clip it. */
+export function CardArtSquare({ url, foil }: { url: string | null; foil: boolean }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   return (
@@ -140,13 +118,7 @@ function ArtSquare({ url, foil }: { url: string | null; foil: boolean }) {
   );
 }
 
-/**
- * A column title that sorts the table.
- *
- * The down caret always means the column's natural order: A to Z for the name,
- * and largest first for the two numbers. Clicking the active column flips it,
- * which shows the up caret and the reverse order.
- */
+/** Down caret is natural order; clicking the active column reverses it. */
 function SortHeader({
   label,
   column,
@@ -169,7 +141,6 @@ function SortHeader({
       ? 'asc'
       : 'desc';
 
-  // Down means the natural order: A-Z for text, biggest first for numbers.
   const downCaret = column === 'name' ? dir === 'asc' : dir === 'desc';
 
   return (
@@ -212,7 +183,6 @@ function SortHeader({
   );
 }
 
-/** Gold arrows when offered, grey arrows when kept. */
 function TradeMark({ forTrade }: { forTrade: boolean }) {
   return forTrade ? (
     <SwapHorizIcon fontSize="small" color="primary" />
@@ -221,7 +191,6 @@ function TradeMark({ forTrade }: { forTrade: boolean }) {
   );
 }
 
-/** One card row: art, name, set, price, weekly move. */
 export function CollectionCardRow({
   item,
   onClick,
@@ -262,7 +231,7 @@ export function CollectionCardRow({
       }}
     >
       <Stack direction="row" sx={{ height: ART_SIZE, minWidth: 0 }}>
-        <ArtSquare url={item.imageUrl} foil={item.finish === 'foil'} />
+        <CardArtSquare url={item.imageUrl} foil={item.finish === 'foil'} />
 
         <Stack
           direction="row"
@@ -366,13 +335,6 @@ export function CollectionCardRow({
   );
 }
 
-/**
- * A flush table of card rows.
- *
- * Rows are clickable when `onRowClick` is given. When `renderDetail` is given,
- * every row in `expandedIds` stays open and shows its detail, so several can be
- * open at once.
- */
 export function CollectionCardTable({
   items,
   onRowClick,
@@ -387,15 +349,12 @@ export function CollectionCardTable({
 }: {
   items: CollectionHighlight[];
   onRowClick?: (item: CollectionHighlight) => void;
-  /** Rows that are open. Several may be open at once. */
   expandedIds?: ReadonlySet<string>;
   renderDetail?: (item: CollectionHighlight) => ReactNode;
-  /** Current order, and the setter. Headers appear only when the setter is given. */
   sort?: CollectionSort;
   dir?: SortDirection;
   onSortChange?: (sort: CollectionSort, dir: SortDirection) => void;
   changeMode?: 'amount' | 'percent';
-  /** Shows the trade button and flips the flag. */
   onToggleTrade?: (item: CollectionHighlight) => void;
   tradeSaving?: boolean;
 }) {

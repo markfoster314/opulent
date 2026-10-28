@@ -3,13 +3,6 @@ import { users } from '@opulent/db';
 import { eq } from 'drizzle-orm';
 import { getEnv } from '../../env';
 
-/**
- * Tells the other person it is their turn.
- *
- * Off unless RESEND_API_KEY and EMAIL_FROM are set, so local work sends
- * nothing. One plain template, one provider, plain `fetch`. The Trades badge
- * in the app is the floor. This is the nudge on top of it.
- */
 export function notifyTurn(db: Database, trade: TradeRow, actorId: string): void {
   const env = getEnv();
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;

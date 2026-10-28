@@ -1,18 +1,12 @@
 import { z } from 'zod';
 
-/**
- * A city the picker can show and save.
- *
- * Coordinates stay on the server. A share link never includes them, and a
- * radius search returns a distance rather than another person's pin.
- */
+/** Coordinates stay on the server: share links omit them and a radius search returns a distance, not a pin. */
 export const placeRefSchema = z.object({
   geonameId: z.number().int().positive(),
   label: z.string(),
 });
 export type PlaceRef = z.infer<typeof placeRefSchema>;
 
-/** The id of a GeoNames city, as stored on the user. */
 export const placeIdSchema = z.number().int().positive();
 
 export const placeSearchQuerySchema = z.object({

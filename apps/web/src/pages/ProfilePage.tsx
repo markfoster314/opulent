@@ -495,7 +495,6 @@ function ProfileLinks({
     matchCount?: number | undefined;
   }[];
   href: (slug: string) => string;
-  /** A small heading over the list when the lead card stands apart from it. */
   itemsLabel?: string;
 }) {
   return (

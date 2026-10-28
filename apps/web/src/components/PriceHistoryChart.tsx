@@ -43,16 +43,7 @@ interface ChartPoint {
   value: number;
 }
 
-/**
- * The price line for one printing, in the finish the owner actually holds.
- *
- * History stores change points, and the server carries the last price forward,
- * so every day in the window has a value. A foil is charted with foil prices,
- * never the plain ones.
- *
- * The heading shows the newest price and the change across the whole window.
- * Hovering reads any day through the tooltip.
- */
+/** Charts the finish the owner holds; the server carries the last price forward, so every day has a value. */
 export function PriceHistoryChart({
   scryfallId,
   finish,
@@ -67,7 +58,6 @@ export function PriceHistoryChart({
   const { data, isLoading, error } = useCardPriceSeries(scryfallId, range);
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
-  // A new window or a new card starts on the window the collection chose.
   useEffect(() => {
     setRange(defaultRange);
   }, [defaultRange, scryfallId]);
@@ -174,7 +164,6 @@ export function PriceHistoryChart({
   );
 }
 
-/** Newest price, its date, and the change across the whole window. */
 function Reading({
   point,
   change,
@@ -218,7 +207,6 @@ function axisMoney(value: number): string {
   return Math.abs(value) >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value.toFixed(2)}`;
 }
 
-/** 2026-10-27 -> Oct 27. */
 function formatDay(day: string): string {
   const [year, month, date] = day.split('-').map(Number);
   if (!year || !month || !date) return day;

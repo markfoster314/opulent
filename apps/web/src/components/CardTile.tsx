@@ -47,7 +47,6 @@ export function collectionTilePrice(
   return null;
 }
 
-/** Set code, printing, quality, and language code, in one line under the name. */
 export function collectionTileCaption(item: CollectionItem): string {
   if (!item.card) return '';
   return [
@@ -68,7 +67,6 @@ export interface CardTileMark {
 const markSize = 34;
 const markIconSize = 18;
 
-/** Notes first, then the copy marks, and only the ones this stack has. */
 function cardMarks(
   props: Pick<
     CardTileProps,
@@ -127,12 +125,7 @@ function cardMarks(
   return marks;
 }
 
-/**
- * Card images are hotlinked straight from Scryfall's CDN.
- *
- * The Scryfall terms forbid cropping, stretching, recolouring or watermarking
- * card images, so this tile only ever scales the whole image proportionally.
- */
+/** Scryfall terms forbid cropping, stretching, recolouring, or watermarking, so only scale the image. */
 export function CardTile({
   card,
   quantity,

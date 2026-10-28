@@ -1,5 +1,10 @@
 import { pathToFileURL } from 'node:url';
-import { genericWantMatchKey, type CreateGenericWantInput } from '@opulent/shared';
+import {
+  cardLanguageOrEnglish,
+  genericWantMatchKey,
+  wantScopeKey,
+  type CreateGenericWantInput,
+} from '@opulent/shared';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -19,34 +24,24 @@ import {
   trades,
   users,
   wantItems,
+  wantListItems,
   wantLists,
 } from './schema';
 import type { NewCardPriceHistoryRow } from './schema';
 
-/**
- * Dev data for local trade tests.
- *
- * Looks up real cities and real card printings already in the database.
- * Each group and each want list gets 100 cards. Part of each list is shared
- * across these users. The rest of each list is unique.
- * Safe to run again. It replaces seed groups, seed want lists, seed generic
- * wants, friendships, and trades between these ten users. It leaves every other row alone.
- *
- *   pnpm db:seed
- */
+/** Dev trade data; re-running replaces only these ten users' rows, never anyone else's. */
 
-/** Each group and each want list gets this many cards. */
 const CARDS_PER_COLLECTION = 100;
 
-/** Days of frozen collection values to seed, ending yesterday. */
+/** Frozen days of collection values; ends yesterday because today stays live. */
 const SNAPSHOT_DAYS = 120;
 
-/** Cards many people both own and want. The rest of each list is unique. */
+/** Cards many users both own and want; the rest of each list is unique. */
 const SHARED_POOL_SIZE = 240;
 const SHARED_HAVE = 80;
 const SHARED_WANT = 80;
 
-/** One English printing per card, enough for the shared pool plus unique fillers. */
+/** One English printing per card: enough for the shared pool plus unique fillers. */
 const POOL_SIZE = 4200;
 
 const SKIPPED_LAYOUTS = [
@@ -167,6 +162,12 @@ type Printing = {
   finishes: string[];
 };
 
+type WantChoices = {
+  languages: Set<string>;
+  finishes: Set<string>;
+  sets: Set<string>;
+};
+
 type OwnedCopy = {
   printing: Printing;
   finish: 'foil' | 'nonfoil';
@@ -271,6 +272,10 @@ export async function runSeed() {
     const placeIds = await loadPlaces(db);
     const pool = await loadPrintings(db);
     const priceRows = await seedPriceHistory(db, pool);
+    const wantChoices = await loadWantChoices(
+      db,
+      pool.map((card) => card.oracleId),
+    );
     const shared = pool.slice(0, SHARED_POOL_SIZE);
     const filler = pool.slice(SHARED_POOL_SIZE);
     const fillerCursor = { index: 0 };
@@ -303,6 +308,7 @@ export async function runSeed() {
     await db.delete(cardGroups).where(inArray(cardGroups.userId, ids));
     await db.delete(collectionValueSnapshots).where(inArray(collectionValueSnapshots.userId, ids));
     await db.delete(collectionItems).where(inArray(collectionItems.userId, ids));
+    await db.delete(wantItems).where(inArray(wantItems.userId, ids));
     await db
       .delete(wantLists)
       .where(and(inArray(wantLists.userId, ids), like(wantLists.slug, 'seed-%')));
@@ -420,15 +426,44 @@ export async function runSeed() {
           })
           .returning({ id: wantLists.id });
         if (!list) throw new Error(`Could not create a want list for ${person.username}`);
-        await db.insert(wantItems).values(
-          group.map((card, cardIndex) => ({
-            userId,
-            wantListId: list.id,
-            oracleId: card.oracleId,
-            quantity: 1,
-            priority: ((cardIndex % 3) + 1) as 1 | 2 | 3,
-          })),
-        );
+        await db
+          .insert(wantItems)
+          .values(
+            group.map((card, cardIndex) => {
+              const scope = singleChoiceScope(wantChoices.get(card.oracleId));
+              return {
+                userId,
+                oracleId: card.oracleId,
+                quantity: 1,
+                priority: ((cardIndex % 3) + 1) as 1 | 2 | 3,
+                ...scope,
+                scopeKey: wantScopeKey(scope),
+              };
+            }),
+          )
+          .onConflictDoNothing();
+        const stored = await db
+          .select({ id: wantItems.id, oracleId: wantItems.oracleId })
+          .from(wantItems)
+          .where(
+            and(
+              eq(wantItems.userId, userId),
+              inArray(
+                wantItems.oracleId,
+                group.map((card) => card.oracleId),
+              ),
+            ),
+          );
+        const storedByOracle = new Map(stored.map((row) => [row.oracleId, row.id]));
+        await db
+          .insert(wantListItems)
+          .values(
+            group.flatMap((card) => {
+              const wantId = storedByOracle.get(card.oracleId);
+              return wantId ? [{ wantListId: list.id, wantItemId: wantId, userId }] : [];
+            }),
+          )
+          .onConflictDoNothing();
         listCount += 1;
         wantCount += group.length;
         const wish = wantsByUser.get(person.username) ?? new Set<string>();
@@ -526,16 +561,7 @@ export async function runSeed() {
   }
 }
 
-/**
- * Fake change points for the cards the seed uses.
- *
- * History keeps a row only on the day a price changes, so one row is enough for
- * a seeded card: its current price on the first day of its window. Readers carry
- * that price forward, which gives charts a flat line without inventing movement.
- *
- * Only the seed's card pool gets rows. The card table holds more than half a
- * million printings, so touching all of them would be needless work in a seed.
- */
+/** History keeps only change days, so one row per seeded card gives a flat line; the other 500k+ printings stay untouched. */
 async function seedPriceHistory(
   db: ReturnType<typeof drizzle>,
   printings: Printing[],
@@ -609,7 +635,7 @@ function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Every `days` days from `start` up to `end`, with `end` always included. */
+/** Steps of `days` from `start`; always includes `end`. */
 function everyFewDays(start: Date, end: Date, days: number): Date[] {
   const step = days * 86_400_000;
   const points: Date[] = [];
@@ -626,7 +652,6 @@ function parseDay(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** A price moved by a factor and rounded to cents, or null when there is none. */
 function priceAt(value: string | null | undefined, factor: number): string | null {
   if (value === null || value === undefined || value === '') return null;
   const amount = Number(value);
@@ -634,22 +659,7 @@ function priceAt(value: string | null | undefined, factor: number): string | nul
   return (amount * factor).toFixed(2);
 }
 
-/**
- * Gives Mark's cards a year of movement.
- *
- * Every other seeded card keeps one flat change point, which draws a line but
- * makes a dull chart. Mark's own cards get a change every two weeks, shaped by a
- * smooth wave plus a small deterministic wobble: interesting to look at, and the
- * same on every reseed. The last few points settle back onto the card's real
- * price, so the line ends where the collection page says it does and the nightly
- * job has nothing to correct.
- */
-/**
- * Seed a frozen value for each of the last SNAPSHOT_DAYS, ending yesterday.
- *
- * The shape is a gentle upward trend with a small sine wiggle, so dev charts
- * have movement without inventing per-card history. Today stays live.
- */
+/** Gentle upward trend with a sine wiggle, so dev charts move without inventing real history. */
 async function seedCollectionSnapshots(
   db: ReturnType<typeof drizzle>,
   userIds: string[],
@@ -747,6 +757,7 @@ async function currentCollectionValues(
   return rows.map((row) => ({ userId: row.userId, value: Number(row.value) }));
 }
 
+/** Mark's cards move every two weeks on a wave plus deterministic wobble, tapered onto the real price. */
 async function seedMarkPriceHistory(
   db: ReturnType<typeof drizzle>,
   markUserId: string,
@@ -787,8 +798,7 @@ async function seedMarkPriceHistory(
     const phase = hashUnit(`${card.scryfallId}:phase`) * Math.PI * 2;
 
     days.forEach((day, step) => {
-      // Fade the movement out over the last four points so the line lands on the
-      // current price instead of jumping to it.
+      // Fade movement out over the last four points so the line lands on the current price.
       const left = days.length - 1 - step;
       const taper = Math.min(1, left / 4);
       const wave = Math.sin(step * 0.55 + phase) * 0.2;
@@ -872,6 +882,59 @@ async function loadPrintings(db: ReturnType<typeof drizzle>): Promise<Printing[]
     );
   }
   return pool;
+}
+
+async function loadWantChoices(
+  db: ReturnType<typeof drizzle>,
+  oracleIds: string[],
+): Promise<Map<string, WantChoices>> {
+  const unique = [...new Set(oracleIds)];
+  const byOracle = new Map<string, WantChoices>();
+  for (let start = 0; start < unique.length; start += 1000) {
+    const chunk = unique.slice(start, start + 1000);
+    const rows = (await db.execute(sql`
+      SELECT
+        ${cards.oracleId} AS "oracleId",
+        ${cards.lang} AS lang,
+        ${cards.finishes} AS finishes,
+        ${cards.setCode} AS "setCode"
+      FROM ${cards}
+      WHERE ${cards.oracleId} IN (${sql.join(
+        chunk.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+        AND jsonb_exists(${cards.raw}->'games', 'paper')
+        AND ${cards.layout} IS DISTINCT FROM 'art_series'
+    `)) as unknown as {
+      oracleId: string;
+      lang: string;
+      finishes: unknown;
+      setCode: string;
+    }[];
+
+    for (const row of rows) {
+      const choices = byOracle.get(row.oracleId) ?? {
+        languages: new Set<string>(),
+        finishes: new Set<string>(),
+        sets: new Set<string>(),
+      };
+      choices.languages.add(cardLanguageOrEnglish(row.lang));
+      for (const finish of readFinishes(row.finishes)) choices.finishes.add(finish);
+      choices.sets.add(row.setCode.toLowerCase());
+      byOracle.set(row.oracleId, choices);
+    }
+  }
+  return byOracle;
+}
+
+/** A list that has one choice is stored as that choice, not as "any". */
+function singleChoiceScope(choices: WantChoices | undefined) {
+  return {
+    wantedLanguages: choices?.languages.size === 1 ? [...choices.languages] : [],
+    wantedFinishes: choices?.finishes.size === 1 ? [...choices.finishes] : [],
+    wantedConditions: [],
+    wantedSets: choices?.sets.size === 1 ? [...choices.sets] : [],
+  };
 }
 
 function toCopies(
@@ -1133,7 +1196,7 @@ async function seedTrades(
   return TRADE_PLANS.length;
 }
 
-/** Cards `holder` has for trade. Prefer cards `wanter` already wants. */
+/** Holder's trade stock, with cards the wanter already wants first. */
 function pickCards(
   stock: Map<string, StockCard[]>,
   wantsByUser: Map<string, Set<string>>,

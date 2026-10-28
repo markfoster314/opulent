@@ -11,13 +11,7 @@ const MOVERS_PER_TABLE = 5;
 /** Five 64 px rows, four dividers, and the table border. Keeps the section still. */
 const MOVERS_MIN_HEIGHT = MOVERS_PER_TABLE * 64 + 8;
 
-/**
- * The dashboard's second section: the biggest gains and the biggest drops.
- *
- * Each table is a fixed view, so its header is a caption. The two View all
- * buttons carry the window and format to the card list, plus the direction that
- * matches the table they came from.
- */
+/** The View all buttons carry the window, format, and each table's own direction to the card list. */
 export function TopMovers({ enabled }: { enabled: boolean }) {
   const [range, setRange] = useState<PriceRange>('1w');
   const [changeMode, setChangeMode] = useState<'amount' | 'percent'>('amount');
@@ -103,8 +97,7 @@ function MoverTable({
     <Stack spacing={1} sx={{ minWidth: 0 }}>
       <Typography variant="h3">{title}</Typography>
 
-      {/* This box holds the height of a full table whether the list is short,
-          empty, or swapping to another window. */}
+      {/* Holds a full table's height whether the list is short, empty, or swapping windows. */}
       <Box
         aria-busy={fetching}
         sx={{

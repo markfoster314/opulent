@@ -5,10 +5,7 @@ import type { CatalogSource } from './catalog';
 
 const BATCH_SIZE = 500;
 
-/**
- * Upserts a batch. Existing rows are refreshed rather than skipped, because
- * prices change daily and that is a large part of why we re-import.
- */
+/** Refresh existing rows instead of skipping; daily price changes are the point. */
 async function writeBatch(db: Database, batch: NewCardRow[]): Promise<void> {
   if (batch.length === 0) return;
 
@@ -46,7 +43,6 @@ export interface ImportStats {
   skipped: number;
 }
 
-/** Streams one catalog into the cards table. Works the same for any source. */
 export async function importCatalog<Item>(
   db: Database,
   source: CatalogSource<Item>,

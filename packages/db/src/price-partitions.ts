@@ -10,17 +10,7 @@ function isoDay(date: Date): string {
 /** The one method these helpers need, so a plain drizzle handle also fits. */
 type Executor = Pick<Database, 'execute'>;
 
-/**
- * Creates the monthly partitions that cover a date range.
- *
- * An insert with no partition to land in fails, so the callers make the months
- * they are about to write. Existing months are read first and skipped, so a
- * second caller, or a rerun, costs one query and prints nothing.
- *
- * Each partition is named after its month, which is what makes retention cheap:
- * `DROP TABLE card_price_history_2025_10` removes that month and its indexes in
- * one step, with no delete and no vacuum.
- */
+/** Creates the partitions a writer needs, since an insert with no partition fails; month-named tables make retention one DROP, with no delete or vacuum. */
 
 export async function ensurePricePartitions(db: Executor, from: string, to: string): Promise<void> {
   const start = new Date(`${from}T00:00:00Z`);
@@ -32,8 +22,7 @@ export async function ensurePricePartitions(db: Executor, from: string, to: stri
   const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
   const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
 
-  // Ask once which months are already there. Creating a duplicate is harmless
-  // but prints a notice on every run, which reads like a fault in the job log.
+  // Read the existing months first: a duplicate CREATE is harmless but logs a notice that looks like a fault.
   const known = (await db.execute(sql`
     SELECT c.relname AS name
     FROM pg_inherits i
@@ -49,8 +38,7 @@ export async function ensurePricePartitions(db: Executor, from: string, to: stri
     ).padStart(2, '0')}`;
 
     if (!existing.has(name)) {
-      // Bounds are part of the statement, not values: PostgreSQL rejects bind
-      // parameters there. Both strings come from `isoDay`, so they are safe.
+      // Bounds must be statement text, not bind parameters, which PostgreSQL rejects; both strings come from isoDay.
       await db.execute(sql`
         CREATE TABLE ${sql.identifier(name)}
         PARTITION OF card_price_history
@@ -62,10 +50,7 @@ export async function ensurePricePartitions(db: Executor, from: string, to: stri
   }
 }
 
-/**
- * The month range the nightly job keeps ready: a margin behind today for late
- * corrections, and a few months ahead so the job never fails at a month boundary.
- */
+/** The range the nightly job keeps ready: a margin behind today for late corrections, a few months ahead so it never fails at a month boundary. */
 export function pricePartitionWindow(): { from: string; to: string } {
   const now = Date.now();
   return {

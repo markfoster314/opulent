@@ -6,7 +6,6 @@ import { useExportCollection } from '../api/queries';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
-/** Hands the CSV text to the browser as a file download. */
 function downloadCsv(csv: string) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -19,12 +18,7 @@ function downloadCsv(csv: string) {
   URL.revokeObjectURL(url);
 }
 
-/**
- * The title, the CSV actions, and the collection totals.
- *
- * Shared by the collection overview and the full card list so the two pages
- * cannot drift apart.
- */
+/** Shared by the overview and the full card list so the two pages cannot drift apart. */
 export function CollectionHeader({
   title,
   totals,

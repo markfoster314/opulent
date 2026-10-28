@@ -10,7 +10,6 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import type { Card, CardSet } from '@opulent/shared';
-import { formatUsd, priceForFinish } from '@opulent/shared';
 import { useEffect, useState } from 'react';
 import { useCardPrintings, useCardSets } from '../api/queries';
 import { useDebounced } from '../hooks/useDebounced';
@@ -22,18 +21,12 @@ interface PrintingPickerProps {
   onSelect: (printing: Card) => void;
 }
 
-/**
- * Lets the owner say which printing of a card they actually hold.
- *
- * It matters for trading: two Sol Rings can be a dollar or forty dollars apart
- * depending on the set, so "a Sol Ring" is not a tradeable description. The grid
- * holds two rows, and the arrows page through the rest.
- */
+/** Printing matters for value; show two rows and page through the rest. */
 export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPickerProps) {
   const [setFilter, setSetFilter] = useState('');
   const debouncedFilter = useDebounced(setFilter);
 
-  // Columns drive the page size, so every page fills exactly two rows.
+  // Columns set the page size so every page fills two rows.
   const isMd = useMediaQuery('(min-width:900px)');
   const isLg = useMediaQuery('(min-width:1200px)');
   const columns = isLg ? 5 : isMd ? 4 : 3;
@@ -46,7 +39,6 @@ export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPicke
 
   const printings = query.data?.items ?? [];
 
-  // A new card or a new column count starts at the first page.
   useEffect(() => {
     setPageIndex(0);
     setCursors([null]);
@@ -70,7 +62,7 @@ export function PrintingPicker({ oracleId, selectedId, onSelect }: PrintingPicke
   }
 
   const hasPagination = pageIndex > 0 || Boolean(query.data?.nextCursor);
-  // Fill the last page's empty cells so it keeps the height of a full page.
+  // Empty cells keep the last page the height of a full page.
   const placeholders =
     hasPagination && printings.length > 0 && printings.length < limit
       ? limit - printings.length
@@ -159,24 +151,9 @@ interface PrintingTileProps {
   onSelect: () => void;
 }
 
-/**
- * One printing: the card image, then its set code and collector number.
- *
- * The image runs to the tile edges. Hovering shows the same large preview the
- * collection tables use, portalled so the grid cannot clip it. Scryfall terms
- * forbid cropping, so the image is only ever scaled.
- */
+/** Scryfall terms forbid cropping, so scale only; portal the preview so the grid cannot clip it. */
 function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
   const image = printing.imageUris?.normal ?? printing.imageUris?.small;
-  const nonfoil = printing.finishes.includes('nonfoil')
-    ? formatUsd(priceForFinish(printing.prices, 'nonfoil'))
-    : null;
-  const foil = printing.finishes.includes('foil')
-    ? formatUsd(priceForFinish(printing.prices, 'foil'))
-    : null;
-  const etched = printing.finishes.includes('etched')
-    ? formatUsd(priceForFinish(printing.prices, 'etched'))
-    : null;
   const iconColor = rarityIconColor(printing.rarity, printing.typeLine);
   const iconUrl = `https://svgs.scryfall.io/sets/${printing.setCode.toLowerCase()}.svg`;
 
@@ -232,22 +209,6 @@ function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
             </Typography>
           </Stack>
         )}
-
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 6,
-            bottom: 6,
-            display: 'grid',
-            gap: 0.5,
-            gridTemplateColumns: 'max-content',
-            pointerEvents: 'none',
-          }}
-        >
-          {nonfoil && <PricePill price={nonfoil} />}
-          {foil && <PricePill label="F" price={foil} />}
-          {etched && <PricePill label="EF" price={etched} />}
-        </Box>
       </Box>
 
       <Stack
@@ -257,7 +218,6 @@ function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
         justifyContent="center"
         sx={{ p: 0.75, minWidth: 0, overflow: 'hidden' }}
       >
-        {/* The set symbol is a mask, so its colour follows the card rarity. */}
         <Box
           aria-hidden
           sx={{
@@ -306,10 +266,7 @@ function PrintingTile({ printing, selected, onSelect }: PrintingTileProps) {
   );
 }
 
-/**
- * Scryfall set symbols are black, so the colour comes from the card's rarity.
- * Lands count as common. White wins on the dark tile over the offered black.
- */
+/** Set symbols are black, so use rarity colour; white reads best on the dark tile. */
 function rarityIconColor(rarity: string | null, typeLine: string | null): string {
   if (typeLine?.toLowerCase().includes('land')) return '#FFFFFF';
   if (rarity === 'uncommon') return '#B9DCED';
@@ -318,46 +275,6 @@ function rarityIconColor(rarity: string | null, typeLine: string | null): string
   return '#FFFFFF';
 }
 
-/** A small price chip over the card image: coloured dot, optional finish letter, price. */
-function PricePill({ label, price }: { label?: string; price: string }) {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
-        px: 1,
-        py: 0.375,
-        borderRadius: 99,
-        backgroundColor: 'rgba(11, 11, 12, 0.62)',
-        border: '1px solid rgba(255, 255, 255, 0.14)',
-        backdropFilter: 'blur(4px)',
-      }}
-    >
-      {label && (
-        <Typography
-          sx={{ fontSize: 12, fontWeight: 700, lineHeight: 1, color: palette.textSecondary }}
-        >
-          {label}
-        </Typography>
-      )}
-      <Typography
-        sx={{
-          ml: 'auto',
-          fontSize: 14,
-          fontWeight: 600,
-          lineHeight: 1,
-          color: palette.textSecondary,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {price}
-      </Typography>
-    </Box>
-  );
-}
-
-/** An invisible tile that holds the height of a missing card in the last row. */
 function PrintingTilePlaceholder() {
   return (
     <Box
@@ -390,13 +307,7 @@ function setLabel(set: CardSet): string {
   return set.setName ?? set.setCode.toUpperCase();
 }
 
-/**
- * A text box whose list is this card's sets, narrowed by what is typed.
- *
- * Matching covers the set name and the short code, so "MH3" finds Modern
- * Horizons 3. Choosing a row fills the box with that set's name, which is
- * what the tiles below then filter on.
- */
+/** Match set name or code; choosing a row fills the name that filters the tiles. */
 function SetFilter({
   sets,
   loading,

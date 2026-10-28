@@ -1,13 +1,6 @@
 import type { AddCollectionItemInput } from '@opulent/shared';
 
-/**
- * One card a visitor chose before they had an account.
- *
- * Sign-up leaves this page for the identity provider, so the choice needs a home
- * that survives the round trip. `sessionStorage` is per tab and per origin: the
- * draft dies with the tab, it cannot follow the person to another device, and it
- * never reaches the server until the collection page replays it.
- */
+/** Pre-signup card choice; sessionStorage survives the identity-provider round trip and dies with the tab. */
 const KEY = 'opulent-tutor.pending-add';
 
 /** Long enough for a sign-up, short enough that an abandoned tab is forgotten. */
@@ -64,16 +57,13 @@ export function hasPendingAdd(): boolean {
   return readPendingAdd() !== null;
 }
 
-/**
- * Reads the draft and removes it in one step, so two mounts of the collection
- * page cannot add the same card twice.
- */
+/** Reads and removes the draft in one step, so two mounts cannot add the card twice. */
 export function takePendingAdd(): PendingAdd | null {
   const draft = readPendingAdd();
   try {
     store()?.removeItem(KEY);
   } catch {
-    // Nothing to clear.
+    // Cleanup is best effort; the draft has already been read.
   }
   return draft;
 }

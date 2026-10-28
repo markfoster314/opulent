@@ -38,39 +38,24 @@ import {
 import { PrintingPicker } from './PrintingPicker';
 import { FoilSheen } from './FoilSheen';
 
-/** The stored market price as dollars and cents, or blank when there is none. */
 function marketDollar(prices: Card['prices'], finish: CardDetails['finish']): string {
   const market = priceForFinish(prices, finish);
   return market ? (parseCustomAmount(market) ?? '') : '';
 }
 
 interface AddCardPanelProps {
-  /**
-   * The card chosen from search. Card search collapses to one row per card
-   * concept, so this is the newest printing and acts as the starting selection.
-   */
+  /** Search collapses to one row per card, so this starts at its newest printing. */
   card: Card;
   onAdd: (input: AddCollectionItemInput) => void;
   onCancel: () => void;
   pending: boolean;
   error?: string | undefined;
-  /**
-   * A visitor's first card. Price, photo link, and notes fold behind "More
-   * options", so the form between the card and sign-up stays short.
-   */
+  /** On the landing page, fold advanced fields to keep the form short before sign-up. */
   foldAdvanced?: boolean;
+  defaultGroupId?: string | undefined;
 }
 
-/**
- * The steps between finding a card and it landing in the collection.
- *
- * The set comes first, because two copies of one name can be worth very
- * different amounts. The quantity and condition come after that. Going back
- * returns to the set list and keeps what was already typed.
- *
- * Mount this with `key={card.oracleId}` so picking a different card from search
- * gives a fresh panel rather than carrying the previous card's choices over.
- */
+/** Set comes first because printings differ in value; mount with key={card.oracleId} to reset per card. */
 export function AddCardPanel({
   card,
   onAdd,
@@ -78,10 +63,11 @@ export function AddCardPanel({
   pending,
   error,
   foldAdvanced,
+  defaultGroupId,
 }: AddCardPanelProps) {
   const [step, setStep] = useState<'set' | 'details'>('set');
   const [hasChosenSet, setHasChosenSet] = useState(false);
-  /** The first set expansion animates; later step switches are instant. */
+  /** Animate only the first set expansion; later step switches are instant. */
   const [settled, setSettled] = useState(false);
   const [printing, setPrinting] = useState<Card>(card);
   const [details, setDetails] = useState<CardDetails>({
@@ -100,15 +86,10 @@ export function AddCardPanel({
     priceKind: 'market',
     pricePercent: '100',
     priceAmount: marketDollar(card.prices, defaultFinish(card.finishes)),
-    groupIds: [],
+    groupIds: defaultGroupId ? [defaultGroupId] : [],
   });
 
-  /**
-   * Switching printing can invalidate the finish, because a Secret Lair drop may
-   * be foil only while the set it replaced was never foiled at all. Correcting
-   * it here rather than in an effect avoids a render that claims the owner holds
-   * a finish that was never printed.
-   */
+  /** Correct finish on printing change so a foil-only drop never keeps an unprinted finish. */
   function handleSelectPrinting(next: Card, language?: CardLanguage) {
     setPrinting(next);
     setDetails((current) => {

@@ -6,7 +6,7 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import RemoveIcon from '@mui/icons-material/Remove';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import { IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import type { UpdateWantItemInput, WantItem } from '@opulent/shared';
+import type { UpdateWantItemInput, WantItem, WantList } from '@opulent/shared';
 import { cardConditionLabels, cardFinishLabels, cardLanguageLabels } from '@opulent/shared';
 import { useEffect, useRef, useState } from 'react';
 import { palette } from '../theme';
@@ -20,11 +20,13 @@ interface WantItemTileProps {
   onRemove: (wantId: string) => void;
   saving: boolean;
   error?: string | undefined;
-  /** A shared list shows the card only. The owner still gets the edit controls. */
+  /** Shared lists show the card only; owners still get edit controls. */
   readOnly?: boolean;
+  lists?: WantList[];
+  /** A list's action says "Remove from list"; the dialog says delete. */
+  removeLabel?: string;
 }
 
-/** How long to wait after the last click before sending the new quantity. */
 const QUANTITY_DEBOUNCE_MS = 500;
 const markIconSize = 18;
 
@@ -32,55 +34,39 @@ function named(codes: readonly string[], labels?: Record<string, string>): strin
   return codes.map((code) => labels?.[code] ?? code.toUpperCase()).join(', ');
 }
 
-/** A short line for the mark, or nothing when that choice is still "any". */
 function specText(
   title: string,
   wanted: readonly string[],
-  unwanted: readonly string[],
   labels?: Record<string, string>,
 ): string | null {
-  if (wanted.length === 0 && unwanted.length === 0) return null;
-  const keep = wanted.length > 0 ? named(wanted, labels) : '';
-  const drop = unwanted.length > 0 ? `Not ${named(unwanted, labels)}` : '';
-  const detail = [keep, drop].filter((part) => part !== '').join('. ');
-  return `${title}: ${detail}`;
+  if (wanted.length === 0) return null;
+  return `${title}: ${named(wanted, labels)}`;
 }
 
-/** One mark for each of the four choices the owner narrowed. */
 function specMarks(item: WantItem): CardTileMark[] {
   const specs: { key: string; label: string | null; color: string; icon: CardTileMark['icon'] }[] =
     [
       {
         key: 'language',
-        label: specText(
-          'Language',
-          item.wantedLanguages,
-          item.unwantedLanguages,
-          cardLanguageLabels,
-        ),
+        label: specText('Language', item.wantedLanguages, cardLanguageLabels),
         color: palette.markLanguage,
         icon: <LanguageOutlinedIcon sx={{ fontSize: markIconSize }} />,
       },
       {
         key: 'printing',
-        label: specText('Printing', item.wantedFinishes, item.unwantedFinishes, cardFinishLabels),
+        label: specText('Printing', item.wantedFinishes, cardFinishLabels),
         color: palette.markPrinting,
         icon: <AutoAwesomeOutlinedIcon sx={{ fontSize: markIconSize }} />,
       },
       {
         key: 'condition',
-        label: specText(
-          'Condition',
-          item.wantedConditions,
-          item.unwantedConditions,
-          cardConditionLabels,
-        ),
+        label: specText('Condition', item.wantedConditions, cardConditionLabels),
         color: palette.markCondition,
         icon: <VerifiedOutlinedIcon sx={{ fontSize: markIconSize }} />,
       },
       {
         key: 'set',
-        label: specText('Set', item.wantedSets, item.unwantedSets),
+        label: specText('Set', item.wantedSets),
         color: palette.markSet,
         icon: <LayersOutlinedIcon sx={{ fontSize: markIconSize }} />,
       },
@@ -98,6 +84,8 @@ export function WantItemTile({
   saving,
   error,
   readOnly,
+  lists = [],
+  removeLabel,
 }: WantItemTileProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftQuantity, setDraftQuantity] = useState(item.quantity);
@@ -182,6 +170,7 @@ export function WantItemTile({
       {!readOnly && (
         <WantItemDialog
           item={item}
+          lists={lists}
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           onSave={(input) => {

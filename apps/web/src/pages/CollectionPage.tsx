@@ -39,13 +39,7 @@ import { palette } from '../theme';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
-/**
- * The collection dashboard.
- *
- * The overview and the two tables tell the story of the value. Groups label the
- * piles, and the trade binder sits at the bottom. The full card grid lives on
- * /collection/cards, so this page no longer loads every stack.
- */
+/** Collection dashboard; the full card grid lives at /collection/cards to keep this page light. */
 export function CollectionPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth0();
   const me = useMe(isAuthenticated);
@@ -60,10 +54,7 @@ export function CollectionPage() {
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
   const draftTaken = useRef(false);
 
-  /**
-   * A visitor who chose a card before signing up gets it added here, once.
-   * The draft is taken before the request, so a second mount cannot repeat it.
-   */
+  /** Replays a pre-signup draft once; taking it before the request prevents a double add. */
   useEffect(() => {
     if (!isAuthenticated || draftTaken.current) return;
     draftTaken.current = true;
@@ -89,7 +80,6 @@ export function CollectionPage() {
     setAddOpen(false);
   }
 
-  /** The card panel has finished fading up; return to the search for the next card. */
   function handlePanelClosed() {
     // A new card may have been chosen while the old panel was fading out.
     if (!panelClosing) return;
@@ -110,8 +100,7 @@ export function CollectionPage() {
       )}
       {addItem.error && !draftCard && <Alert severity="error">{addItem.error.message}</Alert>}
 
-      {/* Header and add panel share one Stack child. The panel is animated inside
-          it, so no outer spacing margin disappears when the collapse unmounts. */}
+      {/* Header and add panel share one Stack child, so no spacing margin disappears when the collapse unmounts. */}
       <Box>
         <CollectionHeader
           title="My collection"
@@ -219,7 +208,6 @@ export function CollectionPage() {
   );
 }
 
-/** Private groups. A card can sit in several of them or in none. */
 function GroupsSection() {
   const { data, isLoading, error } = useGroups(true);
   const createGroup = useCreateGroup();

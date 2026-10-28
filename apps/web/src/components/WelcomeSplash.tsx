@@ -3,12 +3,9 @@ import { useEffect, useState } from 'react';
 import { palette } from '../theme';
 import { LogoMark } from './LogoMark';
 
-/** How long the welcome holds before the form takes over. */
 const HOLD_MS = 2800;
-/** How long the fade to the form takes. */
 const FADE_MS = 420;
 
-/** One keyframe set, shared by the two lines that rise into place. */
 const riseSx = {
   '@keyframes welcomeRise': {
     '0%': { opacity: 0, transform: 'translateY(12px)' },
@@ -21,34 +18,23 @@ interface WelcomeSplashProps {
   onDone: () => void;
 }
 
-/**
- * The first thing a new account sees: the card mark, the welcome, and one line
- * about what setup needs.
- *
- * It is not a dialog. It owns the whole window, leaves on its own after a short
- * beat, and leaves at once on a tap or any key, because no control inside it can
- * take focus. A reader who asked for less motion gets the same words held still
- * for a shorter time.
- */
+/** Owns the whole window and leaves on its own, or at once on any key; reduced motion holds it still. */
 export function WelcomeSplash({ onDone }: WelcomeSplashProps) {
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [leaving, setLeaving] = useState(false);
 
-  // Show for a beat, then start the fade.
   useEffect(() => {
     const timer = window.setTimeout(() => setLeaving(true), reduced ? 1600 : HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [reduced]);
 
-  // Fade, then hand the window to the form.
   useEffect(() => {
     if (!leaving) return;
     const timer = window.setTimeout(onDone, reduced ? 150 : FADE_MS);
     return () => window.clearTimeout(timer);
   }, [leaving, onDone, reduced]);
 
-  // A tap is handled on the box. A key has to be caught on the window, because
-  // nothing inside the splash holds focus.
+  // A key is caught on the window because nothing inside the splash can take focus.
   useEffect(() => {
     function leave() {
       setLeaving(true);
@@ -115,9 +101,7 @@ export function WelcomeSplash({ onDone }: WelcomeSplashProps) {
           >
             <Box
               sx={{
-                // A slow rock that starts once the card has landed and repeats
-                // until the splash fades. It sits on its own element, so the
-                // entrance keeps its own transform.
+                // Sway sits on its own element so the entrance keeps its transform.
                 animation: reduced ? 'none' : 'welcomeSway 3400ms ease-in-out 900ms infinite',
                 '@keyframes welcomeSway': {
                   '0%': { transform: 'rotate(0deg)' },

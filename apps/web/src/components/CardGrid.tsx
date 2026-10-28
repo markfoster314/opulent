@@ -1,10 +1,7 @@
 import { Box } from '@mui/material';
 import type { ReactNode } from 'react';
 
-/**
- * Responsive card wall. Uses CSS grid with auto-fill rather than a fixed column
- * count, so the same component works for a 6-card phone view and a wide desktop.
- */
+/** Auto-fill rather than a fixed column count, so one grid fits a phone and a wide window. */
 export function CardGrid({ children }: { children: ReactNode }) {
   return (
     <Box

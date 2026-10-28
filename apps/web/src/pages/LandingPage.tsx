@@ -9,13 +9,7 @@ import { Reveal } from '../components/Reveal';
 import { savePendingAdd } from '../pendingAdd';
 import { palette } from '../theme';
 
-/**
- * The public pitch, shown to anyone who is not signed in.
- *
- * The order follows the sale: name the pain, show the match, then ask for the
- * one thing we want. Gold stays on the buttons and the words to read first.
- * Every block is written for a phone first, then given room on a wider window.
- */
+/** Public pitch: pain, match, then sign-up; phone-first, with gold reserved for actions and key copy. */
 export function LandingPage({ onSignUp }: { onSignUp: () => void }) {
   return (
     <Stack spacing={{ xs: 6, md: 8 }}>
@@ -177,7 +171,6 @@ function HowItWorks() {
   );
 }
 
-/** What the binder holds, as opposed to what the group does with it. */
 const binderBenefits = [
   {
     title: 'One link, every card',
@@ -193,7 +186,6 @@ const binderBenefits = [
   },
 ];
 
-/** What happens once the link reaches the other people at the table. */
 const tableBenefits = [
   {
     title: 'Find trades near you',
@@ -236,13 +228,7 @@ interface Benefit {
   body: string;
 }
 
-/**
- * One binder page: a dark sheet with three clear pockets.
- *
- * Six equal cards read as another feature grid, so the list splits into two
- * named halves and each half is a single sheet. The pockets stay quiet: a top
- * highlight and an inner shade do the work a border would otherwise do twice.
- */
+/** Two binder sheets instead of a six-card grid; quiet pockets rely on highlight and shade, not borders. */
 function BinderPage({ title, items }: { title: string; items: Benefit[] }) {
   return (
     <Box
@@ -308,13 +294,7 @@ function Pocket({ benefit }: { benefit: Benefit }) {
   );
 }
 
-/**
- * The one live part of the page.
- *
- * Search and the add panel are the real app, open to anyone. Keeping the card is
- * the one thing that needs an account, so the panel saves the whole form and
- * sends the visitor to sign up. The collection page replays it afterwards.
- */
+/** Search is open to all; keeping the card needs an account, so the form is saved and replayed after sign-up. */
 function StartBinder() {
   const { loginWithRedirect } = useAuth0();
   const [card, setCard] = useState<Card | null>(null);

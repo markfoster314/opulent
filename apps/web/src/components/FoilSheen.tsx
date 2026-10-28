@@ -8,11 +8,7 @@ const foilSweep = keyframes`
   100% { background-position: -20% 0; }
 `;
 
-/**
- * A glossy band over a card image when the owner selected the foil finish.
- *
- * The Scryfall scan stays untouched underneath. This layer is only the shine.
- */
+/** Shine-only layer; the Scryfall scan stays untouched underneath. */
 export function FoilSheen() {
   const motion = {
     backgroundSize: '240% 100%',

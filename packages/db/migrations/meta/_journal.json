@@ -176,6 +176,13 @@
       "when": 1793140671525,
       "tag": "0024_dry_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793143642818,
+      "tag": "0025_wants_global",
+      "breakpoints": true
     }
   ]
 }

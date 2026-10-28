@@ -3,13 +3,7 @@ import { binderVisibilitySchema, profileVisibilitySchema } from './enums';
 import { placeIdSchema, placeRefSchema } from './place';
 import { genericWantSchema } from './want';
 
-/**
- * Usernames that must never belong to a person.
- *
- * A username is the first segment after `/u/`, and it is also the word a future
- * top-level route could want. Letting someone register `admin` or `binders`
- * makes their profile indistinguishable from a page we own.
- */
+/** Names no person may take, because a future top-level route could claim the same word and blur into their profile. */
 export const reservedUsernames = new Set([
   'about',
   'account',
@@ -53,14 +47,7 @@ export function isReservedUsername(username: string): boolean {
   return reservedUsernames.has(username.trim().toLowerCase());
 }
 
-/**
- * The shape of a username, used for reading as well as writing.
- *
- * Case is folded before the rule runs rather than rejected by it. Someone
- * typing `Mark` means `mark`, and the computer already knows that, so turning
- * it into an error would be busywork. A space or a `!` still fails, because
- * there is no single obvious correction for those.
- */
+/** Case is folded before the rule runs, since `Mark` means `mark`; a space or `!` still fails, with no single obvious fix. */
 export const usernameSchema = z
   .string()
   .trim()
@@ -73,19 +60,13 @@ export const usernameSchema = z
       .regex(/^[a-z0-9_]+$/, 'Use letters, numbers and underscores only, with no spaces'),
   );
 
-/**
- * A username somebody is trying to claim. Reading an existing one uses
- * `usernameSchema`, so a reserved word in a URL is a miss rather than a refusal.
- */
+/** Claiming refuses reserved words; reading an existing name uses `usernameSchema`, so the same word in a URL is a miss. */
 export const claimedUsernameSchema = usernameSchema.refine(
   (username) => !reservedUsernames.has(username),
   'That username is reserved',
 );
 
-/**
- * One name does both jobs: it is what people see, and it is the `/u/` segment
- * in every share link. There is no separate display name to keep in step.
- */
+/** One name does both jobs: what people see, and the /u/ segment in share links. */
 export const userSchema = z.object({
   id: z.string().uuid(),
   username: usernameSchema,
@@ -104,14 +85,12 @@ export const meSchema = userSchema.extend({
   onboarded: z.boolean(),
   profileVisibility: profileVisibilitySchema,
   bio: z.string().nullable(),
-  /** Who can open the trade binder: every stack marked for trade. */
   tradeBinderVisibility: binderVisibilitySchema,
-  /** Share link secret for an unlisted trade binder. */
   tradeBinderShareToken: z.string(),
 });
 export type Me = z.infer<typeof meSchema>;
 
-/** The welcome screen, shown once. City may be left blank. */
+/** The welcome screen, shown once. */
 export const completeOnboardingSchema = z.object({
   username: claimedUsernameSchema,
   placeId: placeIdSchema.nullable().optional(),
@@ -146,13 +125,7 @@ export const updateProfileSchema = z
   );
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
-/**
- * Who is within a radius of a point.
- *
- * Pass both coordinates to search from the browser's current location. Omit
- * both to search from the caller's saved city. The answer is a distance, never
- * another user's coordinates.
- */
+/** Both coordinates searches from the browser location, neither from the saved city, and the answer is a distance, never coordinates. */
 export const nearbyQuerySchema = z
   .object({
     latitude: z.coerce.number().min(-90).max(90).optional(),
@@ -177,7 +150,7 @@ export type NearbyUser = z.infer<typeof nearbyUserSchema>;
 export const usernameAvailabilitySchema = z.object({
   username: z.string(),
   available: z.boolean(),
-  /** Why not, in words the form can show directly. Null when available. */
+  /** Why not, ready to show in the form; null when available. */
   reason: z.string().nullable(),
 });
 export type UsernameAvailability = z.infer<typeof usernameAvailabilitySchema>;
@@ -198,16 +171,12 @@ export const profileSchema = z.object({
   city: placeRefSchema.nullable(),
   visibility: profileVisibilitySchema,
   isOwner: z.boolean(),
-  /** True when the viewer follows this person. */
   isFollowing: z.boolean(),
   followerCount: z.number().int().nonnegative(),
   followingCount: z.number().int().nonnegative(),
-  /**
-   * Copies in the public trade binder. Present when the profile is public and
-   * the trade binder is public. Missing means there is no trade binder to open.
-   */
+  /** Present only when both the profile and the trade binder are public; missing means nothing to open. */
   tradeBinderCount: z.number().int().nonnegative().optional(),
-  /** Matches across every public want list. Omitted for the owner and for signed-out visitors. */
+  /** Matches across public want lists; omitted for the owner and for signed-out visitors. */
   wantMatchCount: z.number().int().nonnegative().optional(),
   wantLists: z.array(profileEntrySchema).optional(),
   genericWants: z.array(genericWantSchema).optional(),

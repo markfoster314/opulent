@@ -18,8 +18,11 @@ import type {
   CreateGenericWantInput,
   CreateWantListInput,
   Friend,
+  GenericMatchOwner,
   GenericWant,
   WantList,
+  WantsImportInput,
+  WantsImportResult,
   CollectionItem,
   Card,
   CompleteOnboardingInput,
@@ -37,6 +40,7 @@ import type {
   CreateTradeInput,
   TradeLinesInput,
   UpdateCardGroupInput,
+  SplitCollectionItemInput,
   UpdateCollectionItemInput,
   UpdateProfileInput,
   UpdateWantItemInput,
@@ -55,7 +59,7 @@ import { binderSearchParams, emptyBinderSearch, type BinderSearch } from '../bin
 import { useDebounced } from '../hooks/useDebounced';
 import { useApi } from './ApiProvider';
 
-/** Query key factory. Keeping the keys in one place makes cache busting reliable. */
+/** Centralized query keys keep cache invalidation reliable. */
 export const queryKeys = {
   me: ['me'] as const,
   friends: ['friends'] as const,
@@ -77,6 +81,7 @@ export const queryKeys = {
   groupItems: (id: string) => ['group', id, 'items'] as const,
   wants: ['wants'] as const,
   genericWants: ['wants', 'generic'] as const,
+  genericMatches: ['wants', 'generic', 'matches'] as const,
   setSearch: (term: string) => ['cards', 'sets', 'search', term] as const,
   wantList: (id: string) => ['wants', id] as const,
   wantItems: (id: string) => ['wants', id, 'items'] as const,
@@ -105,12 +110,7 @@ export function useMe(enabled: boolean) {
   });
 }
 
-/**
- * Asks whether a username is free while the user types.
- *
- * The answer can go stale between the check and the save, so the welcome form
- * treats it as a hint. The server decides.
- */
+/** Typing-time hint only; the server decides whether the username is free. */
 export function useUsernameAvailability(username: string, enabled: boolean) {
   const api = useApi();
   return useQuery({
@@ -124,7 +124,6 @@ export function useUsernameAvailability(username: string, enabled: boolean) {
   });
 }
 
-/** The one-time welcome screen save. */
 export function useCompleteOnboarding() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -135,10 +134,7 @@ export function useCompleteOnboarding() {
   });
 }
 
-/**
- * Later edits from profile settings. Changing the username moves every share
- * link the user has handed out, so cached profiles are dropped too.
- */
+/** Changing a username moves share links, so cached profiles are dropped too. */
 export function useUpdateProfile() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -212,15 +208,9 @@ export function useRemoveFriend() {
   });
 }
 
-/** A page size that fills a few rows of the card grid without a long first load. */
+/** Balances a full grid against a slow first load. */
 const BINDER_PAGE_SIZE = 24;
 
-/**
- * Keyset pagination over a binder's cards.
- *
- * The server hands back an opaque `nextCursor` rather than a page number, so
- * adding a card mid-scroll cannot duplicate or skip a row.
- */
 function useDebouncedSearch(search: BinderSearch): BinderSearch {
   const q = useDebounced(search.q);
   const set = useDebounced(search.set);
@@ -228,8 +218,6 @@ function useDebouncedSearch(search: BinderSearch): BinderSearch {
   const artist = useDebounced(search.artist);
   return { ...search, q, set, type, artist };
 }
-
-// --- The signed-in person's collection: every stack they own ---
 
 export function useCollectionSummary(enabled: boolean) {
   const api = useApi();
@@ -240,7 +228,6 @@ export function useCollectionSummary(enabled: boolean) {
   });
 }
 
-/** The dashboard table: the priciest stacks plus their one-week move. */
 export function useCollectionHighlights(enabled: boolean, limit = 10) {
   const api = useApi();
   return useQuery({
@@ -251,7 +238,6 @@ export function useCollectionHighlights(enabled: boolean, limit = 10) {
   });
 }
 
-/** The whole collection's asking value, one point per day. */
 export function useCollectionValueHistory(enabled: boolean, range: PriceRange) {
   const api = useApi();
   return useQuery({
@@ -262,7 +248,6 @@ export function useCollectionValueHistory(enabled: boolean, range: PriceRange) {
   });
 }
 
-/** The current asking value, split by one card factor. */
 export function useCollectionValueBreakdown(enabled: boolean, by: CollectionValueBreakdownBy) {
   const api = useApi();
   return useQuery({
@@ -273,7 +258,6 @@ export function useCollectionValueBreakdown(enabled: boolean, by: CollectionValu
   });
 }
 
-/** Biggest gainers and losers for the dashboard. */
 export function useCollectionMovers(
   enabled: boolean,
   range: PriceRange,
@@ -286,15 +270,12 @@ export function useCollectionMovers(
       api<{ gainers: CollectionHighlight[]; losers: CollectionHighlight[] }>(
         `/v1/collection/movers?range=${range}&changeBy=${changeMode}&limit=5`,
       ),
-    // The old rows stay on screen while the next window loads, so the section
-    // never collapses between fetches.
+    // Keep old rows visible while the next window loads so the section never collapses.
     placeholderData: keepPreviousData,
     enabled,
   });
 }
 
-/** Every card ranked by value, one page at a time. */
-/** One stack, with its groups and card detail. Fetched when a row expands. */
 export function useCollectionItem(itemId: string | undefined) {
   const api = useApi();
   return useQuery({
@@ -304,7 +285,6 @@ export function useCollectionItem(itemId: string | undefined) {
   });
 }
 
-/** Daily prices for one printing over a chosen window. */
 export function useCardPriceSeries(scryfallId: string | undefined, range: PriceRange) {
   const api = useApi();
   return useQuery({
@@ -328,6 +308,7 @@ export function useCollectionCardsByValue(
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
@@ -348,7 +329,7 @@ export function useCollectionItems(enabled: boolean, search: BinderSearch = empt
   });
 }
 
-/** A stack change touches the collection, its folder, and every count on the folder list. */
+/** A stack change invalidates the collection, its groups, and group-list counts. */
 function refreshStacks(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.collection });
   queryClient.invalidateQueries({ queryKey: queryKeys.groups });
@@ -380,13 +361,7 @@ interface CardListCache {
   pageParams: unknown[];
 }
 
-/**
- * Flips one card's trade flag without refetching the list.
- *
- * The PATCH returns the updated row, so it is written straight into every cached
- * card list. Only the summary is refetched, because its trade count and value
- * change. Groups are untouched: a trade flag never changes a group's copies.
- */
+/** Reuse the PATCH row in cached lists; refetch only the summary, whose counts and value change. */
 export function useSetTradeFlag() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -418,10 +393,20 @@ export function useSetTradeFlag() {
         queryClient.setQueryData(detailKey, item);
       }
 
-      // Other collection screens refetch when they are next opened, not now.
+      // Other collection screens refetch when next opened, not now.
       queryClient.invalidateQueries({ queryKey: queryKeys.collection, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: queryKeys.collectionSummary });
     },
+  });
+}
+
+export function useSplitCollectionItem() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, input }: { itemId: string; input: SplitCollectionItemInput }) =>
+      api<void>(`/v1/collection/items/${itemId}/split`, { method: 'POST', body: input }),
+    onSuccess: () => refreshStacks(queryClient),
   });
 }
 
@@ -434,8 +419,6 @@ export function useRemoveCollectionItem() {
     onSuccess: () => refreshStacks(queryClient),
   });
 }
-
-// --- Private groups: labels inside one person's collection ---
 
 export function useGroups(enabled: boolean) {
   const api = useApi();
@@ -509,7 +492,7 @@ export function useDeleteGroup() {
   });
 }
 
-/** Puts a card in a group. The card stays in the collection either way. */
+/** Adds a group label; the card stays in the collection. */
 export function useAddGroupMember(groupId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -530,7 +513,7 @@ export function useRemoveGroupMember(groupId: string) {
   });
 }
 
-/** CSV import. Dry run first for the preview, then the real write with the same body. */
+/** Preview uses the same body as the real import. */
 export function useImportCollection() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -543,15 +526,46 @@ export function useImportCollection() {
   });
 }
 
-/** Fetches the plain-format CSV as text. The caller turns it into a download. */
-export function useExportCollection() {
+/** Returns CSV text; the caller turns it into a download. */
+export function useExportCollection(groupId?: string) {
   const api = useApi();
   return useMutation({
-    mutationFn: () => api<string>('/v1/collection/export.csv', { asText: true }),
+    mutationFn: () =>
+      api<string>(
+        groupId
+          ? `/v1/collection/export.csv?groupId=${encodeURIComponent(groupId)}`
+          : '/v1/collection/export.csv',
+        { asText: true },
+      ),
   });
 }
 
-// --- Someone's trade binder: every stack they marked for trade ---
+/** Preview uses the same body as the commit. */
+export function useImportWants() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: WantsImportInput) =>
+      api<WantsImportResult>('/v1/wants/import', { method: 'POST', body: input }),
+    onSuccess: (result) => {
+      if (result.dryRun) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      queryClient.invalidateQueries({ queryKey: ['wants'] });
+    },
+  });
+}
+
+/** Returns want CSV text; the caller hands it to the browser as a file. */
+export function useExportWants(listId?: string) {
+  const api = useApi();
+  return useMutation({
+    mutationFn: () =>
+      api<string>(listId ? `/v1/wants/lists/${listId}/export.csv` : '/v1/wants/export.csv', {
+        asText: true,
+      }),
+  });
+}
 
 export function useTradeBinder(handle: string | undefined, shareToken?: string) {
   const api = useApi();
@@ -585,7 +599,6 @@ export function useTradeBinderItems(
   });
 }
 
-/** What the signed-in viewer wants from this person's trade binder. */
 export function useTradeBinderMatches(
   handle: string | undefined,
   enabled: boolean,
@@ -614,7 +627,6 @@ export function useRotateTradeBinderToken() {
   });
 }
 
-/** Find trades: people whose public trade binder holds cards on my want lists, nearest first. */
 export function useMatchOwners(enabled: boolean) {
   const api = useApi();
   return useQuery({
@@ -628,13 +640,11 @@ function tokenQuery(shareToken: string | undefined): string {
   return shareToken ? `?t=${encodeURIComponent(shareToken)}` : '';
 }
 
-/** Flattens the paged result into the single list the card grid wants. */
 export function flattenPages<T>(pages: { items: T[] }[] | undefined): T[] {
   return pages?.flatMap((page) => page.items) ?? [];
 }
 
-/** The headline feature: what the signed-in viewer wants from this binder. */
-/** Cities from our GeoNames copy. Two letters is the shortest term worth a round trip. */
+/** City lookup uses our GeoNames copy; two letters is the shortest useful term. */
 export function usePlaceSearch(term: string) {
   const api = useApi();
   return useQuery({
@@ -656,20 +666,19 @@ export function useCard(scryfallId: string | undefined) {
 
 export function useCardSearch(term: string) {
   const api = useApi();
-  // One cache entry per meaningful term: case and extra spaces do not split it.
+  // Normalize case and spacing so each meaningful term gets one cache entry.
   const query = term.trim().replace(/\s+/g, ' ').toLowerCase();
   return useQuery({
     queryKey: queryKeys.cardSearch(query),
     queryFn: () =>
       api<{ items: Card[] }>(`/v1/cards/search?q=${encodeURIComponent(query)}&uniqueByOracle=true`),
-    // Two characters is the shortest term worth a round trip.
+    // Two characters is the shortest term worth a request.
     enabled: query.length >= 2,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
 }
 
-/** Every set this card was printed in, for the set dropdown. */
 export function useCardSets(oracleId: string | undefined) {
   const api = useApi();
   return useQuery({
@@ -680,20 +689,7 @@ export function useCardSets(oracleId: string | undefined) {
   });
 }
 
-/**
- * Every set a card was printed in, for the printing picker.
- *
- * `setFilter` matters for cards like Plains, which has over 900 printings. It is
- * sent to the server rather than filtered here, because only a fraction of the
- * printings have been fetched at any moment.
- */
-/**
- * One page of a card's printings, for the printing picker.
- *
- * `setFilter` matters for cards like Plains, which has over 900 printings. It is
- * sent to the server rather than filtered here, because only one page is held at
- * a time. The page size is chosen so the grid always shows two rows.
- */
+/** Server-side set filter matters for cards like Plains with 900+ printings; only one page is held. */
 export function useCardPrintings(
   oracleId: string | undefined,
   setFilter = '',
@@ -717,7 +713,6 @@ export function useCardPrintings(
   });
 }
 
-/** Languages this printing was produced in, for the language dropdown. */
 export function useCardLanguages(scryfallId: string | undefined) {
   const api = useApi();
   return useQuery({
@@ -743,6 +738,15 @@ export function useGenericWants(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.genericWants,
     queryFn: () => api<{ items: GenericWant[] }>('/v1/wants/generic'),
+    enabled,
+  });
+}
+
+export function useGenericMatches(enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.genericMatches,
+    queryFn: () => api<{ items: GenericMatchOwner[] }>('/v1/wants/generic/matches'),
     enabled,
   });
 }
@@ -793,7 +797,6 @@ export function useWantItems(listId: string | undefined) {
   });
 }
 
-/** Every want across the signed-in person's lists. */
 export function useAllWantItems(enabled: boolean) {
   const api = useApi();
   return useQuery({
@@ -803,7 +806,6 @@ export function useAllWantItems(enabled: boolean) {
   });
 }
 
-/** Every want in this person's public lists. */
 export function usePublicWantItems(handle: string | undefined) {
   const api = useApi();
   return useQuery({
@@ -899,6 +901,19 @@ export function useOracleChoices(oracleId: string | undefined) {
   });
 }
 
+export function useAddGlobalWant() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddWantItemInput) =>
+      api<WantItem>('/v1/wants/items', { method: 'POST', body: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+    },
+  });
+}
+
 export function useAddWantItem(listId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -908,6 +923,7 @@ export function useAddWantItem(listId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
       queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
     },
   });
@@ -918,14 +934,29 @@ export function useUpdateWantItem(listId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ wantId, input }: { wantId: string; input: UpdateWantItemInput }) =>
-      api<WantItem>(`/v1/wants/lists/${listId}/items/${wantId}`, {
+      api<WantItem>(`/v1/wants/items/${wantId}`, {
         method: 'PATCH',
         body: input,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
       queryClient.invalidateQueries({ queryKey: queryKeys.wants });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+      if (listId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
+      }
+    },
+  });
+}
+
+export function useDeleteWantItem() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (wantId: string) => api<void>(`/v1/wants/items/${wantId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
+      queryClient.invalidateQueries({ queryKey: ['wants'] });
     },
   });
 }
@@ -934,11 +965,13 @@ export function useRemoveWantItem(listId: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
+    // Removing from a list leaves the want in All wants.
     mutationFn: (wantId: string) =>
       api<void>(`/v1/wants/lists/${listId}/items/${wantId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wantItems(listId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wants });
+      queryClient.invalidateQueries({ queryKey: queryKeys.allWantItems });
       queryClient.invalidateQueries({ queryKey: queryKeys.wantList(listId) });
     },
   });

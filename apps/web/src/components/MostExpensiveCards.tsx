@@ -15,14 +15,7 @@ import { CollectionCardTable } from './CollectionCardTable';
 /** Rows in one table on a wide window. A phone gets one table of ten. */
 const ROWS_PER_TABLE = 5;
 
-/**
- * The top of the collection dashboard: the ten priciest stacks.
- *
- * Rank and the printed price are the asking price of one copy: the market price
- * for its finish, unless the owner set a percent or a custom amount. The weekly
- * figure compares the same finish a week ago, so a foil is never measured
- * against a plain copy.
- */
+/** The ten priciest stacks; price and weekly change use the copy's own finish, never a plain one. */
 export function MostExpensiveCards({ enabled }: { enabled: boolean }) {
   const { data, isLoading, error } = useCollectionHighlights(enabled);
   const navigate = useNavigate();

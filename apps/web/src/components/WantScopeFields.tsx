@@ -10,7 +10,6 @@ import {
   MenuItem,
   Select,
   TextField,
-  Typography,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
@@ -19,7 +18,7 @@ import {
   cardFinishLabels,
   cardLanguageLabels,
 } from '@opulent/shared';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOracleChoices } from '../api/queries';
 
 const ANY = '__any__';
@@ -29,7 +28,7 @@ interface Choice {
   label: string;
 }
 
-/** The four lists on a want. Empty means any. */
+/** The four scope lists; empty means any. */
 export interface WantScopeValue {
   languages: string[];
   finishes: string[];
@@ -44,7 +43,6 @@ interface WantScopeFieldsProps {
   onChange: (patch: Partial<WantScopeValue>) => void;
 }
 
-/** Language, printing, condition, and set. The same boxes used to add a want and to edit one. */
 export function WantScopeFields({ oracleId, idPrefix, value, onChange }: WantScopeFieldsProps) {
   const choicesQuery = useOracleChoices(oracleId);
   const [setQuery, setSetQuery] = useState('');
@@ -86,6 +84,22 @@ export function WantScopeFields({ oracleId, idPrefix, value, onChange }: WantSco
   );
 
   const menusDisabled = choicesQuery.isLoading || !choices;
+
+  // A sole option is forced, so "Any" is not a real choice.
+  useEffect(() => {
+    if (!choices) return;
+    const patch: Partial<WantScopeValue> = {};
+    if (value.languages.length === 0 && languageChoices.length === 1) {
+      patch.languages = [languageChoices[0]!.value];
+    }
+    if (value.finishes.length === 0 && finishChoices.length === 1) {
+      patch.finishes = [finishChoices[0]!.value];
+    }
+    if (value.sets.length === 0 && setChoices.length === 1) {
+      patch.sets = [setChoices[0]!.value];
+    }
+    if (Object.keys(patch).length > 0) onChange(patch);
+  }, [choices, languageChoices, finishChoices, setChoices, value, onChange]);
 
   return (
     <>
@@ -134,10 +148,6 @@ export function WantScopeFields({ oracleId, idPrefix, value, onChange }: WantSco
           searchPlaceholder="Search by set name"
         />
       </Box>
-
-      <Typography variant="caption" color="text.secondary">
-        Any stays checked until you check a choice.
-      </Typography>
     </>
   );
 }

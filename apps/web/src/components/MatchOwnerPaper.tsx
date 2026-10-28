@@ -3,7 +3,6 @@ import type { MatchOwner } from '@opulent/shared';
 import { Link as RouterLink } from 'react-router-dom';
 import { clickableSurfaceSx, palette } from '../theme';
 
-/** One person who holds cards on the viewer's want lists. */
 export function MatchOwnerPaper({ owner }: { owner: MatchOwner }) {
   const more = owner.matchCount - owner.cardNames.length;
   return (

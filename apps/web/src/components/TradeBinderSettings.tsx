@@ -28,7 +28,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useRotateTradeBinderToken, useUpdateProfile } from '../api/queries';
 import { palette } from '../theme';
 
-/** Who can open the trade binder, the link to hand out, and the token controls. */
 export function TradeBinderSettings({ me }: { me: Me }) {
   const updateProfile = useUpdateProfile();
   const rotateToken = useRotateTradeBinderToken();

@@ -29,20 +29,15 @@ export class OpulentTutorStack extends cdk.Stack {
 
     const isProd = props.stage === 'prod';
 
-    // ---------------------------------------------------------------------
     // Network
-    // ---------------------------------------------------------------------
 
-    // One NAT gateway, not one per availability zone. A second NAT costs about
-    // 32 USD a month and buys redundancy the MVP does not need yet.
+    // One NAT, not one per AZ: a second costs about 32 USD a month for redundancy the MVP does not need.
     const vpc = new ec2.Vpc(this, 'Vpc', {
       maxAzs: 2,
       natGateways: isProd ? 1 : 1,
     });
 
-    // ---------------------------------------------------------------------
     // Database
-    // ---------------------------------------------------------------------
 
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -65,11 +60,7 @@ export class OpulentTutorStack extends cdk.Stack {
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    /**
-     * Amazon RDS Proxy. Without it, every warm Lambda copy holds its own
-     * Postgres connection and a traffic spike exhausts the database. The proxy
-     * keeps one shared pool and hands connections out.
-     */
+    /** RDS Proxy keeps one shared Postgres pool, so a traffic spike cannot exhaust the database with per-copy connections. */
     const dbProxy = database.addProxy('DbProxy', {
       vpc,
       secrets: [database.secret!],
@@ -79,14 +70,7 @@ export class OpulentTutorStack extends cdk.Stack {
       maxConnectionsPercent: 90,
     });
 
-    /**
-     * Note what is NOT here: a DATABASE_URL containing the password.
-     *
-     * Putting it in an environment variable would place the plaintext password
-     * in the CloudFormation template and in the Lambda console. Instead the
-     * compute gets the secret ARN and the proxy host, and assembles the
-     * connection string at runtime from AWS Secrets Manager.
-     */
+    /** No DATABASE_URL with a password: that would put it in the CloudFormation template and the Lambda console, so compute assembles it from Secrets Manager. */
     const databaseEnvironment = {
       DB_SECRET_ARN: database.secret!.secretArn,
       DB_HOST: dbProxy.endpoint,
@@ -94,9 +78,7 @@ export class OpulentTutorStack extends cdk.Stack {
       DB_PORT: '5432',
     };
 
-    // ---------------------------------------------------------------------
     // API: the whole backend in one Lambda function
-    // ---------------------------------------------------------------------
 
     const apiFunction = new lambda.Function(this, 'ApiFunction', {
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -141,16 +123,11 @@ export class OpulentTutorStack extends cdk.Stack {
       ),
     });
 
-    // ---------------------------------------------------------------------
     // Nightly Scryfall mirror refresh
-    // ---------------------------------------------------------------------
 
     const cluster = new ecs.Cluster(this, 'JobsCluster', { vpc });
 
-    /**
-     * This runs on Fargate rather than Lambda because downloading and upserting
-     * roughly 100,000 cards takes longer than Lambda's 15 minute ceiling.
-     */
+    /** Fargate, not Lambda: a 100,000-card download and upsert runs past Lambda's 15 minute ceiling. */
     const cardSyncTask = new ecs.FargateTaskDefinition(this, 'CardSyncTask', {
       cpu: 512,
       memoryLimitMiB: 1024,
@@ -174,17 +151,14 @@ export class OpulentTutorStack extends cdk.Stack {
 
     database.secret!.grantRead(cardSyncTask.taskRole);
 
-    // The batch writer connects straight to the instance rather than through
-    // the proxy: it is one long-lived connection, which is exactly the case the
-    // proxy adds no value to.
+    // The batch writer connects straight to the instance: one long-lived connection gains nothing from the proxy.
     const cardSyncSecurityGroup = new ec2.SecurityGroup(this, 'CardSyncSecurityGroup', {
       vpc,
       description: 'Nightly Scryfall mirror refresh task',
     });
     database.connections.allowDefaultPortFrom(cardSyncSecurityGroup, 'card sync task');
 
-    // Scryfall rebuilds its bulk files in the evening UTC, so 06:00 UTC is
-    // comfortably after a fresh file exists.
+    // Scryfall rebuilds its bulk files in the evening UTC, so 06:00 UTC is safely after a fresh file.
     new events.Rule(this, 'CardSyncSchedule', {
       schedule: events.Schedule.cron({ minute: '0', hour: '6' }),
       targets: [
@@ -197,9 +171,7 @@ export class OpulentTutorStack extends cdk.Stack {
       ],
     });
 
-    // ---------------------------------------------------------------------
     // Web: static React build on S3, served through CloudFront
-    // ---------------------------------------------------------------------
 
     const webBucket = new s3.Bucket(this, 'WebBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -216,17 +188,14 @@ export class OpulentTutorStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
       defaultRootObject: 'index.html',
-      // Single-page app: every unknown path must still load index.html so
-      // client-side routing can take over.
+      // Single-page app: unknown paths must still load index.html so client routing takes over.
       errorResponses: [
         { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
     });
 
-    // ---------------------------------------------------------------------
     // Outputs
-    // ---------------------------------------------------------------------
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: httpApi.apiEndpoint });
     new cdk.CfnOutput(this, 'WebUrl', { value: `https://${distribution.distributionDomainName}` });

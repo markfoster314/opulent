@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { cardFinishSchema, cardLanguageSchema, type CardFinish } from './enums';
 
-/**
- * Scryfall serves several image sizes per card. We keep them all so the UI can
- * pick a small thumbnail for grids and a large scan for the detail view.
- */
+/** Every Scryfall image size, so the UI can pick a grid thumbnail or a detail scan. */
 export const cardImageUrisSchema = z.object({
   small: z.string().url().optional(),
   normal: z.string().url().optional(),
@@ -26,24 +23,11 @@ export const cardPricesSchema = z.object({
 });
 export type CardPrices = z.infer<typeof cardPricesSchema>;
 
-/**
- * The id of one exact printing.
- *
- * Today it is Scryfall's id, and the wire field is still named `scryfallId`
- * so no client breaks. Every schema uses this one type for it, so when a
- * second game arrives the field can be renamed to `printingId` in one pass
- * without hunting through each schema. The database column keeps its name.
- */
+/** One exact printing; a single type so a future rename to `printingId` is one pass, while clients and the database column keep `scryfallId`. */
 export const printingIdSchema = z.string().uuid();
 export type PrintingId = z.infer<typeof printingIdSchema>;
 
-/**
- * The slice of a Scryfall card we promote to real columns.
- *
- * `scryfallId` identifies one exact printing. `oracleId` identifies the card
- * concept across every printing. Binders hold printings; want lists hold
- * concepts, because most traders do not care which set a card came from.
- */
+/** The Scryfall fields we promote to columns; binders hold printings, while want lists hold oracle concepts. */
 export const cardSchema = z.object({
   scryfallId: printingIdSchema,
   oracleId: z.string().uuid(),
@@ -60,14 +44,9 @@ export const cardSchema = z.object({
   imageUris: cardImageUrisSchema.nullable(),
   prices: cardPricesSchema.nullable(),
   scryfallUri: z.string().nullable(),
-  /** Rules text, promoted from the raw object for the detail view. */
   oracleText: z.string().nullable().optional(),
-  /** The illustrator, promoted from the raw object for the detail view. */
   artist: z.string().nullable().optional(),
-  /**
-   * Shop links Scryfall attaches to this printing. A field is missing when that
-   * shop has no page for the card.
-   */
+  /** Shop links from Scryfall; a missing field means that shop has no page. */
   purchaseUris: z
     .object({
       tcgplayer: z.string().nullable().optional(),
@@ -95,24 +74,19 @@ export const cardSearchQuerySchema = z.object({
 export type CardSearchQuery = z.infer<typeof cardSearchQuerySchema>;
 
 export const cardPrintingsQuerySchema = z.object({
-  /**
-   * Narrows by set name or set code. Not a nicety: Plains has over 900
-   * printings, and scrolling is not a realistic way to find one of them.
-   */
+  /** Narrows by set name or code; Plains has over 900 printings, so scrolling cannot find one. */
   q: z.string().max(100).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(60),
   cursor: z.string().optional(),
 });
 export type CardPrintingsQuery = z.infer<typeof cardPrintingsQuerySchema>;
 
-/** One set a card was printed in. The picker uses this for the set dropdown. */
 export const cardSetSchema = z.object({
   setCode: z.string(),
   setName: z.string().nullable(),
 });
 export type CardSet = z.infer<typeof cardSetSchema>;
 
-/** Languages, finishes, and sets a card concept was printed in. The want form uses this. */
 export const cardChoicesSchema = z.object({
   languages: z.array(cardLanguageSchema),
   finishes: z.array(cardFinishSchema),
@@ -120,13 +94,7 @@ export const cardChoicesSchema = z.object({
 });
 export type CardChoices = z.infer<typeof cardChoicesSchema>;
 
-/**
- * The price that applies to one finish of one printing.
- *
- * Foils are priced separately and the gap is large, so reading `usd` alone is
- * actively misleading. A foil-only Secret Lair printing has no `usd` at all,
- * and would look free.
- */
+/** Foils are priced separately, so reading `usd` alone is misleading: a foil-only printing has no `usd` and would look free. */
 export function priceForFinish(
   prices: CardPrices | null | undefined,
   finish: CardFinish,
@@ -139,14 +107,7 @@ export function priceForFinish(
 
 const marketPriceFields = ['usd', 'usd_foil', 'usd_etched', 'eur', 'eur_foil', 'tix'] as const;
 
-/**
- * The market price for a finish.
- *
- * Scryfall prices the English printing. A foreign row of the same set and
- * collector number usually has that field empty, so the English price fills
- * the gap. A price that is present on the foreign printing stays, one finish
- * at a time.
- */
+/** Scryfall prices only the English row, so each missing finish on a foreign printing falls back to the English price. */
 export function marketPrices(
   prices: CardPrices | null | undefined,
   englishPrices: CardPrices | null | undefined,
@@ -164,11 +125,7 @@ export function marketPrices(
   return any ? merged : null;
 }
 
-/**
- * Formats a Scryfall money string for display, or returns null when there is no
- * price. Roughly a quarter of printings have never been priced, so "no price"
- * is a normal outcome rather than an error.
- */
+/** Formats a Scryfall money string; null is a normal answer, since about a quarter of printings were never priced. */
 export function formatUsd(value: string | null | undefined): string | null {
   if (!value) return null;
   const amount = Number(value);
@@ -176,11 +133,10 @@ export function formatUsd(value: string | null | undefined): string | null {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-/** The windows the price chart offers. */
 export const priceRangeSchema = z.enum(['1w', '1m', '6m', '1y']);
 export type PriceRange = z.infer<typeof priceRangeSchema>;
 
-/** Days back for each chart window. One source for the API and the client. */
+/** Days back per window; one source for the API and the client. */
 export const priceRangeDays: Record<PriceRange, number> = {
   '1w': 7,
   '1m': 30,
@@ -188,7 +144,7 @@ export const priceRangeDays: Record<PriceRange, number> = {
   '1y': 365,
 };
 
-/** One day of prices. History carries the last known price forward. */
+/** One day of prices; history carries the last known price forward. */
 export const cardPricePointSchema = z.object({
   recordedOn: z.string(),
   prices: cardPricesSchema,

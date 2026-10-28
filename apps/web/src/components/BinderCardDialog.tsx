@@ -29,7 +29,7 @@ export function BinderCardDialog({
   onClose,
 }: {
   item: CollectionItem | null;
-  /** Set when this copy belongs to someone else. The trade prompt uses this name. */
+  /** Set when this copy belongs to someone else; the trade prompt names them. */
   ownerUsername?: string | undefined;
   open: boolean;
   onClose: () => void;

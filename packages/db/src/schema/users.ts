@@ -10,59 +10,31 @@ export const users = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
 
-    /**
-     * The immutable Auth0 subject claim, for example `auth0|65f...`.
-     * This is the only link between our row and the identity provider.
-     * We never store a password.
-     */
+    /** The immutable Auth0 subject claim, such as `auth0|65f...`; the only link to the identity provider, and we store no password. */
     auth0Sub: text('auth0_sub').notNull(),
 
-    /**
-     * The one name a user has. It is shown to other people and it is also the
-     * `/u/` segment in every share link, so there is no second display name
-     * that could drift out of step with it.
-     */
+    /** The one name a user has: shown to others and used as the /u/ segment, so no second display name can drift. */
     username: text('username').notNull(),
 
     email: text('email'),
     avatarUrl: text('avatar_url'),
 
-    /** A short note on the profile page. Null means they have not written one. */
     bio: text('bio'),
 
-    /**
-     * private  only this person can open /u/:username
-     * public   anyone can open it and see the trade binder and want lists
-     */
+    /** Private: only this person can open /u/:username; public: anyone can, and sees the binder and want lists. */
     profileVisibility: profileVisibility('profile_visibility').notNull().default('private'),
 
-    /**
-     * Who can open this person's trade binder: every stack they marked for trade.
-     * private   only the owner
-     * unlisted  anyone holding the share token
-     * public    anyone, and it is listed on the profile
-     */
+    /** Private: owner only; unlisted: anyone with the share token; public: anyone, and listed on the profile. */
     tradeBinderVisibility: binderVisibility('trade_binder_visibility').notNull().default('private'),
     /** Secret second door to an unlisted trade binder. Rotating it revokes old links. */
     tradeBinderShareToken: text('trade_binder_share_token')
       .notNull()
       .default(sql`encode(gen_random_bytes(16), 'hex')`),
 
-    /**
-     * Optional city, chosen from the GeoNames list. Null means they skipped it.
-     * Kept off public profile responses so a share link does not publish it.
-     * Radius search reads the coordinates from the place, not from this row.
-     */
+    /** Optional GeoNames city; kept out of public profile responses, and radius search reads the place's coordinates, not this row. */
     placeId: integer('place_id').references(() => places.geonameId, { onDelete: 'set null' }),
 
-    /**
-     * When the user picked their own username on the welcome screen.
-     *
-     * Null means the username is still the generated placeholder from first
-     * login, so the web app has not asked them yet. The column holds a time
-     * rather than a boolean because "when did they choose" answers questions a
-     * flag cannot, such as how long people wait before finishing signup.
-     */
+    /** Null while the username is still the generated placeholder; a time beats a flag because it also measures how long signup took. */
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -79,10 +51,7 @@ export const users = pgTable(
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 
-/**
- * One person added another. It is not mutual: the other person has their own list.
- * Removing the row drops only this side.
- */
+/** Directed, not mutual: each side has its own row, and removing one drops only that side. */
 export const friendships = pgTable(
   'friendships',
   {

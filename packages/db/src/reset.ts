@@ -2,14 +2,7 @@ import postgres from 'postgres';
 import { loadEnv } from './load-env';
 import { runSeed } from './seed';
 
-/**
- * Empties every app table, then loads the dev seed.
- *
- * The card mirror and the city list stay. The PostGIS helper table stays too,
- * because city search reads it.
- *
- *   pnpm db:reset
- */
+/** Empties every app table then re-seeds; cards, places, and the PostGIS spatial_ref_sys table survive because city search reads them. */
 
 const KEEP = new Set(['cards', 'places', 'spatial_ref_sys']);
 

@@ -30,6 +30,7 @@ import {
 } from '@opulent/shared';
 import type { CardCondition, CardFinish, CardLanguage, CardSet } from '@opulent/shared';
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   useCreateGenericWant,
   useDeleteGenericWant,
@@ -103,7 +104,7 @@ function setLabel(set: CardSet): string {
   return set.setName ? `${set.setName} (${set.setCode.toUpperCase()})` : set.setCode.toUpperCase();
 }
 
-/** Wide interests that name no single card. */
+/** Broad interests that name no single card. */
 export function GenericWantsSection() {
   const { data, isLoading, error } = useGenericWants(true);
   const createWant = useCreateGenericWant();
@@ -150,7 +151,7 @@ export function GenericWantsSection() {
   return (
     <Stack spacing={2}>
       <Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
           <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             Generic wants
           </Typography>
@@ -159,15 +160,18 @@ export function GenericWantsSection() {
             label={creating ? 'Close new generic want' : 'New generic want'}
             onClick={() => setCreating((open) => !open)}
           />
+          <Button
+            component={RouterLink}
+            to="/matches#generic-matches"
+            variant="outlined"
+            size="small"
+          >
+            Find matches
+          </Button>
         </Stack>
 
         <Collapse in={creating} unmountOnExit>
           <Stack spacing={2} sx={{ pt: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              A wide interest, with no one card. A later trade can use any card that fits these
-              choices.
-            </Typography>
-
             <Paper sx={{ p: 3 }}>
               <Box
                 sx={{
@@ -277,11 +281,6 @@ export function GenericWantsSection() {
                   label="Miscut"
                 />
               </FormGroup>
-
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                Any means that part does not matter. A checked mark means you want cards with that
-                mark.
-              </Typography>
 
               <Button
                 variant="contained"

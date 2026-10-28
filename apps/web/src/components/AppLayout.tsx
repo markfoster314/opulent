@@ -37,21 +37,11 @@ export function AppLayout() {
     (trade) => trade.yourTurn && trade.status !== 'draft',
   ).length;
 
-  /**
-   * A signed-in user without a chosen username is sent to the welcome screen
-   * before anything else. The page they were aiming for travels with them, so
-   * somebody who signed up from a shared binder link lands back on it.
-   */
+  /** A signed-in user without a username goes to /welcome first, carrying the page they aimed for. */
   const needsWelcome = isAuthenticated && me.data !== undefined && !me.data.onboarded;
   const onWelcome = location.pathname === '/welcome';
 
-  /**
-   * Auth0 sends a new account back to the home page, then this layout sends
-   * them to /welcome once their row is known. Auth0 also strips `?code=` before
-   * it marks the session as signed in, which is a beat where the home page
-   * would paint. Remember that we saw the code so the loader stays up across
-   * that beat.
-   */
+  /** Auth0 strips ?code= before it marks the session signed in, so remember it to hold the loader. */
   const hasAuthCode = new URLSearchParams(location.search).has('code');
   const authReturnRef = useRef(hasAuthCode);
   if (hasAuthCode) authReturnRef.current = true;
@@ -59,11 +49,7 @@ export function AppLayout() {
   const accountPending = isAuthenticated && me.data === undefined && !me.isError;
   const redirectingToWelcome = needsWelcome && !onWelcome;
   const settlingAuthReturn = authReturnRef.current && (isLoading || accountPending);
-  /**
-   * A refresh of /welcome does not know yet whether onboarding is finished.
-   * Until the account row arrives, the bar would show My collection, as if setup
-   * were already done. Cover the whole window instead.
-   */
+  /** A /welcome refresh cannot know yet if setup is done, so cover the bar until the account row lands. */
   const welcomePending = onWelcome && (isLoading || accountPending);
   const showLoader =
     settlingAuthReturn ||
@@ -75,8 +61,7 @@ export function AppLayout() {
     authReturnRef.current = false;
   }
 
-  // A wide window shows the links in the bar, so a drawer left open from a phone
-  // would sit on top of them after a resize.
+  // A wide window already shows the links, so a phone drawer must close on resize.
   useEffect(() => {
     const wide = window.matchMedia('(min-width:600px)');
     const closeIfWide = () => {
@@ -237,10 +222,10 @@ export function AppLayout() {
 }
 
 interface BarActionsProps {
-  /** Links sit on the left of a wide bar. The account sits on the right. The menu shows both. */
+  /** Which part of the bar to render; the phone menu shows all of it. */
   part: 'links' | 'account' | 'all';
   stacked?: boolean;
-  /** Trades waiting on this person. Zero hides the badge. */
+  /** Trades waiting on this person; zero hides the badge. */
   yourTurnCount: number;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -253,7 +238,7 @@ interface BarActionsProps {
   sx?: SxProps<Theme>;
 }
 
-/** The same links, either in a row on a wide window or stacked in the phone menu. */
+/** The same links: a row in a wide bar, stacked in the phone menu. */
 function BarActions({
   part,
   stacked = false,
@@ -378,7 +363,7 @@ function BarActions({
   );
 }
 
-/** Covers the whole window, including the bar and footer, so nothing underneath shows. */
+/** Covers the whole window, bar and footer included, so nothing underneath shows. */
 function FullPageLoader() {
   return (
     <Box

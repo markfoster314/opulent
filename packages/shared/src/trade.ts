@@ -8,10 +8,7 @@ const tradeLineSchema = z.object({
   quantity: z.number().int().positive().max(999),
 });
 
-/**
- * Cards the opener wants to receive, sent when a trade is started.
- * `give` is what they offer in return. Leave it out to decide later.
- */
+/** Cards the opener wants, plus an optional `give` they offer in return; omitting `give` decides that side later. */
 export const createTradeSchema = z.object({
   username: usernameSchema,
   items: z.array(tradeLineSchema).min(1).max(100),
@@ -19,11 +16,7 @@ export const createTradeSchema = z.object({
 });
 export type CreateTradeInput = z.infer<typeof createTradeSchema>;
 
-/**
- * Both sides of the table, from this person's point of view. Propose and
- * Finalize both send this. `items` is what they receive. `give` is what they
- * hand over. Leave `give` out to keep that side as it is.
- */
+/** Both sides from this person's view: `items` is what they receive, `give` what they hand over; omitting `give` keeps that side unchanged. */
 export const tradeLinesSchema = z.object({
   items: z.array(tradeLineSchema).max(100),
   give: z.array(tradeLineSchema).max(100).optional(),
@@ -62,7 +55,6 @@ export const tradeDetailSchema = tradeSummarySchema.extend({
 });
 export type TradeDetail = z.infer<typeof tradeDetailSchema>;
 
-/** One printing somebody has marked for trade. */
 export const tradeChoiceSchema = z.object({
   scryfallId: printingIdSchema,
   name: z.string(),
@@ -80,7 +72,7 @@ export const tradeChoicesSchema = z.object({
 });
 export type TradeChoices = z.infer<typeof tradeChoicesSchema>;
 
-/** Adds up market value for one side of a trade. Unpriced cards count as zero. */
+/** Unpriced cards count as zero. */
 export function tradeSideValue(cards: { quantity: number; marketPrice: string | null }[]): number {
   return cards.reduce((sum, card) => {
     const price = Number(card.marketPrice ?? 0);

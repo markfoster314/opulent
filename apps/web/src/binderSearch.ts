@@ -8,15 +8,12 @@ import type {
   SortDirection,
 } from '@opulent/shared';
 
-/** The choices on the collection filter form. Empty text and false mean that rule is off. */
+/** Empty strings and false switch a filter rule off. */
 export interface BinderSearch {
   q: string;
   set: string;
-  /** Matched against the type line. */
   type: string;
-  /** Matched against the illustrator. */
   artist: string;
-  /** Only cards carrying this group label. Empty means any. */
   groupId: string;
   finish: CardFinish | '';
   condition: CardCondition | '';
@@ -29,11 +26,10 @@ export interface BinderSearch {
   miscut: boolean;
   artistProof: boolean;
   onWantList: boolean;
+  onGenericWant: boolean;
   sort: CollectionSort;
   dir: SortDirection;
-  /** The window used for the change column and the price chart. */
   range: PriceRange;
-  /** Show the move as dollars or as a percent. */
   changeMode: 'amount' | 'percent';
 }
 
@@ -54,13 +50,14 @@ export const emptyBinderSearch: BinderSearch = {
   miscut: false,
   artistProof: false,
   onWantList: false,
+  onGenericWant: false,
   sort: 'price',
   dir: 'desc',
   range: '1w',
   changeMode: 'amount',
 };
 
-/** True when any filter rule is on. Ordering and the window are not filters. */
+/** Ordering, range, and change mode are not filters. */
 export function binderSearchIsActive(search: BinderSearch): boolean {
   return (
     search.q.trim() !== '' ||
@@ -78,11 +75,12 @@ export function binderSearchIsActive(search: BinderSearch): boolean {
     search.misprint ||
     search.miscut ||
     search.artistProof ||
-    search.onWantList
+    search.onWantList ||
+    search.onGenericWant
   );
 }
 
-/** Clears the rules but keeps the ordering and window the user chose. */
+/** Clears filters but keeps ordering, range, and change mode. */
 export function clearBinderFilters(search: BinderSearch): BinderSearch {
   return {
     ...emptyBinderSearch,
@@ -93,7 +91,6 @@ export function clearBinderFilters(search: BinderSearch): BinderSearch {
   };
 }
 
-/** Query string for one page of cards. Only rules that are on are sent. */
 export function binderSearchParams(search: BinderSearch, pageParam: string | null, limit: number) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (pageParam) params.set('cursor', pageParam);
@@ -117,6 +114,7 @@ export function binderSearchParams(search: BinderSearch, pageParam: string | nul
   if (search.miscut) params.set('miscut', 'true');
   if (search.artistProof) params.set('artistProof', 'true');
   if (search.onWantList) params.set('onWantList', 'true');
+  if (search.onGenericWant) params.set('onGenericWant', 'true');
   params.set('sort', search.sort);
   params.set('dir', search.dir);
   params.set('range', search.range);

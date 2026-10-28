@@ -29,16 +29,12 @@ export function HomePage() {
   return <LandingPage onSignUp={() => void loginWithRedirect()} />;
 }
 
-/** Live work for a signed-in person. Trends and alerts wait in empty slots. */
 function SignedInHome() {
   const me = useMe(true);
   const trades = useTrades(true);
   const matches = useMatchOwners(true);
   const summary = useCollectionSummary(true);
-  /**
-   * A card chosen before sign-up. The collection page replays it, so a visitor
-   * who started with one card lands there rather than on the home page.
-   */
+  /** A pre-signup card is replayed on /collection, so such visitors land there rather than home. */
   const [pendingAdd] = useState(() => hasPendingAdd());
 
   const waitingOnYou = (trades.data?.items ?? []).filter(

@@ -4,6 +4,7 @@ export * from './binder';
 export * from './want';
 export * from './trade';
 export * from './import';
+export * from './wantsImport';
 export * from './place';
 export * from './user';
 export * from './pagination';

@@ -150,7 +150,6 @@ function englishPrintingJoin() {
   );
 }
 
-/** Starts a trade, or adds these cards to the open trade these two people already have. */
 export async function openTrade(
   db: Database,
   userId: string,
@@ -166,8 +165,7 @@ export async function openTrade(
   const draft = pair.find((row) => row.status === 'draft' && row.proposerId === userId);
   const open = pair.find((row) => live.has(row.status));
 
-  // A closed trade binder cannot receive a brand-new request. A trade that is
-  // already under way keeps going.
+  // Closed binder blocks new requests, but an in-progress trade keeps going.
   if (!open && !draft && partner.tradeBinderVisibility === 'private') {
     throw ApiError.notFound('Trade binder not found');
   }
@@ -313,10 +311,7 @@ async function moveTrade(
   return toDetail(db, updated, userId);
 }
 
-/**
- * A draft stays with the person who started it. Propose is what the other person can see.
- * If a live trade already exists, the draft cards fold into that trade.
- */
+/** Drafts stay private to their starter; proposing folds into a live trade if one exists. */
 async function proposeDraft(
   db: Database,
   userId: string,
@@ -401,7 +396,6 @@ async function loadSide(db: Database, tradeId: string, side: Side): Promise<Line
   return rows;
 }
 
-/** Folds offered cards into the give side, keeping the larger count per printing. */
 async function mergeGiveSide(
   db: Database,
   tradeId: string,
@@ -471,7 +465,6 @@ async function availableCopies(
   return new Map([...stock].map(([scryfallId, row]) => [scryfallId, row.available]));
 }
 
-/** Copies for trade per printing, with the finish most of them carry. */
 async function stockByPrinting(
   db: Database,
   ownerId: string,

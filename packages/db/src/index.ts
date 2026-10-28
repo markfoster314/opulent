@@ -17,6 +17,7 @@ export {
   trades,
   users,
   wantItems,
+  wantListItems,
   wantLists,
 } from './schema';
 export type {

@@ -7,10 +7,7 @@ import type { CatalogSource } from './catalog';
 
 const BULK_DATA_URL = 'https://api.scryfall.com/bulk-data';
 
-/**
- * Scryfall requires an accurate User-Agent and an explicit Accept header on
- * every request. A generic library default can get the project blocked.
- */
+/** Scryfall requires a real User-Agent and explicit Accept; generic defaults can get us blocked. */
 function headers(): Record<string, string> {
   return {
     'User-Agent': process.env.SCRYFALL_USER_AGENT ?? 'OpulentTutor/0.1 (+https://opulenttutor.com)',
@@ -46,13 +43,7 @@ export async function findBulkData(type: string): Promise<BulkDataEntry> {
   return entry;
 }
 
-/**
- * Yields one Scryfall card object at a time.
- *
- * The file is gzipped JSONL, roughly 80 MB compressed and far larger expanded,
- * so it is streamed and gunzipped line by line. Nothing is ever held whole in
- * memory and nothing is written to disk.
- */
+/** Gzipped JSONL (~80 MB) streams line by line; nothing is held whole or written to disk. */
 export async function* streamBulkCards(entry: BulkDataEntry): AsyncGenerator<ScryfallCard> {
   const response = await fetch(entry.jsonl_download_uri, { headers: headers() });
   if (!response.ok || !response.body) {
@@ -70,7 +61,6 @@ export async function* streamBulkCards(entry: BulkDataEntry): AsyncGenerator<Scr
   }
 }
 
-/** Scryfall as a catalog source. `bulkType` is usually default_cards or all_cards. */
 export function scryfallSource(bulkType: string): CatalogSource<ScryfallCard> {
   return {
     name: `scryfall:${bulkType}`,
@@ -87,18 +77,14 @@ export function scryfallSource(bulkType: string): CatalogSource<ScryfallCard> {
   };
 }
 
-/**
- * Double-faced cards carry no top-level `image_uris`; the art lives on each
- * face. Fall back to the front face so every card has a picture.
- */
+/** Double-faced cards keep art on faces; use the front face so every card has a picture. */
 function pickImageUris(card: ScryfallCard): CardImageUris | null {
   const source = card.image_uris ?? card.card_faces?.[0]?.image_uris;
   return (source as CardImageUris | undefined) ?? null;
 }
 
 export function toCardRow(card: ScryfallCard): NewCardRow | null {
-  // A handful of Scryfall objects (tokens, art series oddities) have no
-  // oracle_id. Want lists are keyed on oracle_id, so such rows are unusable.
+  // Tokens and art-series oddities lack oracle_id; want lists need it, so skip those rows.
   if (!card.oracle_id) return null;
 
   return {
@@ -124,7 +110,7 @@ export function toCardRow(card: ScryfallCard): NewCardRow | null {
   };
 }
 
-/** Only the fields we promote to columns. The rest travels in the `raw` column. */
+/** Only promoted fields; the full object still travels in raw. */
 export interface ScryfallCard {
   id: string;
   oracle_id?: string;

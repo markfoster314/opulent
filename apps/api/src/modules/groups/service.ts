@@ -27,12 +27,7 @@ function toCardGroup(row: CardGroupRow, itemCount: number): CardGroup {
   };
 }
 
-/**
- * Every group this person owns, with the number of stacks in each.
- *
- * A group is a label, so an empty group is still a group. Counting through the
- * membership join keeps the list to one query.
- */
+/** Empty groups still count; joining memberships keeps the list to one query. */
 export async function listGroupsForOwner(db: Database, userId: string): Promise<CardGroup[]> {
   const rows = await db
     .select({
@@ -58,7 +53,7 @@ export async function listGroupsForOwner(db: Database, userId: string): Promise<
   }));
 }
 
-/** Groups are private, so a group that is not yours reports "not found". */
+/** Private groups report "not found" to non-owners. */
 export async function getGroupForOwner(
   db: Database,
   userId: string,
@@ -85,7 +80,7 @@ export async function getGroupForOwner(
   };
 }
 
-/** Two groups of one person cannot share a name, ignoring case. */
+/** Postgres unique constraint ignores case for one person's group names. */
 function isGroupNameTaken(error: unknown): boolean {
   const candidates = [error, (error as { cause?: unknown } | null)?.cause];
   return candidates.some((candidate) => {
@@ -153,7 +148,6 @@ export async function deleteGroup(db: Database, userId: string, groupId: string)
   await db.delete(cardGroups).where(and(eq(cardGroups.id, groupId), eq(cardGroups.userId, userId)));
 }
 
-/** The stacks carrying this group's label. */
 export async function listGroupItems(
   db: Database,
   userId: string,
@@ -164,7 +158,7 @@ export async function listGroupItems(
   return listItemsInGroup(db, groupId, query);
 }
 
-/** Puts a stack in a group. Adding twice is not an error. */
+/** Idempotent: adding the same stack twice is not an error. */
 export async function addMembership(
   db: Database,
   userId: string,
@@ -182,7 +176,6 @@ export async function addMembership(
   await db.insert(groupMemberships).values({ itemId, groupId, userId }).onConflictDoNothing();
 }
 
-/** Takes a stack out of a group. The stack stays in the collection. */
 export async function removeMembership(
   db: Database,
   userId: string,

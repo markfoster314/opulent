@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-/**
- * Which catalog a card belongs to. Magic is the only value today. A later
- * game (Pokemon, Lorcana) gets its own value and its own sync job. Every list
- * query narrows on this so a second catalog cannot leak into Magic screens.
- */
+/** Card catalog; a later game gets its own value and sync job, and every list query narrows on it. */
 export const CARD_GAME = 'mtg';
 
 /** How a physical card is printed. Mirrors Scryfall's `finishes` array. */
@@ -33,24 +29,17 @@ export const cardLanguageSchema = z.enum([
 ]);
 export type CardLanguage = z.infer<typeof cardLanguageSchema>;
 
-/** A known language code, or English when the printing uses one we do not list. */
+/** Falls back to English for a code we do not list. */
 export function cardLanguageOrEnglish(lang: string): CardLanguage {
   const parsed = cardLanguageSchema.safeParse(lang);
   return parsed.success ? parsed.data : 'en';
 }
 
-/**
- * Grading shorthand used by every major Magic marketplace:
- * NM near mint, LP lightly played, MP moderately played, HP heavily played, DMG damaged.
- */
+/** Grading shorthand used by every major Magic marketplace: NM, LP, MP, HP, DMG. */
 export const cardConditionSchema = z.enum(['NM', 'LP', 'MP', 'HP', 'DMG']);
 export type CardCondition = z.infer<typeof cardConditionSchema>;
 
-/**
- * private   only the owner can open it
- * unlisted  anyone holding the share token can open it, but it is never listed publicly
- * public    listed on the owner's profile and indexable
- */
+/** Private: owner only; unlisted: reachable only by share token, never listed; public: listed and indexable. */
 export const binderVisibilitySchema = z.enum(['private', 'unlisted', 'public']);
 export type BinderVisibility = z.infer<typeof binderVisibilitySchema>;
 
@@ -72,12 +61,7 @@ export type TradeStatus = z.infer<typeof tradeStatusSchema>;
 export const tradeSideSchema = z.enum(['offered', 'requested']);
 export type TradeSide = z.infer<typeof tradeSideSchema>;
 
-/**
- * Display text for the enums above.
- *
- * These live beside the schemas rather than in the web app so that the eventual
- * mobile app cannot drift from the website on what "LP" means.
- */
+/** Display text lives beside the schemas, not in the web app, so a mobile app cannot drift on what "LP" means. */
 export const cardConditionLabels: Record<CardCondition, string> = {
   NM: 'Near mint',
   LP: 'Lightly played',
@@ -86,12 +70,7 @@ export const cardConditionLabels: Record<CardCondition, string> = {
   DMG: 'Damaged',
 };
 
-/**
- * Usual share of the market price left after wear.
- *
- * Near mint stays at the full market price, so it has no entry here.
- * Light play is about 10% off, moderate 20% off, heavy 30% off, damaged 50% off.
- */
+/** Usual share of market price left after wear; near mint has no entry because it keeps the full price. */
 export const conditionMarketPercent: Partial<Record<CardCondition, number>> = {
   LP: 90,
   MP: 80,

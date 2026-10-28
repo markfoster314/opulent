@@ -2,25 +2,7 @@ import type { Database } from '@opulent/db';
 import { ensurePricePartitions, pricePartitionWindow } from '@opulent/db';
 import { sql } from 'drizzle-orm';
 
-/**
- * Writes a price row only where the price changed.
- *
- * History is a list of change points, not a row per day: a card that held the
- * same price for a month has one row covering that month. Readers carry the
- * newest row forward to fill the days in between, so the table stays small and
- * still answers "what was this worth on that day".
- *
- * The newest row per card comes from one pass over the history table rather than
- * a lookup per card, so the cost follows the size of the history, not the size of
- * the catalog.
- *
- * Prices arrive from the card row as JSON and are cast once here. Comparing the
- * six numbers, rather than two JSON objects, means "2.30" and "2.3" are the same
- * price and a missing key is the same as a null.
- *
- * `CURRENT_DATE` is the database server's date, which keeps every row on one
- * clock. A second run on the same day corrects that day instead of adding a row.
- */
+/** Change points only; cast numerics compare by value and CURRENT_DATE makes reruns idempotent. */
 export async function recordDailyPrices(db: Database): Promise<number> {
   // An insert with no partition to land in fails, so make the months first.
   const window = pricePartitionWindow();

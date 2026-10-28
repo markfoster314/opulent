@@ -26,7 +26,7 @@ import { useRotateWantShareToken, useUpdateWantList } from '../api/queries';
 
 interface WantListSettingsDialogProps {
   list: WantList;
-  /** The owner's username, needed to build the shareable URL. */
+  /** Used to build the shareable URL. */
   username: string | undefined;
   open: boolean;
   onClose: () => void;
@@ -41,33 +41,26 @@ export function WantListSettingsDialog({
   const updateList = useUpdateWantList(list.id);
   const rotateToken = useRotateWantShareToken(list.id);
 
-  const [name, setName] = useState(list.name);
   const [slug, setSlug] = useState(list.slug);
-  const [description, setDescription] = useState(list.description ?? '');
   const [visibility, setVisibility] = useState<BinderVisibility>(list.visibility);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setName(list.name);
       setSlug(list.slug);
-      setDescription(list.description ?? '');
       setVisibility(list.visibility);
       setCopied(false);
     }
   }, [open, list]);
 
   const slugError = slug !== list.slug && !slugSchema.safeParse(slug).success;
-  const nameError = name.trim().length === 0;
   const shareUrl = buildShareUrl(username, slug, visibility, list.shareToken);
 
   function handleSave() {
-    if (nameError || slugError) return;
+    if (slugError) return;
 
     const input: UpdateWantListInput = {};
-    if (name.trim() !== list.name) input.name = name.trim();
     if (slug !== list.slug) input.slug = slug;
-    if (description !== (list.description ?? '')) input.description = description;
     if (visibility !== list.visibility) input.visibility = visibility;
 
     if (Object.keys(input).length === 0) {
@@ -90,25 +83,6 @@ export function WantListSettingsDialog({
 
       <DialogContent>
         <Stack spacing={3} sx={{ pt: 1 }}>
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            error={nameError}
-            helperText={nameError ? 'A list needs a name' : ' '}
-            fullWidth
-          />
-
-          <TextField
-            label="Description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            multiline
-            minRows={2}
-            fullWidth
-            placeholder="Foils and foreign copies welcome."
-          />
-
           <FormControl fullWidth>
             <InputLabel id="want-visibility-label">Who can see it</InputLabel>
             <Select
@@ -207,7 +181,7 @@ export function WantListSettingsDialog({
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={nameError || slugError || updateList.isPending}
+          disabled={slugError || updateList.isPending}
           sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           Save

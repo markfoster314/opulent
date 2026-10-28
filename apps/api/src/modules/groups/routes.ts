@@ -19,12 +19,7 @@ import {
   updateGroup,
 } from './service';
 
-/**
- * Private named groups inside one person's collection.
- *
- * A card can sit in several groups or none, and a group never owns the card.
- * There are no public routes here: the only shared surface is the trade binder.
- */
+/** Private labels only; a card can sit in many groups or none and is never owned by one. */
 export const groupRoutes = new Hono<AppEnv>();
 
 groupRoutes.use('*', requireAuth, requireUser);
@@ -84,14 +79,13 @@ groupRoutes.get(
   },
 );
 
-/** Puts a card in this group. The card must already be in your collection. */
 groupRoutes.post('/:groupId/items/:itemId', zValidator('param', memberParam), async (c) => {
   const { groupId, itemId } = c.req.valid('param');
   await addMembership(c.get('db'), c.get('user').id, groupId, itemId);
   return c.json({ ok: true }, 201);
 });
 
-/** Removes the label only. The card stays in the collection. */
+/** Removes the label only; the card stays in the collection. */
 groupRoutes.delete('/:groupId/items/:itemId', zValidator('param', memberParam), async (c) => {
   const { groupId, itemId } = c.req.valid('param');
   await removeMembership(c.get('db'), c.get('user').id, groupId, itemId);

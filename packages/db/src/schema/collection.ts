@@ -17,14 +17,7 @@ import { cards } from './cards';
 import { cardCondition, cardFinish, itemPriceKind } from './enums';
 import { users } from './users';
 
-/**
- * A named lump of cards from someone's collection.
- *
- * A group is a label, not a home: a card can sit in several groups or in none,
- * and a group can be empty. Groups are private to their owner, so there is no
- * slug, visibility, or share link. The only public surface is the trade binder,
- * which is every collection item marked for trade.
- */
+/** A private label over items: a card may sit in several groups or none, and the only public surface is the trade binder. */
 export const cardGroups = pgTable(
   'card_groups',
   {
@@ -42,21 +35,15 @@ export const cardGroups = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // "One group cannot share a name with another of yours", ignoring case.
+    // Group names are unique per owner, ignoring case.
     uniqueIndex('card_groups_user_name_key').on(table.userId, sql`lower(${table.name})`),
-    // Lets a membership prove the group belongs to the same person as the card.
+    // Composite FK target, so a membership cannot point at another owner's group.
     uniqueIndex('card_groups_user_id_id_key').on(table.userId, table.id),
     index('card_groups_user_id_idx').on(table.userId),
   ],
 );
 
-/**
- * One stack of cards a person owns.
- *
- * The collection is every row with their user id. The trade binder is the rows
- * marked for trade. Groups are joined through `groupMemberships`, so a stack is
- * never tied to a single folder and a group never owns the card.
- */
+/** One stack a person owns; the binder is the rows marked for trade, and groups join through groupMemberships so they never own a card. */
 export const collectionItems = pgTable(
   'collection_items',
   {
@@ -76,25 +63,21 @@ export const collectionItems = pgTable(
     finish: cardFinish('finish').notNull().default('nonfoil'),
     condition: cardCondition('condition').notNull().default('NM'),
     language: text('language').notNull().default('en'),
-    /** Marks on this physical copy. Each one trades as its own stack. */
+    /** Marks on this copy; each one trades as its own stack. */
     signed: boolean('signed').notNull().default(false),
     altered: boolean('altered').notNull().default(false),
     misprint: boolean('misprint').notNull().default(false),
     miscut: boolean('miscut').notNull().default(false),
-    /** A proof copy given to the artist. It trades as its own stack. */
+    /** A proof copy for the artist; it trades as its own stack. */
     artistProof: boolean('artist_proof').notNull().default(false),
     notes: text('notes'),
-    /** A link to photos of this physical copy. Not part of the stack key. */
+    /** Photos of this copy; not part of the stack key. */
     photoUrl: text('photo_url'),
 
-    /** Puts the stack in the public trade binder. A personal collection starts private. */
+    /** Puts the stack in the public trade binder. */
     forTrade: boolean('for_trade').notNull().default(false),
 
-    /**
-     * Market stores percent 100 and an empty amount. A percent price stores 0–100
-     * and an empty amount. Custom stores percent 0 and a dollar string such as "4.50".
-     * The kind column keeps 100% distinct from market, and 0% distinct from a custom price.
-     */
+    /** Kind separates the columns: market is percent 100 with no amount, percent is 0-100 with no amount, custom is percent 0 with a dollar string like "4.50". */
     priceKind: itemPriceKind('price_kind').notNull().default('market'),
     pricePercent: integer('price_percent').notNull().default(100),
     priceAmount: text('price_amount').notNull().default(''),
@@ -103,8 +86,7 @@ export const collectionItems = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // One stack per physical kind. Price is an attribute of the stack, not part
-    // of what makes it distinct, so editing a price updates the same row.
+    // One row per physical stack; price is an attribute, so editing it updates the same row.
     uniqueIndex('collection_items_stack_key').on(
       table.userId,
       table.scryfallId,
@@ -117,37 +99,31 @@ export const collectionItems = pgTable(
       table.miscut,
       table.artistProof,
     ),
-    // Lets a membership prove the card and the group share one owner.
+    // Composite FK target, so a membership cannot point at another owner's card.
     uniqueIndex('collection_items_user_id_id_key').on(table.userId, table.id),
     index('collection_items_user_id_idx').on(table.userId),
     index('collection_items_scryfall_id_idx').on(table.scryfallId),
-    /** Find trades walks for-trade stacks by printing, and ignores the rest. */
+    /** Partial index for trade search, which only walks for-trade stacks. */
     index('collection_items_trade_scryfall_idx')
       .on(table.scryfallId)
       .where(sql`${table.forTrade}`),
   ],
 );
 
-/**
- * One card in one group.
- *
- * A row exists only while the card is lumped into that group; the card itself
- * lives in `collection_items`. Deleting a group or a card removes the membership
- * and nothing else.
- */
+/** One card in one group; the card lives in collectionItems, so deleting either side removes only the membership. */
 export const groupMemberships = pgTable(
   'group_memberships',
   {
     itemId: uuid('item_id').notNull(),
     groupId: uuid('group_id').notNull(),
-    /** Owner of both rows. The two foreign keys below keep the owners in step. */
+    /** Owner of both rows; the composite foreign keys keep both owners in step. */
     userId: uuid('user_id').notNull(),
 
     addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.itemId, table.groupId] }),
-    // "Every card in this group" walks by group, the reverse of the primary key.
+    // Reverse lookup for every card in a group, the opposite of the primary key.
     index('group_memberships_group_id_idx').on(table.groupId),
     foreignKey({
       name: 'group_memberships_item_fk',
@@ -166,12 +142,7 @@ export type CardGroupRow = typeof cardGroups.$inferSelect;
 export type NewCardGroupRow = typeof cardGroups.$inferInsert;
 export type CollectionItemRow = typeof collectionItems.$inferSelect;
 
-/**
- * One frozen collection value per person per day.
- *
- * The value history reads these for past days instead of re-pricing today's
- * holdings across the whole window. Today is still computed live.
- */
+/** One frozen value per user per day, so history need not re-price today's holdings; today is still computed live. */
 export const collectionValueSnapshots = pgTable(
   'collection_value_snapshots',
   {

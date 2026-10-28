@@ -22,13 +22,7 @@ export async function getUserByUsername(
   return rows[0];
 }
 
-/**
- * Answers the welcome screen's "is this username free?" as the user types.
- *
- * This is advice, not a reservation. Nothing stops two people from seeing
- * "available" for the same name at the same moment, which is why the write
- * path below still has to survive losing that race.
- */
+/** Availability is advice, not a reservation; the write path handles the race. */
 export async function checkUsernameAvailability(
   db: Database,
   username: string,
@@ -57,12 +51,7 @@ export async function checkUsernameAvailability(
   return { username: normalized, available: true, reason: null };
 }
 
-/**
- * The one-time welcome screen write.
- *
- * Stamping `onboardedAt` is what closes the screen for good, so this refuses to
- * run twice. Later changes go through `updateProfile`.
- */
+/** One-time onboarding; the stamp closes it for good, so a second run is refused. */
 export async function completeOnboarding(
   db: Database,
   userId: string,
@@ -116,13 +105,7 @@ export interface RadiusOrigin {
   longitude: number;
 }
 
-/**
- * People whose saved city falls inside the radius.
- *
- * ST_DWithin on a geography column measures meters on the earth, so 80,000
- * means 80 kilometers. The caller's own row is left out, and the result carries
- * a distance rather than anyone else's coordinates.
- */
+/** Radius search in meters on geography; returns distance, never other users' coordinates. */
 export async function findUsersWithinRadius(
   db: Database,
   callerId: string,
@@ -195,13 +178,7 @@ async function assertUsernameIsFree(db: Database, username: string, userId: stri
   }
 }
 
-/**
- * The single write, wrapped so the database has the last word.
- *
- * The check above can lose a race with two people claiming one username in the
- * same instant. `users_username_key` cannot, so its rejection is translated
- * into the same conflict the caller would have seen a moment earlier.
- */
+/** Single write; the unique username index wins any race and maps to a conflict. */
 async function writeUser(
   db: Database,
   userId: string,
@@ -241,29 +218,22 @@ function isDuplicateFriend(error: unknown): boolean {
   });
 }
 
-/**
- * Same copy rules as a binder match: language, finish, condition, and set.
- * Expects the want row as `w`, the card as `c`, and the stack as `bi`.
- */
+/** Shared copy filters; SQL expects aliases w, c, and bi. */
 export function copyScope() {
   return sql`
     AND (cardinality(w.wanted_languages) = 0 OR c.lang = ANY(w.wanted_languages))
-    AND (cardinality(w.unwanted_languages) = 0 OR NOT (c.lang = ANY(w.unwanted_languages)))
     AND (cardinality(w.wanted_finishes) = 0 OR bi.finish::text = ANY(w.wanted_finishes))
-    AND (cardinality(w.unwanted_finishes) = 0 OR NOT (bi.finish::text = ANY(w.unwanted_finishes)))
     AND (cardinality(w.wanted_conditions) = 0 OR bi.condition::text = ANY(w.wanted_conditions))
-    AND (cardinality(w.unwanted_conditions) = 0 OR NOT (bi.condition::text = ANY(w.unwanted_conditions)))
     AND (cardinality(w.wanted_sets) = 0 OR lower(c.set_code) = ANY(w.wanted_sets))
-    AND (cardinality(w.unwanted_sets) = 0 OR NOT (lower(c.set_code) = ANY(w.unwanted_sets)))
   `;
 }
 
-/** Their public wants that the viewer is holding for trade. */
 function wantMatchSql(ownerId: string, viewerId: string) {
   return sql`
     SELECT wl.slug AS slug, GROUPING(wl.slug) AS "isTotal", COUNT(DISTINCT w.id)::int AS "matchCount"
     FROM want_items w
-    JOIN want_lists wl ON wl.id = w.want_list_id
+    JOIN want_list_items wli ON wli.want_item_id = w.id AND wli.user_id = w.user_id
+    JOIN want_lists wl ON wl.id = wli.want_list_id
     JOIN cards c ON c.oracle_id = w.oracle_id
     JOIN collection_items bi ON bi.scryfall_id = c.scryfall_id
     WHERE w.user_id = ${ownerId}
@@ -293,7 +263,6 @@ async function matchCountsBySlug(db: Database, query: ReturnType<typeof wantMatc
   return { bySlug, total };
 }
 
-/** Copies this person has marked for trade. */
 async function countTradeBinder(db: Database, userId: string): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`coalesce(sum(${collectionItems.quantity}), 0)::int` })
@@ -325,7 +294,7 @@ async function listedEntries(db: Database, userId: string, table: typeof wantLis
     .orderBy(asc(table.name));
 }
 
-/** The page at /u/:username. A private page hides the lists from everyone, including the owner. */
+/** Profile page; a private profile hides want lists from everyone, including the owner. */
 export async function getProfile(
   db: Database,
   username: string,
@@ -397,14 +366,12 @@ export async function viewerAddedFriend(
   return rows.length > 0;
 }
 
-/** People this username follows. */
 export async function listFollowing(db: Database, username: string): Promise<Friend[]> {
   const user = await getUserByUsername(db, username);
   if (!user) throw ApiError.notFound('User not found');
   return listFriends(db, user.id);
 }
 
-/** People who follow this username. */
 export async function listFollowers(db: Database, username: string): Promise<Friend[]> {
   const user = await getUserByUsername(db, username);
   if (!user) throw ApiError.notFound('User not found');

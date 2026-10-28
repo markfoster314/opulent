@@ -8,6 +8,7 @@ import {
   collectionMoversQuerySchema,
   collectionValueBreakdownQuerySchema,
   collectionValueHistoryQuerySchema,
+  splitCollectionItemSchema,
   updateCollectionItemSchema,
 } from '@opulent/shared';
 import { Hono } from 'hono';
@@ -23,17 +24,13 @@ import {
   listCollectionMovers,
   listCollectionItems,
   removeCollectionItem,
+  splitCollectionItem,
   updateCollectionItem,
 } from './service';
 import { exportCollectionCsv, importCollection } from './import';
 import { getCollectionValueBreakdown, getCollectionValueHistory } from './value';
 
-/**
- * The signed-in person's own cards, as one collection.
- *
- * A stack lives here first. Groups are labels joined through memberships, and
- * the trade binder is every stack marked for trade.
- */
+/** Signed-in owner's cards; groups are labels and the trade binder is every for-trade stack. */
 export const collectionRoutes = new Hono<AppEnv>();
 
 const itemParam = z.object({ itemId: z.string().uuid() });
@@ -44,7 +41,6 @@ collectionRoutes.get('/summary', async (c) => {
   return c.json(await getCollectionSummary(c.get('db'), c.get('user').id));
 });
 
-/** Every card in the collection, ranked by value, one page at a time. */
 collectionRoutes.get('/cards', zValidator('query', collectionCardsQuerySchema), async (c) => {
   const { limit, cursor, sort, dir, range, changeBy, ...filters } = c.req.valid('query');
   return c.json(
@@ -60,7 +56,6 @@ collectionRoutes.get('/cards', zValidator('query', collectionCardsQuerySchema), 
   );
 });
 
-/** The whole collection's value, one point per day. */
 collectionRoutes.get(
   '/value-history',
   zValidator('query', collectionValueHistoryQuerySchema),
@@ -70,7 +65,6 @@ collectionRoutes.get(
   },
 );
 
-/** Current asking value, split by one card factor. */
 collectionRoutes.get(
   '/value-breakdown',
   zValidator('query', collectionValueBreakdownQuerySchema),
@@ -80,7 +74,6 @@ collectionRoutes.get(
   },
 );
 
-/** Biggest gainers and losers for the dashboard. */
 collectionRoutes.get('/movers', zValidator('query', collectionMoversQuerySchema), async (c) => {
   const { limit, range, changeBy } = c.req.valid('query');
   return c.json(
@@ -88,7 +81,6 @@ collectionRoutes.get('/movers', zValidator('query', collectionMoversQuerySchema)
   );
 });
 
-/** The dashboard table: the priciest stacks, with their one-week move. */
 collectionRoutes.get(
   '/highlights',
   zValidator('query', collectionHighlightsQuerySchema),
@@ -111,12 +103,26 @@ collectionRoutes.post('/items', zValidator('json', addCollectionItemSchema), asy
   return c.json(await addCollectionItem(c.get('db'), c.get('user').id, c.req.valid('json')), 201);
 });
 
-/** One stack, with everything the expanded row shows. */
 collectionRoutes.get('/items/:itemId', zValidator('param', itemParam), async (c) => {
   return c.json(
     await getCollectionItem(c.get('db'), c.get('user').id, c.req.valid('param').itemId),
   );
 });
+
+collectionRoutes.post(
+  '/items/:itemId/split',
+  zValidator('param', itemParam),
+  zValidator('json', splitCollectionItemSchema),
+  async (c) => {
+    await splitCollectionItem(
+      c.get('db'),
+      c.get('user').id,
+      c.req.valid('param').itemId,
+      c.req.valid('json'),
+    );
+    return c.body(null, 204);
+  },
+);
 
 collectionRoutes.patch(
   '/items/:itemId',
@@ -139,15 +145,21 @@ collectionRoutes.delete('/items/:itemId', zValidator('param', itemParam), async 
   return c.body(null, 204);
 });
 
-/** CSV in. Dry run by default, so the screen can show a preview first. */
 collectionRoutes.post('/import', zValidator('json', collectionImportSchema), async (c) => {
   return c.json(await importCollection(c.get('db'), c.get('user').id, c.req.valid('json')));
 });
 
-/** CSV out, in the plain format the importer also reads. */
-collectionRoutes.get('/export.csv', async (c) => {
-  const csv = await exportCollectionCsv(c.get('db'), c.get('user').id);
-  c.header('Content-Type', 'text/csv; charset=utf-8');
-  c.header('Content-Disposition', 'attachment; filename="opulent-tutor-collection.csv"');
-  return c.body(csv);
-});
+collectionRoutes.get(
+  '/export.csv',
+  zValidator('query', z.object({ groupId: z.string().uuid().optional() })),
+  async (c) => {
+    const csv = await exportCollectionCsv(
+      c.get('db'),
+      c.get('user').id,
+      c.req.valid('query').groupId,
+    );
+    c.header('Content-Type', 'text/csv; charset=utf-8');
+    c.header('Content-Disposition', 'attachment; filename="opulent-tutor-collection.csv"');
+    return c.body(csv);
+  },
+);

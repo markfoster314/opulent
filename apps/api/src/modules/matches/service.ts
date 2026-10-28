@@ -11,19 +11,9 @@ interface MatchOwnerRow {
   cardNames: string[] | null;
 }
 
-/** How many card names ride along on each paper. */
 const NAMES_PER_OWNER = 4;
 
-/**
- * Who has what I want.
- *
- * One row per other person whose public trade binder holds a card on the
- * viewer's want lists. The copy rules (language, finish, condition, set) are
- * the same ones the binder match uses. Distance comes from the two saved
- * cities through PostGIS, so it is null when either side has no city.
- *
- * Sorted nearest first. People with no distance go last, then by count.
- */
+/** One row per owner; copy rules match binder search, and distance is null without saved cities. */
 export async function findMatchOwners(
   db: Database,
   viewerId: string,

@@ -4,7 +4,7 @@ import { cardGroups, collectionItems, groupMemberships } from './collection';
 import { places } from './places';
 import { tradeItems, trades } from './trades';
 import { friendships, users } from './users';
-import { genericWants, wantItems, wantLists } from './wants';
+import { genericWants, wantItems, wantListItems, wantLists } from './wants';
 
 export const placesRelations = relations(places, ({ many }) => ({
   users: many(users),
@@ -57,16 +57,22 @@ export const groupMembershipsRelations = relations(groupMemberships, ({ one }) =
 
 export const wantListsRelations = relations(wantLists, ({ one, many }) => ({
   owner: one(users, { fields: [wantLists.userId], references: [users.id] }),
-  items: many(wantItems),
+  items: many(wantListItems),
 }));
 
 export const genericWantsRelations = relations(genericWants, ({ one }) => ({
   user: one(users, { fields: [genericWants.userId], references: [users.id] }),
 }));
 
-export const wantItemsRelations = relations(wantItems, ({ one }) => ({
+export const wantItemsRelations = relations(wantItems, ({ one, many }) => ({
   user: one(users, { fields: [wantItems.userId], references: [users.id] }),
-  list: one(wantLists, { fields: [wantItems.wantListId], references: [wantLists.id] }),
+  memberships: many(wantListItems),
+}));
+
+export const wantListItemsRelations = relations(wantListItems, ({ one }) => ({
+  list: one(wantLists, { fields: [wantListItems.wantListId], references: [wantLists.id] }),
+  item: one(wantItems, { fields: [wantListItems.wantItemId], references: [wantItems.id] }),
+  user: one(users, { fields: [wantListItems.userId], references: [users.id] }),
 }));
 
 export const tradesRelations = relations(trades, ({ one, many }) => ({

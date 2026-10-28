@@ -4,21 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 
 interface RevealProps {
   children: ReactNode;
-  /** How far the block travels up, in pixels. A larger number snaps harder. */
+  /** How far the block travels up in pixels; a larger number snaps harder. */
   distance?: number;
   /** Delay before the motion starts, in milliseconds. */
   delay?: number;
 }
 
-/**
- * Fades a block in and lifts it the last few pixels as it enters the window.
- *
- * The block keeps its place in the page, so nothing jumps and no height changes:
- * only `opacity` and `transform` move, which the browser can animate without a
- * new layout. The observer disconnects after the first trip, so scrolling back up
- * does not replay it. A reader who asked for less motion gets the finished block
- * straight away, with no transition at all.
- */
+/** Moves opacity and transform only, so nothing jumps; reduced-motion readers get it at once. */
 export function Reveal({ children, distance = 40, delay = 250 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
@@ -40,9 +32,7 @@ export function Reveal({ children, distance = 40, delay = 250 }: RevealProps) {
         setShown(true);
         observer.disconnect();
       },
-      // Wait until the block is a little way into the window, so the motion is
-      // seen rather than already finished at the edge. A threshold of zero keeps
-      // a tall block from waiting for a share of itself that never fits.
+      // Trigger a little way into the window; threshold zero keeps a tall block from never firing.
       { threshold: 0, rootMargin: '0px 0px -10% 0px' },
     );
     observer.observe(node);

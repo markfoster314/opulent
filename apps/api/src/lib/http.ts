@@ -1,10 +1,7 @@
 import type { ApiErrorCode } from '@opulent/shared';
 import { httpStatusByErrorCode } from '@opulent/shared';
 
-/**
- * The only error type route handlers should throw. The error middleware turns it
- * into the response shape the web app expects.
- */
+/** Route handlers throw this; error middleware maps it to the web app's response shape. */
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
   readonly status: number;
@@ -35,7 +32,6 @@ export class ApiError extends Error {
   }
 }
 
-/** Turns "Mark's Trade Binder" into "marks-trade-binder". */
 export function slugify(input: string): string {
   return input
     .toLowerCase()

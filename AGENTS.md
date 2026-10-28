@@ -26,6 +26,10 @@ Do not add helper sentences under a section title. The purpose of a section must
 - If data needs context, put it in the data, a tooltip, or a label. Do not write a paragraph.
 - When you touch a section, remove this kind of helper text.
 
+# Comments
+
+Comment sparingly and keep comments short. A comment earns its place only when it explains WHY a decision was made, flags a non-obvious gotcha, or cites an external constraint.  Never restate what the code plainly does.  If the code is self-explanatory, leave no comment. Prefer clear variable names and small functions over explanatory comments
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know

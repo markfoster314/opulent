@@ -30,12 +30,7 @@ import { TradeBinderSettings } from '../components/TradeBinderSettings';
 import { TradeMatchesPanel } from '../components/TradeMatchesPanel';
 import { palette } from '../theme';
 
-/**
- * Everything one person has marked for trade, in one place.
- *
- * `?want=1` in the URL opens the page with "On my want lists" already checked,
- * which is how the Find trades page hands someone over.
- */
+/** ?want=1 and ?generic=1 open with the matching filter checked. */
 export function TradeBinderPage() {
   const { handle } = useParams<{ handle: string }>();
   const [searchParams] = useSearchParams();
@@ -44,15 +39,16 @@ export function TradeBinderPage() {
   const [search, setSearch] = useState<BinderSearch>(() => ({
     ...emptyBinderSearch,
     onWantList: searchParams.get('want') === '1',
+    onGenericWant: searchParams.get('generic') === '1',
   }));
   const [preview, setPreview] = useState(false);
 
-  // A new binder always opens as the owner, never mid-preview.
+  // Reset to the owner so a new binder never opens mid-preview.
   useEffect(() => {
     setPreview(false);
   }, [handle]);
 
-  // Unlisted trade binders are reachable only with ?t=<share token>.
+  // Unlisted binders are reachable only with the ?t= share token.
   const shareToken = searchParams.get('t') ?? undefined;
 
   const binderQuery = useTradeBinder(handle, shareToken);
@@ -61,7 +57,11 @@ export function TradeBinderPage() {
   const ownBinder = profile.data?.isOwner === true;
   const viewingAsVisitor = ownBinder && preview;
   const wantListReady = Boolean(isAuthenticated && profile.data && !ownBinder);
-  const itemSearch = { ...search, onWantList: wantListReady && search.onWantList };
+  const itemSearch = {
+    ...search,
+    onWantList: wantListReady && search.onWantList,
+    onGenericWant: wantListReady && search.onGenericWant,
+  };
 
   const itemsQuery = useTradeBinderItems(
     binderQuery.data ? handle : undefined,
@@ -159,7 +159,7 @@ export function TradeBinderPage() {
 
       {!isAuthenticated && (
         <Alert severity="info">
-          Sign in and add cards to your want list to see which of these are matches for you.
+          Sign in and add wants to see which of these are matches for you.
         </Alert>
       )}
 
@@ -173,7 +173,7 @@ export function TradeBinderPage() {
       )}
 
       {isAuthenticated && matchesQuery.isSuccess && matches.length === 0 && (
-        <Alert severity="info">No overlap with your want list yet.</Alert>
+        <Alert severity="info">No overlap with your wants yet.</Alert>
       )}
 
       {canAddCard && !viewingAsVisitor && (

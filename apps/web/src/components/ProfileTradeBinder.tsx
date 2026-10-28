@@ -2,13 +2,7 @@ import type { BinderVisibility } from '@opulent/shared';
 import { useCollectionSummary, useTradeBinderMatches } from '../api/queries';
 import { TradeBinderPreview } from './TradeBinderPreview';
 
-/**
- * The profile page's binder card.
- *
- * On your own page it mirrors the collection dashboard: cards, value, and cards
- * on the table. On someone else's page it only answers the useful question: do
- * their trade cards meet your want lists, and how many do.
- */
+/** Own page mirrors the collection totals; someone else's page reports only want-list matches. */
 export function ProfileTradeBinder({
   username,
   ownPage,

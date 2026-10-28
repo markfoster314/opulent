@@ -1,5 +1,5 @@
 import type { Database } from '@opulent/db';
-import { collectionItems, cards } from '@opulent/db';
+import { cardGroups, cards, collectionItems, groupMemberships } from '@opulent/db';
 import type { CollectionImportInput, CollectionImportResult, ImportRow } from '@opulent/shared';
 import { CARD_GAME, PLAIN_CSV_COLUMNS } from '@opulent/shared';
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
@@ -19,7 +19,6 @@ import {
 
 /** Rows sent back in the preview. The counts cover every row. */
 const PREVIEW_ROWS = 200;
-/** Rows per INSERT. */
 const BATCH = 200;
 
 interface PrintingHit {
@@ -30,19 +29,7 @@ interface PrintingHit {
   lang: string;
 }
 
-/**
- * CSV in, stacks out.
- *
- * Matching order per row:
- *  1. A Scryfall id column, when the file has one and we know the printing.
- *  2. Set code + collector number + language. This is the `cards_printing_key`
- *     unique index, so it is one printing or none.
- *  3. Card name + set code, taking the lowest collector number in that set.
- *
- * Rows that match are merged into the person's existing stacks, bumping the
- * count where the same printing, finish, condition, language, and marks already
- * sit together. Nothing is written on a dry run.
- */
+/** Match by Scryfall id, then set/number/language (cards_printing_key), then name/set; dry runs write nothing. */
 export async function importCollection(
   db: Database,
   userId: string,
@@ -57,6 +44,17 @@ export async function importCollection(
   const at = columnIndexes(header, format);
   if (at.name === -1 && at.scryfallId === -1) {
     throw ApiError.badRequest('Could not find a card name column in this file.');
+  }
+
+  const groupIds = [...new Set(input.groupIds ?? [])];
+  if (groupIds.length > 0) {
+    const owned = await db
+      .select({ id: cardGroups.id })
+      .from(cardGroups)
+      .where(and(eq(cardGroups.userId, userId), inArray(cardGroups.id, groupIds)));
+    if (owned.length !== groupIds.length) {
+      throw ApiError.badRequest('One of those groups is not yours.');
+    }
   }
 
   const raw = table.slice(1).map((cells, index) => ({ line: index + 2, row: readRow(cells, at) }));
@@ -141,7 +139,7 @@ export async function importCollection(
   }
 
   let added = 0;
-  if (!input.dryRun) added = await writeStacks(db, userId, [...writes.values()]);
+  if (!input.dryRun) added = await writeStacks(db, userId, [...writes.values()], groupIds);
 
   return {
     dryRun: input.dryRun,
@@ -155,11 +153,16 @@ export async function importCollection(
   };
 }
 
-async function writeStacks(db: Database, userId: string, lines: ImportRow[]): Promise<number> {
+async function writeStacks(
+  db: Database,
+  userId: string,
+  lines: ImportRow[],
+  groupIds: string[],
+): Promise<number> {
   let added = 0;
   for (let start = 0; start < lines.length; start += BATCH) {
     const chunk = lines.slice(start, start + BATCH);
-    await db
+    const inserted = await db
       .insert(collectionItems)
       .values(
         chunk.map((line) => ({
@@ -192,22 +195,31 @@ async function writeStacks(db: Database, userId: string, lines: ImportRow[]): Pr
           collectionItems.misprint,
           collectionItems.miscut,
           collectionItems.artistProof,
-          collectionItems.priceKind,
-          collectionItems.pricePercent,
-          collectionItems.priceAmount,
         ],
         set: {
           quantity: sql`${collectionItems.quantity} + excluded.quantity`,
           forTrade: sql`${collectionItems.forTrade} OR excluded.for_trade`,
           updatedAt: new Date(),
         },
-      });
+      })
+      .returning({ id: collectionItems.id });
+
+    if (groupIds.length > 0 && inserted.length > 0) {
+      await db
+        .insert(groupMemberships)
+        .values(
+          inserted.flatMap((row) =>
+            groupIds.map((groupId) => ({ itemId: row.id, groupId, userId })),
+          ),
+        )
+        .onConflictDoNothing();
+    }
     added += chunk.reduce((sum, line) => sum + line.quantity, 0);
   }
   return added;
 }
 
-/** Paper printings only, never art cards. Same rule as adding one card by hand. */
+/** Same paper-only rule as adding one card by hand. */
 function paperOnly() {
   return and(
     eq(cards.game, CARD_GAME),
@@ -264,7 +276,7 @@ async function printingsByKey(
   );
 }
 
-/** Name + set, lowest collector number wins. English first so a plain file lands on the usual row. */
+/** Name + set match; lowest collector number wins, English first. */
 async function printingsByNameSet(
   db: Database,
   raw: { row: { name: string; set: string } }[],
@@ -327,8 +339,12 @@ function whyNoMatch(row: { name: string; set: string; number: string }): string 
   return 'No paper printing with this set, number, or name in our card list.';
 }
 
-/** The plain format, one line per stack, with the stack's own finish and condition. */
-export async function exportCollectionCsv(db: Database, userId: string): Promise<string> {
+/** Plain export: one line per stack, with its own finish and condition. */
+export async function exportCollectionCsv(
+  db: Database,
+  userId: string,
+  groupId?: string,
+): Promise<string> {
   const rows = await db
     .select({
       name: cards.name,
@@ -342,7 +358,20 @@ export async function exportCollectionCsv(db: Database, userId: string): Promise
     })
     .from(collectionItems)
     .innerJoin(cards, eq(cards.scryfallId, collectionItems.scryfallId))
-    .where(and(eq(collectionItems.userId, userId), eq(cards.game, CARD_GAME)))
+    .$dynamic()
+    .where(
+      and(
+        eq(collectionItems.userId, userId),
+        eq(cards.game, CARD_GAME),
+        groupId
+          ? sql`EXISTS (
+              SELECT 1 FROM ${groupMemberships}
+              WHERE ${groupMemberships.itemId} = ${collectionItems.id}
+                AND ${groupMemberships.groupId} = ${groupId}::uuid
+            )`
+          : undefined,
+      ),
+    )
     .orderBy(asc(cards.name), asc(cards.setCode), asc(cards.collectorNumber));
 
   const lines = [toCsvLine([...PLAIN_CSV_COLUMNS])];

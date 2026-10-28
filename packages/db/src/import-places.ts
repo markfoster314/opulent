@@ -4,16 +4,7 @@ import { loadEnv } from './load-env';
 
 loadEnv();
 
-/**
- * Copies the GeoNames city list into our database.
- *
- * GeoNames publishes a free dump of populated places. We keep our own copy so
- * signup never calls them, and so radius search can run entirely in Postgres.
- * Running this again refreshes the same rows. It is the step a new checkout
- * uses after migrate.
- *
- * Source: https://download.geonames.org/export/dump/ (Creative Commons Attribution 4.0)
- */
+/** Mirrors the GeoNames cities5000 dump (CC BY 4.0) so signup never calls GeoNames and search runs locally; source: download.geonames.org/export/dump/ */
 
 const CITIES_URL = 'https://download.geonames.org/export/dump/cities5000.zip';
 const ADMIN1_URL = 'https://download.geonames.org/export/dump/admin1CodesASCII.txt';
@@ -190,11 +181,7 @@ async function main() {
   }
 }
 
-/**
- * The previous column was free text. Once the city list is loaded, a typed
- * name such as "Austin" can be pointed at the largest matching place, and the
- * text column can go.
- */
+/** One-off: points the legacy free-text users.city at the largest matching place, then drops that column. */
 async function copyTypedCities(sql: postgres.Sql) {
   const column = await sql<{ exists: boolean }[]>`
     SELECT EXISTS (

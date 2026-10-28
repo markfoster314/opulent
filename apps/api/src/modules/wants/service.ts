@@ -1,11 +1,12 @@
 import type { Database, WantListRow } from '@opulent/db';
-import { cards, genericWants, users, wantItems, wantLists } from '@opulent/db';
+import { cards, genericWants, users, wantItems, wantListItems, wantLists } from '@opulent/db';
 import type {
   AddWantItemInput,
   CardImageUris,
   CardSet,
   CreateGenericWantInput,
   CreateWantListInput,
+  GenericMatchOwner,
   GenericWant,
   UpdateWantItemInput,
   UpdateWantListInput,
@@ -13,24 +14,19 @@ import type {
   WantList,
   WantPriority,
 } from '@opulent/shared';
-import { CARD_GAME, genericWantMatchKey, wantScopeError } from '@opulent/shared';
+import { CARD_GAME, genericWantMatchKey, wantScopeKey } from '@opulent/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { ApiError, slugify } from '../../lib/http';
 
 const scopeColumns = {
   wantedLanguages: wantItems.wantedLanguages,
-  unwantedLanguages: wantItems.unwantedLanguages,
   wantedFinishes: wantItems.wantedFinishes,
-  unwantedFinishes: wantItems.unwantedFinishes,
   wantedConditions: wantItems.wantedConditions,
-  unwantedConditions: wantItems.unwantedConditions,
   wantedSets: wantItems.wantedSets,
-  unwantedSets: wantItems.unwantedSets,
 };
 
 const wantSelection = {
   id: wantItems.id,
-  wantListId: wantItems.wantListId,
   userId: wantItems.userId,
   oracleId: wantItems.oracleId,
   quantity: wantItems.quantity,
@@ -41,20 +37,15 @@ const wantSelection = {
 
 type WantRow = {
   id: string;
-  wantListId: string;
   userId: string;
   oracleId: string;
   quantity: number;
   priority: number;
   notes: string | null;
   wantedLanguages: string[];
-  unwantedLanguages: string[];
   wantedFinishes: string[];
-  unwantedFinishes: string[];
   wantedConditions: string[];
-  unwantedConditions: string[];
   wantedSets: string[];
-  unwantedSets: string[];
 };
 
 interface CardFace {
@@ -62,7 +53,12 @@ interface CardFace {
   imageUris: CardImageUris | null;
 }
 
-/** Keeps only real picture links. A bad or empty scan is treated as no picture. */
+interface ListRef {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 function readImage(value: unknown): CardImageUris | null {
   let parsed = value;
   if (typeof value === 'string') {
@@ -83,23 +79,19 @@ function readImage(value: unknown): CardImageUris | null {
   return image;
 }
 
-function toWantItem(row: WantRow, face: CardFace | undefined): WantItem {
+function toWantItem(row: WantRow, face: CardFace | undefined, lists: ListRef[]): WantItem {
   return {
     id: row.id,
-    wantListId: row.wantListId,
     userId: row.userId,
     oracleId: row.oracleId,
     quantity: row.quantity,
     priority: (row.priority as WantPriority) ?? 2,
     notes: row.notes,
     wantedLanguages: (row.wantedLanguages ?? []) as WantItem['wantedLanguages'],
-    unwantedLanguages: (row.unwantedLanguages ?? []) as WantItem['unwantedLanguages'],
     wantedFinishes: (row.wantedFinishes ?? []) as WantItem['wantedFinishes'],
-    unwantedFinishes: (row.unwantedFinishes ?? []) as WantItem['unwantedFinishes'],
     wantedConditions: (row.wantedConditions ?? []) as WantItem['wantedConditions'],
-    unwantedConditions: (row.unwantedConditions ?? []) as WantItem['unwantedConditions'],
     wantedSets: row.wantedSets ?? [],
-    unwantedSets: row.unwantedSets ?? [],
+    lists,
     ...(face?.name ? { cardName: face.name } : {}),
     ...(face?.imageUris ? { imageUris: face.imageUris } : {}),
   };
@@ -112,12 +104,6 @@ function oracleIdList(oracleIds: readonly string[]) {
   );
 }
 
-/**
- * The name and oldest picture for each card on the list.
- *
- * The name is read from the same card row as the picture, so the title is the
- * card the owner picked. A card with no picture still gets its name.
- */
 async function cardFaces(
   db: Database,
   oracleIds: readonly string[],
@@ -171,28 +157,69 @@ async function cardFaces(
   return faces;
 }
 
-async function withFaces(db: Database, rows: WantRow[]): Promise<WantItem[]> {
-  const faces = await cardFaces(
-    db,
-    rows.map((row) => row.oracleId),
-  );
-  return rows.map((row) => toWantItem(row, faces.get(row.oracleId)));
+/** One query for every list label on a page of wants. */
+async function listsForItems(
+  db: Database,
+  itemIds: string[],
+  viewerId: string | undefined,
+): Promise<Map<string, ListRef[]>> {
+  const byItem = new Map<string, ListRef[]>();
+  if (itemIds.length === 0 || !viewerId) return byItem;
+  const rows = await db
+    .select({
+      itemId: wantListItems.wantItemId,
+      id: wantLists.id,
+      name: wantLists.name,
+      slug: wantLists.slug,
+    })
+    .from(wantListItems)
+    .innerJoin(wantLists, eq(wantLists.id, wantListItems.wantListId))
+    .where(and(inArray(wantListItems.wantItemId, itemIds), eq(wantLists.userId, viewerId)))
+    .orderBy(asc(wantLists.name));
+  for (const row of rows) {
+    const list = byItem.get(row.itemId) ?? [];
+    list.push({ id: row.id, name: row.name, slug: row.slug });
+    byItem.set(row.itemId, list);
+  }
+  return byItem;
 }
 
-function scopeValues(input: AddWantItemInput | UpdateWantItemInput) {
+async function withFaces(
+  db: Database,
+  rows: WantRow[],
+  viewerId: string | undefined,
+): Promise<WantItem[]> {
+  const ids = rows.map((row) => row.id);
+  const [faces, lists] = await Promise.all([
+    cardFaces(
+      db,
+      rows.map((row) => row.oracleId),
+    ),
+    listsForItems(db, ids, viewerId),
+  ]);
+  return rows.map((row) => toWantItem(row, faces.get(row.oracleId), lists.get(row.id) ?? []));
+}
+
+function normalizedScope(input: {
+  wantedLanguages?: readonly string[];
+  wantedFinishes?: readonly string[];
+  wantedConditions?: readonly string[];
+  wantedSets?: readonly string[];
+}) {
+  const sort = (values: readonly string[] | undefined, upper = false) =>
+    [...new Set((values ?? []).map((value) => value.trim()))]
+      .map((value) => (upper ? value.toUpperCase() : value.toLowerCase()))
+      .sort();
   return {
-    ...(input.wantedLanguages !== undefined ? { wantedLanguages: input.wantedLanguages } : {}),
-    ...(input.unwantedLanguages !== undefined
-      ? { unwantedLanguages: input.unwantedLanguages }
-      : {}),
-    ...(input.wantedFinishes !== undefined ? { wantedFinishes: input.wantedFinishes } : {}),
-    ...(input.unwantedFinishes !== undefined ? { unwantedFinishes: input.unwantedFinishes } : {}),
-    ...(input.wantedConditions !== undefined ? { wantedConditions: input.wantedConditions } : {}),
-    ...(input.unwantedConditions !== undefined
-      ? { unwantedConditions: input.unwantedConditions }
-      : {}),
-    ...(input.wantedSets !== undefined ? { wantedSets: input.wantedSets } : {}),
-    ...(input.unwantedSets !== undefined ? { unwantedSets: input.unwantedSets } : {}),
+    wantedLanguages: sort(input.wantedLanguages),
+    wantedFinishes: sort(input.wantedFinishes),
+    wantedConditions: sort(input.wantedConditions, true),
+    wantedSets: sort(input.wantedSets),
+  } as {
+    wantedLanguages: string[];
+    wantedFinishes: string[];
+    wantedConditions: string[];
+    wantedSets: string[];
   };
 }
 
@@ -207,18 +234,28 @@ async function ownedList(db: Database, userId: string, listId: string) {
   return list;
 }
 
+async function verifyLists(db: Database, userId: string, listIds: readonly string[]) {
+  const unique = [...new Set(listIds)];
+  if (unique.length === 0) return unique;
+  const rows = await db
+    .select({ id: wantLists.id })
+    .from(wantLists)
+    .where(and(eq(wantLists.userId, userId), inArray(wantLists.id, unique)));
+  if (rows.length !== unique.length) {
+    throw ApiError.badRequest('One of those lists is not yours.');
+  }
+  return unique;
+}
+
 async function itemCountFor(db: Database, listId: string): Promise<number> {
   const counts = await db
     .select({ itemCount: sql<number>`coalesce(sum(${wantItems.quantity}), 0)::int` })
-    .from(wantItems)
-    .where(eq(wantItems.wantListId, listId));
+    .from(wantListItems)
+    .innerJoin(wantItems, eq(wantItems.id, wantListItems.wantItemId))
+    .where(eq(wantListItems.wantListId, listId));
   return Number(counts[0]?.itemCount ?? 0);
 }
 
-/**
- * The share token stays with the owner. A stranger who opens a public list
- * must not learn a token that would still work if the list later becomes unlisted.
- */
 function toWantList(row: WantListRow, itemCount: number, includeToken: boolean): WantList {
   return {
     id: row.id,
@@ -234,7 +271,6 @@ function toWantList(row: WantListRow, itemCount: number, includeToken: boolean):
   };
 }
 
-/** You own it, it is public, or you hold the unlisted token. */
 export function assertCanViewWantList(
   list: WantListRow,
   viewer: { userId?: string | undefined; shareToken?: string | undefined },
@@ -256,17 +292,18 @@ export async function listWantLists(db: Database, userId: string): Promise<WantL
   if (rows.length > 0) {
     const counts = await db
       .select({
-        id: wantItems.wantListId,
+        id: wantListItems.wantListId,
         itemCount: sql<number>`coalesce(sum(${wantItems.quantity}), 0)::int`,
       })
-      .from(wantItems)
+      .from(wantListItems)
+      .innerJoin(wantItems, eq(wantItems.id, wantListItems.wantItemId))
       .where(
         inArray(
-          wantItems.wantListId,
+          wantListItems.wantListId,
           rows.map((row) => row.id),
         ),
       )
-      .groupBy(wantItems.wantListId);
+      .groupBy(wantListItems.wantListId);
     for (const count of counts) totals.set(count.id, Number(count.itemCount));
   }
 
@@ -310,7 +347,6 @@ export async function getWantList(db: Database, userId: string, listId: string):
   return toWantList(row, await itemCountFor(db, listId), true);
 }
 
-/** Wire shape for a list opened from a share link. The token stays with the owner. */
 export async function toPublicWantList(
   db: Database,
   row: WantListRow,
@@ -362,7 +398,6 @@ export async function updateWantList(
   return getWantList(db, userId, listId);
 }
 
-/** Invalidates every share link handed out so far. */
 export async function rotateWantShareToken(db: Database, listId: string): Promise<string> {
   const updated = await db
     .update(wantLists)
@@ -379,43 +414,81 @@ export async function deleteWantList(db: Database, userId: string, listId: strin
   await db.delete(wantLists).where(and(eq(wantLists.id, listId), eq(wantLists.userId, userId)));
 }
 
-export async function listWantItems(db: Database, listId: string): Promise<WantItem[]> {
+export async function listWantItems(
+  db: Database,
+  listId: string,
+  viewerId?: string,
+): Promise<WantItem[]> {
   const rows = await db
     .select(wantSelection)
     .from(wantItems)
-    .where(eq(wantItems.wantListId, listId))
+    .innerJoin(wantListItems, eq(wantListItems.wantItemId, wantItems.id))
+    .where(eq(wantListItems.wantListId, listId))
     .orderBy(asc(wantItems.priority), asc(wantItems.createdAt));
-  return withFaces(db, rows);
+  return withFaces(db, rows, viewerId);
 }
 
-/** Every want across this person's lists. Public skips private and unlisted lists. */
+export async function listAllWantItems(db: Database, userId: string): Promise<WantItem[]> {
+  const rows = await db
+    .select(wantSelection)
+    .from(wantItems)
+    .where(eq(wantItems.userId, userId))
+    .orderBy(asc(wantItems.priority), asc(wantItems.createdAt));
+  return withFaces(db, rows, userId);
+}
+
 export async function listCollectedWants(
   db: Database,
   userId: string,
   onlyPublic: boolean,
 ): Promise<WantItem[]> {
-  const scope = onlyPublic
-    ? and(eq(wantItems.userId, userId), eq(wantLists.visibility, 'public'))
-    : eq(wantItems.userId, userId);
+  if (!onlyPublic) return listAllWantItems(db, userId);
+
   const rows = await db
     .select(wantSelection)
     .from(wantItems)
-    .innerJoin(wantLists, eq(wantLists.id, wantItems.wantListId))
-    .where(scope)
+    .innerJoin(wantListItems, eq(wantListItems.wantItemId, wantItems.id))
+    .innerJoin(wantLists, eq(wantLists.id, wantListItems.wantListId))
+    .where(and(eq(wantItems.userId, userId), eq(wantLists.visibility, 'public')))
+    .groupBy(wantItems.id)
     .orderBy(asc(wantItems.priority), asc(wantItems.createdAt));
-  return withFaces(db, rows);
+  return withFaces(db, rows, onlyPublic ? undefined : userId);
 }
 
-/** Adding a card already on the list raises the quantity and saves the new choices. */
+async function getWantItem(db: Database, userId: string, wantId: string): Promise<WantItem> {
+  const rows = await db
+    .select(wantSelection)
+    .from(wantItems)
+    .where(and(eq(wantItems.id, wantId), eq(wantItems.userId, userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Want not found');
+  const [item] = await withFaces(db, [row], userId);
+  if (!item) throw ApiError.notFound('Want not found');
+  return item;
+}
+
+async function insertMemberships(
+  db: Database,
+  userId: string,
+  wantId: string,
+  listIds: readonly string[],
+): Promise<void> {
+  if (listIds.length === 0) return;
+  await db
+    .insert(wantListItems)
+    .values(listIds.map((wantListId) => ({ wantListId, wantItemId: wantId, userId })))
+    .onConflictDoNothing();
+}
+
 export async function addWantItem(
   db: Database,
   userId: string,
-  listId: string,
   input: AddWantItemInput,
 ): Promise<WantItem> {
-  await ownedList(db, userId, listId);
-  const scopeMessage = wantScopeError(input);
-  if (scopeMessage) throw ApiError.badRequest(scopeMessage);
+  const listIds = await verifyLists(db, userId, input.listIds);
+  const scope = normalizedScope(input);
+  const scopeKey = wantScopeKey(scope);
 
   const known = await db
     .select({ oracleId: cards.oracleId })
@@ -429,27 +502,20 @@ export async function addWantItem(
   const inserted = await db
     .insert(wantItems)
     .values({
-      wantListId: listId,
       userId,
       oracleId: input.oracleId,
       quantity: input.quantity,
       priority: input.priority,
       notes: input.notes ?? null,
-      wantedLanguages: input.wantedLanguages,
-      unwantedLanguages: input.unwantedLanguages,
-      wantedFinishes: input.wantedFinishes,
-      unwantedFinishes: input.unwantedFinishes,
-      wantedConditions: input.wantedConditions,
-      unwantedConditions: input.unwantedConditions,
-      wantedSets: input.wantedSets,
-      unwantedSets: input.unwantedSets,
+      ...scope,
+      scopeKey,
     })
     .onConflictDoUpdate({
-      target: [wantItems.wantListId, wantItems.oracleId],
+      target: [wantItems.userId, wantItems.oracleId, wantItems.scopeKey],
       set: {
-        quantity: sql`${wantItems.quantity} + ${input.quantity}`,
-        priority: input.priority,
-        ...scopeValues(input),
+        quantity: sql`${wantItems.quantity} + excluded.quantity`,
+        priority: sql`least(${wantItems.priority}, excluded.priority)`,
+        notes: sql`coalesce(${wantItems.notes}, excluded.notes)`,
         updatedAt: new Date(),
       },
     })
@@ -457,49 +523,130 @@ export async function addWantItem(
 
   const id = inserted[0]?.id;
   if (!id) throw new ApiError('internal_error', 'Could not add the want');
-
-  const rows = await db.select(wantSelection).from(wantItems).where(eq(wantItems.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) throw new ApiError('internal_error', 'Could not read back the want');
-  const [item] = await withFaces(db, [row]);
-  if (!item) throw new ApiError('internal_error', 'Could not read back the want');
-  return item;
+  await insertMemberships(db, userId, id, listIds);
+  return getWantItem(db, userId, id);
 }
 
 export async function updateWantItem(
   db: Database,
   userId: string,
-  listId: string,
   wantId: string,
   input: UpdateWantItemInput,
 ): Promise<WantItem> {
-  await ownedList(db, userId, listId);
-  const updated = await db
+  const current = await db
+    .select(wantSelection)
+    .from(wantItems)
+    .where(and(eq(wantItems.id, wantId), eq(wantItems.userId, userId)))
+    .limit(1);
+  const row = current[0];
+  if (!row) throw ApiError.notFound('Want not found');
+
+  const listIds =
+    input.listIds === undefined ? undefined : await verifyLists(db, userId, input.listIds);
+  const nextScope =
+    input.wantedLanguages !== undefined ||
+    input.wantedFinishes !== undefined ||
+    input.wantedConditions !== undefined ||
+    input.wantedSets !== undefined
+      ? normalizedScope({
+          wantedLanguages: input.wantedLanguages ?? row.wantedLanguages,
+          wantedFinishes: input.wantedFinishes ?? row.wantedFinishes,
+          wantedConditions: input.wantedConditions ?? row.wantedConditions,
+          wantedSets: input.wantedSets ?? row.wantedSets,
+        })
+      : null;
+  const nextScopeKey = nextScope ? wantScopeKey(nextScope) : null;
+
+  if (nextScopeKey && nextScopeKey !== wantScopeKey(row)) {
+    const clash = await db
+      .select({ id: wantItems.id, quantity: wantItems.quantity, priority: wantItems.priority })
+      .from(wantItems)
+      .where(
+        and(
+          eq(wantItems.userId, userId),
+          eq(wantItems.oracleId, row.oracleId),
+          eq(wantItems.scopeKey, nextScopeKey),
+          ne(wantItems.id, wantId),
+        ),
+      )
+      .limit(1);
+    const target = clash[0];
+    if (target) {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(wantItems)
+          .set({
+            quantity: target.quantity + row.quantity,
+            priority: Math.min(target.priority, input.priority ?? row.priority),
+            notes: input.notes ?? row.notes ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(wantItems.id, target.id));
+        const existingMemberships = await tx
+          .select({ wantListId: wantListItems.wantListId, userId: wantListItems.userId })
+          .from(wantListItems)
+          .where(eq(wantListItems.wantItemId, wantId));
+        if (existingMemberships.length > 0) {
+          await tx
+            .insert(wantListItems)
+            .values(
+              existingMemberships.map((membership) => ({
+                wantListId: membership.wantListId,
+                wantItemId: target.id,
+                userId: membership.userId,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+        await tx.delete(wantItems).where(eq(wantItems.id, wantId));
+      });
+      return getWantItem(db, userId, target.id);
+    }
+  }
+
+  await db
     .update(wantItems)
     .set({
       ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
-      ...scopeValues(input),
+      ...(nextScope ?? {}),
+      ...(nextScopeKey ? { scopeKey: nextScopeKey } : {}),
       updatedAt: new Date(),
     })
-    .where(
-      and(eq(wantItems.id, wantId), eq(wantItems.wantListId, listId), eq(wantItems.userId, userId)),
-    )
+    .where(and(eq(wantItems.id, wantId), eq(wantItems.userId, userId)));
+
+  if (listIds !== undefined) {
+    await db.delete(wantListItems).where(eq(wantListItems.wantItemId, wantId));
+    await insertMemberships(db, userId, wantId, listIds);
+  }
+  return getWantItem(db, userId, wantId);
+}
+
+export async function removeWantItem(db: Database, userId: string, wantId: string): Promise<void> {
+  const removed = await db
+    .delete(wantItems)
+    .where(and(eq(wantItems.id, wantId), eq(wantItems.userId, userId)))
     .returning({ id: wantItems.id });
+  if (!removed[0]) throw ApiError.notFound('Want not found');
+}
 
-  if (!updated[0]) throw ApiError.notFound('Want not found');
-
-  const rows = await db
-    .select(wantSelection)
-    .from(wantItems)
-    .where(eq(wantItems.id, wantId))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw ApiError.notFound('Want not found');
-  const [item] = await withFaces(db, [row]);
-  if (!item) throw ApiError.notFound('Want not found');
-  return item;
+export async function removeWantFromList(
+  db: Database,
+  userId: string,
+  listId: string,
+  wantId: string,
+): Promise<void> {
+  await ownedList(db, userId, listId);
+  await db
+    .delete(wantListItems)
+    .where(
+      and(
+        eq(wantListItems.wantListId, listId),
+        eq(wantListItems.wantItemId, wantId),
+        eq(wantListItems.userId, userId),
+      ),
+    );
 }
 
 function isDuplicateGenericWant(error: unknown): boolean {
@@ -638,16 +785,95 @@ export async function removeGenericWant(
   if (!removed[0]) throw ApiError.notFound('Generic want not found');
 }
 
-export async function removeWantItem(
+/** Generic matches; each fitting stack counts once, and results are capped per owner. */
+export async function findGenericMatchOwners(
   db: Database,
-  userId: string,
-  listId: string,
-  wantId: string,
-): Promise<void> {
-  await ownedList(db, userId, listId);
-  await db
-    .delete(wantItems)
-    .where(
-      and(eq(wantItems.id, wantId), eq(wantItems.wantListId, listId), eq(wantItems.userId, userId)),
-    );
+  viewerId: string,
+  limit: number,
+): Promise<GenericMatchOwner[]> {
+  const rows = (await db.execute(sql`
+    WITH viewer AS (
+      SELECT p.location
+      FROM users u
+      LEFT JOIN places p ON p.geoname_id = u.place_id
+      WHERE u.id = ${viewerId}
+    ),
+    hits AS (
+      SELECT
+        bi.user_id AS owner_id,
+        bi.id AS item_id,
+        min(c.name) AS card_name,
+        min(c.set_code) AS set_code,
+        (array_agg(c.image_uris))[1] AS image_uris,
+        min(bi.finish::text) AS finish,
+        min(bi.condition::text) AS condition,
+        min(c.lang) AS lang,
+        sum(bi.quantity)::int AS quantity
+      FROM generic_wants gw
+      JOIN collection_items bi ON bi.for_trade = true AND bi.user_id <> ${viewerId}
+      JOIN cards c ON c.scryfall_id = bi.scryfall_id
+      WHERE gw.user_id = ${viewerId}
+        AND c.game = ${CARD_GAME}
+        AND (cardinality(gw.languages) = 0 OR c.lang = ANY(gw.languages))
+        AND (cardinality(gw.finishes) = 0 OR bi.finish::text = ANY(gw.finishes))
+        AND (cardinality(gw.conditions) = 0 OR bi.condition::text = ANY(gw.conditions))
+        AND (cardinality(gw.sets) = 0 OR lower(c.set_code) = ANY(gw.sets))
+        AND (NOT gw.signed OR bi.signed)
+        AND (NOT gw.altered OR bi.altered)
+        AND (NOT gw.misprint OR bi.misprint)
+        AND (NOT gw.miscut OR bi.miscut)
+        AND (NOT gw.artist_proof OR bi.artist_proof)
+      GROUP BY bi.user_id, bi.id
+    ),
+    grouped AS (
+      SELECT
+        owner_id,
+        count(*)::int AS match_count,
+        jsonb_agg(
+          jsonb_build_object(
+            'name', card_name,
+            'setCode', set_code,
+            'imageUris', image_uris,
+            'finish', finish,
+            'condition', condition,
+            'language', lang,
+            'quantity', quantity
+          )
+          ORDER BY card_name
+        ) AS cards
+      FROM hits
+      GROUP BY owner_id
+    )
+    SELECT
+      u.username,
+      p.label AS city,
+      CASE
+        WHEN p.location IS NULL OR viewer.location IS NULL THEN NULL
+        ELSE ST_Distance(p.location, viewer.location)
+      END AS "distanceMeters",
+      g.match_count AS "matchCount",
+      g.cards
+    FROM grouped g
+    JOIN users u ON u.id = g.owner_id
+    LEFT JOIN places p ON p.geoname_id = u.place_id
+    CROSS JOIN viewer
+    WHERE u.trade_binder_visibility = 'public'
+      AND u.onboarded_at IS NOT NULL
+    ORDER BY "distanceMeters" ASC NULLS LAST, g.match_count DESC, u.username ASC
+    LIMIT ${limit}
+  `)) as unknown as {
+    username: string;
+    city: string | null;
+    distanceMeters: number | string | null;
+    matchCount: number | string;
+    cards: GenericMatchOwner['cards'];
+  }[];
+
+  return rows.map((row) => ({
+    username: row.username,
+    city: row.city,
+    distanceMeters: row.distanceMeters === null ? null : Math.round(Number(row.distanceMeters)),
+    matchCount: Number(row.matchCount),
+    cards: (row.cards ?? []).slice(0, 4),
+  }));
 }

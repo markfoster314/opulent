@@ -1,13 +1,6 @@
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 
-/**
- * Resolves the database connection string without ever writing the password
- * into a CloudFormation template or an environment variable.
- *
- * Local development sets DATABASE_URL directly. In AWS, the stack passes
- * DB_SECRET_ARN and DB_HOST instead, and the password is fetched from AWS
- * Secrets Manager on first use.
- */
+/** Keeps the password out of templates and env vars: local uses DATABASE_URL, AWS passes DB_SECRET_ARN and DB_HOST to Secrets Manager. */
 let resolution: Promise<string> | undefined;
 
 async function resolve(): Promise<string> {
@@ -43,11 +36,7 @@ export function resolveConnectionString(): Promise<string> {
   return resolution;
 }
 
-/**
- * Sets process.env.DATABASE_URL once per process, so getDatabase() can stay a
- * simple synchronous getter. The promise is cached, so concurrent cold-start
- * requests make one Secrets Manager call between them.
- */
+/** Sets DATABASE_URL once so getDatabase() stays synchronous; the cached promise shares one Secrets Manager call across cold starts. */
 export async function ensureDatabaseUrl(): Promise<void> {
   process.env.DATABASE_URL = await resolveConnectionString();
 }

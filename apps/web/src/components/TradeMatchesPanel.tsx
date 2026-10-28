@@ -22,12 +22,15 @@ interface TradeMatchesPanelProps {
   matches: TradeMatch[];
   /** False while we do not yet know the viewer is someone else, or the list is empty. */
   canTrade: boolean;
-  /** Where the cards live, for the line under the title. */
   sourceLabel: string;
 }
 
-/** "N matches for your want list" with the pick-and-draft flow underneath. */
-export function TradeMatchesPanel({ handle, matches, canTrade, sourceLabel }: TradeMatchesPanelProps) {
+export function TradeMatchesPanel({
+  handle,
+  matches,
+  canTrade,
+  sourceLabel,
+}: TradeMatchesPanelProps) {
   const navigate = useNavigate();
   const openTrade = useOpenTrade();
   const [picking, setPicking] = useState(false);

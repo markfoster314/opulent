@@ -68,7 +68,6 @@ async function toMe(db: Database, user: UserRow) {
 
 const handleParam = z.object({ username: usernameSchema });
 
-/** Share links carry the token in the query string: ?t=abc123 */
 async function tradeBinderOwner(db: Database, username: string) {
   const owner = await getUserByUsername(db, username);
   if (!owner) throw ApiError.notFound('User not found');
@@ -79,11 +78,7 @@ userRoutes.get('/me', requireAuth, requireUser, async (c) =>
   c.json(await toMe(c.get('db'), c.get('user'))),
 );
 
-/**
- * The one-time welcome screen. Separate from PATCH so the two moments stay
- * distinct: here the user picks freely, and afterwards a rename is a trip to
- * profile settings rather than something they can wander into.
- */
+/** One-time welcome rename stays separate from later profile edits. */
 userRoutes.post(
   '/me/onboarding',
   requireAuth,
@@ -95,7 +90,7 @@ userRoutes.post(
   },
 );
 
-/** Live feedback for the welcome screen, so a taken username is seen before saving. */
+/** Live feedback so a taken username is seen before saving. */
 userRoutes.get(
   '/me/username-available',
   requireAuth,
@@ -122,7 +117,7 @@ userRoutes.patch(
   },
 );
 
-/** New secret for the trade binder link. Every old link stops working. */
+/** New secret invalidates every old trade binder link. */
 userRoutes.post('/me/trade-binder/share-token/rotate', requireAuth, requireUser, async (c) => {
   return c.json({ shareToken: await rotateTradeBinderToken(c.get('db'), c.get('user').id) });
 });
@@ -154,10 +149,7 @@ userRoutes.delete(
   },
 );
 
-/**
- * Users whose saved city is inside the radius. Registered before `/:username`
- * so the word "nearby" is this search and not somebody's name.
- */
+/** Registered before /:username so "nearby" is not treated as a username. */
 userRoutes.get(
   '/nearby',
   requireAuth,
@@ -189,8 +181,6 @@ userRoutes.get(
   },
 );
 
-// --- Trade binder: every stack this person marked for trade ---
-
 userRoutes.get(
   '/:username/trade-binder',
   optionalAuth,
@@ -217,7 +207,6 @@ userRoutes.get(
   },
 );
 
-/** Cards on my want lists that this person holds for trade. */
 userRoutes.get(
   '/:username/trade-binder/matches',
   requireAuth,
@@ -235,7 +224,6 @@ userRoutes.get(
   },
 );
 
-/** People this person follows. */
 userRoutes.get(
   '/:username/following',
   zValidator('param', z.object({ username: usernameSchema })),
@@ -245,7 +233,6 @@ userRoutes.get(
   },
 );
 
-/** People who follow this person. */
 userRoutes.get(
   '/:username/followers',
   zValidator('param', z.object({ username: usernameSchema })),
@@ -255,7 +242,7 @@ userRoutes.get(
   },
 );
 
-/** The page at /u/:username. A private page leaves the lists off for everyone except the owner. */
+/** Private profiles hide lists from everyone except the owner. */
 userRoutes.get(
   '/:username',
   optionalAuth,

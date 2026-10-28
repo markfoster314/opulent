@@ -4,10 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import { ZodError } from 'zod';
 import { ApiError } from '../lib/http';
 
-/**
- * Single exit point for failures. Keeps internal messages and stack traces out
- * of responses while still logging enough to debug.
- */
+/** Single failure exit: hide internals from responses but log enough to debug. */
 export function onError(error: Error, c: Context): Response {
   if (error instanceof ApiError) {
     const body: ApiErrorBody = {

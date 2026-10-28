@@ -21,16 +21,11 @@ export interface RequestOptions {
   /** Share token for viewing an unlisted binder without signing in. */
   shareToken?: string;
   signal?: AbortSignal;
-  /** Read the body as text instead of JSON. For file downloads such as the CSV export. */
+  /** Read as text instead of JSON, for downloads such as the CSV export. */
   asText?: boolean;
 }
 
-/**
- * One place that knows how to talk to the API.
- *
- * `getToken` is supplied by the Auth0 provider, so this file never touches
- * Auth0 directly and stays easy to use from tests.
- */
+/** API client with injected token lookup, so Auth0 stays outside and tests can stub it. */
 export function createApiClient(getToken: TokenProvider) {
   return async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const url = new URL(path, env.apiBaseUrl);

@@ -17,13 +17,7 @@ import { tradeRoutes } from './modules/trades/routes';
 import { userRoutes } from './modules/users/routes';
 import { wantRoutes } from './modules/wants/routes';
 
-/**
- * One deployable service with clearly separated modules inside it.
- *
- * Modules talk to each other only through exported service functions, never by
- * reading another module's tables directly. That rule is what will let any of
- * them be lifted into a separate service later without a rewrite.
- */
+/** Modules share service functions, never tables, so each can be split out later. */
 export function createApp() {
   const env = getEnv();
   const app = new Hono<AppEnv>();
@@ -41,16 +35,14 @@ export function createApp() {
     }),
   );
 
-  // One database handle per process, shared by every request. The connection
-  // string may need resolving from AWS Secrets Manager on a cold start.
+  // One db handle per process; AWS Secrets Manager may resolve the URL on cold start.
   app.use('*', async (c, next) => {
     await ensureDatabaseUrl();
     c.set('db', getDatabase());
     await next();
   });
 
-  // Personal data must never sit in a browser or intermediary cache. Set before
-  // the route runs, so public card routes can replace it on the way out.
+  // Personal data must not be cached; set early so public card routes can override.
   app.use('/v1/*', async (c, next) => {
     c.header('Cache-Control', 'private, no-store');
     await next();

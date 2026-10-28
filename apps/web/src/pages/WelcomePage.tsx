@@ -22,20 +22,11 @@ import { WelcomeSplash } from '../components/WelcomeSplash';
 import { useDebounced } from '../hooks/useDebounced';
 import { palette } from '../theme';
 
-/** The two things setup asks for. The second one may be skipped. */
 const STEPS = ['Username', 'City'] as const;
 
-/** How long the gold fill takes to cross one part of the progress bar. */
 const FILL_MS = 520;
 
-/**
- * Shown once, straight after the first sign-in.
- *
- * Until this is saved the user is carrying a generated username such as
- * `mark_a1b2c3`, which would otherwise end up in every link they share. Setup
- * asks for two things in order: a name they must choose, then a city they may
- * leave blank.
- */
+/** Shown once after first sign-in; a generated username would otherwise leak into every shared link. */
 export function WelcomePage() {
   const { isAuthenticated, isLoading } = useAuth0();
   const me = useMe(isAuthenticated);
@@ -61,16 +52,13 @@ function WelcomeForm({ me }: { me: Me }) {
   const [step, setStep] = useState(0);
   const [username, setUsername] = useState('');
   const [city, setCity] = useState<PlaceRef | null>(null);
-  /** The splash covers the form once, then hands over for good. */
   const [splash, setSplash] = useState(true);
   const finishSplash = useCallback(() => setSplash(false), []);
   const usernameRef = useRef<HTMLInputElement>(null);
   const headingRef = useRef<HTMLElement>(null);
   const firstStep = useRef(true);
 
-  // Fold case as the user types rather than complaining about it afterwards.
-  // Somebody entering "Mark" means "mark", and watching it happen in the field
-  // is clearer than reading a rule that says capitals are not allowed.
+  // Fold case while typing; seeing "Mark" become "mark" is clearer than an error about capitals.
   const normalized = username.trim().toLowerCase();
   const debounced = useDebounced(normalized, 300);
   const settled = debounced === normalized;
@@ -95,16 +83,14 @@ function WelcomeForm({ me }: { me: Me }) {
   /** Where the user was heading before being stopped, such as a shared binder. */
   const returnTo = (location.state as { from?: string } | null)?.from ?? '/collection';
 
-  // A phone keeps its keyboard down until the person taps the field themselves.
-  // Nothing reaches for focus while the splash owns the window.
+  // Do not focus on phones: keep their keyboard down; only focus after the splash on desktop.
   useEffect(() => {
     if (splash) return;
     if (!window.matchMedia('(min-width: 900px)').matches) return;
     usernameRef.current?.focus();
   }, [splash]);
 
-  // The button that moved the page has gone, so put the reader on the new step
-  // instead of leaving focus on the body.
+  // Move focus to the new step heading; the button that advanced the page is gone.
   useEffect(() => {
     if (firstStep.current) {
       firstStep.current = false;
@@ -133,12 +119,7 @@ function WelcomeForm({ me }: { me: Me }) {
         <StepBar step={step} />
 
         <ResizeBox step={step}>
-          {/*
-           * Only the words change with the step, so only the words are
-           * keyed. The card and the buttons below keep their place and
-           * their paint, which is what stops the whole block from fading
-           * on every move.
-           */}
+          {/* Key only the title so the card and buttons keep their paint instead of fading on every step. */}
           <Box
             key={step}
             sx={{
@@ -255,10 +236,7 @@ function WelcomeForm({ me }: { me: Me }) {
               Back
             </Button>
           )}
-          {/*
-           * One button for both steps. A floor on the width stops
-           * "Continue" and "Finish setup" from moving it.
-           */}
+          {/* Floor the button width so "Continue" and "Finish setup" do not move it. */}
           <Button
             variant="contained"
             size="large"
@@ -274,7 +252,6 @@ function WelcomeForm({ me }: { me: Me }) {
   );
 }
 
-/** Where the reader is in setup: a caption, the step name, and a two-part bar. */
 function StepBar({ step }: { step: number }) {
   return (
     <Stack spacing={1}>
@@ -298,11 +275,7 @@ function StepBar({ step }: { step: number }) {
               overflow: 'hidden',
             }}
           >
-            {/*
-             * Each part has a track and a fill. The fill grows from the left on
-             * the way forward and pulls back to the left on the way back, so the
-             * bar reports the move instead of blinking to the new step.
-             */}
+            {/* The fill grows from the left going forward and pulls back going back, so the bar reports the move. */}
             <Box
               sx={{
                 height: '100%',
@@ -320,14 +293,7 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
-/**
- * Holds its content at a measured height.
- *
- * The content is taken out of flow, so a swap between the two steps changes the
- * wrapper's height instead of moving the page at once. The wrapper then animates
- * to the new height over the same 360ms as the title fade, so the title block and
- * the input card always resize together.
- */
+/** Animates a measured height as steps swap, so the title and input card resize together. */
 function ResizeBox({ step, children }: { step: number; children: ReactNode }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | null>(null);
@@ -348,11 +314,7 @@ function ResizeBox({ step, children }: { step: number; children: ReactNode }) {
       sx={{
         position: 'relative',
         height: height ?? undefined,
-        /*
-         * Clip the bottom while the box resizes, but leave room above the top.
-         * A floating field label sits outside the top of its input, and a plain
-         * `overflow: hidden` cuts it in half.
-         */
+        /* Clip the bottom only; overflow hidden would cut the floating field label above the input. */
         clipPath: 'inset(-16px 0 0 0)',
         transition: 'height 360ms cubic-bezier(0.22, 1, 0.36, 1)',
         '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
@@ -365,7 +327,6 @@ function ResizeBox({ step, children }: { step: number; children: ReactNode }) {
   );
 }
 
-/** One line of helper text, picking the most useful thing to say right now. */
 function describe(state: {
   empty: boolean;
   shapeError: string | null;

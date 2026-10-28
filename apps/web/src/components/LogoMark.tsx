@@ -1,7 +1,6 @@
 import { Box, type SxProps, type Theme } from '@mui/material';
 import { palette } from '../theme';
 
-/** A gold card with a black O stacked above a black T. */
 export function LogoMark({ sx }: { sx?: SxProps<Theme> }) {
   return (
     <Box

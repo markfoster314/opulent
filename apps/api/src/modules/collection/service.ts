@@ -3,6 +3,7 @@ import {
   cardGroups,
   cards,
   collectionItems,
+  genericWants,
   groupMemberships,
   tradeItems,
   trades,
@@ -22,6 +23,7 @@ import type {
   Page,
   PriceRange,
   SortDirection,
+  SplitCollectionItemInput,
   TradeBinder,
   TradeMatch,
   UpdateCollectionItemInput,
@@ -50,13 +52,11 @@ function isCardFinish(value: string): value is CardFinish {
 }
 
 export interface ViewerContext {
-  /** Internal user id of the signed-in caller, if any. */
   userId?: string | undefined;
-  /** Share token supplied on the request, if any. */
   shareToken?: string | undefined;
 }
 
-/** The trade binder follows the same three doors as any other shared list. */
+/** Owner, public, or matching unlisted token; otherwise hide as not found. */
 export function assertCanViewTradeBinder(owner: UserRow, viewer: ViewerContext): void {
   if (viewer.userId && owner.id === viewer.userId) return;
   if (owner.tradeBinderVisibility === 'public') return;
@@ -69,7 +69,7 @@ export function assertCanViewTradeBinder(owner: UserRow, viewer: ViewerContext):
   throw ApiError.notFound('Trade binder not found');
 }
 
-/** What a visitor sees above the trade binder. The token stays with the owner. */
+/** What a visitor sees above the binder; the share token stays with the owner. */
 export async function getTradeBinder(
   db: Database,
   owner: UserRow,
@@ -101,11 +101,7 @@ export async function rotateTradeBinderToken(db: Database, userId: string): Prom
   return token;
 }
 
-/**
- * The market price of one copy, in SQL, so the whole collection sums in one pass.
- * Foils and etched foils read their own price. A non-English printing falls
- * back to the English printing of the same set and number, like `marketPrices`.
- */
+/** One copy's market price in SQL, with the same English fallback as marketPrices. */
 function copyMarketPriceSql() {
   const own = sql`CASE ${collectionItems.finish}::text
     WHEN 'foil' THEN ${cards.prices}->>'usd_foil'
@@ -118,7 +114,6 @@ function copyMarketPriceSql() {
   return sql`COALESCE(NULLIF(${own}, '')::numeric, NULLIF(${english}, '')::numeric, 0)`;
 }
 
-/** Card and value totals for the top of the collection page. */
 export async function getCollectionSummary(
   db: Database,
   userId: string,
@@ -142,8 +137,7 @@ export async function getCollectionSummary(
     .where(and(eq(collectionItems.userId, userId), eq(cards.game, CARD_GAME)));
   const row = rows[0];
 
-  // The owner's side of every live trade: offered when they proposed, requested
-  // when the other person did. Drafts are not between two people yet.
+  // The owner's side of live trades; drafts are not between two people yet.
   const onTheTable = await db
     .select({ count: sql<number>`coalesce(sum(${tradeItems.quantity}), 0)::int` })
     .from(tradeItems)
@@ -207,7 +201,6 @@ type CollectionItemJoinRow = Awaited<ReturnType<typeof selectCollectionItems>>[n
 
 const englishCards = alias(cards, 'english_card');
 
-/** The English printing of the same set and number, which carries the price. */
 function englishPrintingJoin() {
   return and(
     eq(englishCards.setCode, cards.setCode),
@@ -237,10 +230,7 @@ function toItemPrice(
   return { kind: 'market' };
 }
 
-/**
- * Fills the unused price columns so the row is always complete.
- * Market is 100 and an empty amount. Custom is 0 and the dollar string.
- */
+/** Fills unused price columns so each row is complete: market uses 100, custom uses 0. */
 function priceColumns(price: ItemPrice | undefined): {
   priceKind: ItemPrice['kind'];
   pricePercent: number;
@@ -309,6 +299,11 @@ interface ValueRow {
   finish: string;
   quantity: number;
   forTrade: boolean;
+  signed: boolean;
+  altered: boolean;
+  misprint: boolean;
+  miscut: boolean;
+  artistProof: boolean;
   imageUrl: string | null;
   askingNow: string | null;
   change: string | null;
@@ -350,6 +345,11 @@ function toCollectionHighlight(row: ValueRow): CollectionHighlight {
     finish: row.finish as CollectionHighlight['finish'],
     quantity: Number(row.quantity),
     forTrade: row.forTrade,
+    signed: row.signed,
+    altered: row.altered,
+    misprint: row.misprint,
+    miscut: row.miscut,
+    artistProof: row.artistProof,
     imageUrl: row.imageUrl,
     price: price === null ? null : price.toFixed(2),
     change: change === null || change === 0 ? null : `${change > 0 ? '+' : ''}${change.toFixed(2)}`,
@@ -358,24 +358,7 @@ function toCollectionHighlight(row: ValueRow): CollectionHighlight {
   };
 }
 
-/**
- * Cards in one collection, filtered, ranked by the chosen key, one page at a time.
- *
- * The asking price is the market price for the stack's finish, unless the owner
- * set a percent or a custom amount, in which case the owner's number wins. A
- * non-English printing falls back to the English printing of the same set and
- * number, like `marketPrices`.
- *
- * The change compares that number with the price in force at the start of the
- * window. History stores change points rather than a row per day, so the start
- * means the newest row on or before that date. A custom price is fixed by the
- * owner, so it reports no change.
- *
- * `pricedOnly` is the dashboard: the ten most valuable cards. Without it the
- * list is every card, and a stack with no known price sorts last with a dash.
- * The cursor carries the sort key and the row id, so a page never repeats or
- * skips a row.
- */
+/** Paged cards; owner price overrides market, foreign printings fall back to English, cursor carries sort key and id. */
 async function queryCardsByValue(
   db: Database,
   userId: string,
@@ -386,9 +369,7 @@ async function queryCardsByValue(
     range: PriceRange;
     cursor?: ValueCursor;
     pricedOnly: boolean;
-    /** Which change the "change" sort ranks on. */
     changeBy: 'amount' | 'percent';
-    /** Only rows with a real move, and optionally only up or down. */
     changedOnly?: boolean;
     changeSign?: 'up' | 'down';
     filters?: Partial<CollectionItemQuery>;
@@ -479,6 +460,11 @@ async function queryCardsByValue(
         ci.finish,
         ci.quantity,
         ci.for_trade,
+        ci.signed,
+        ci.altered,
+        ci.misprint,
+        ci.miscut,
+        ci.artist_proof,
         ci.price_kind,
         ci.price_percent,
         ci.price_amount,
@@ -608,6 +594,11 @@ async function queryCardsByValue(
       r.finish::text AS finish,
       r.quantity,
       r.for_trade AS "forTrade",
+      r.signed,
+      r.altered,
+      r.misprint,
+      r.miscut,
+      r.artist_proof AS "artistProof",
       COALESCE(
         r.image_uris->>'normal',
         r.image_uris->>'large',
@@ -631,7 +622,6 @@ async function queryCardsByValue(
   };
 }
 
-/** The few biggest gainers and losers for the dashboard. */
 export async function listCollectionMovers(
   db: Database,
   userId: string,
@@ -652,7 +642,6 @@ export async function listCollectionMovers(
   return { gainers: gainers.items, losers: losers.items };
 }
 
-/** The dashboard: the ten most valuable stacks, always priced, one week of change. */
 export async function listCollectionHighlights(
   db: Database,
   userId: string,
@@ -697,7 +686,6 @@ export async function listCollectionCardsByValue(
   });
 }
 
-/** Every group each of these stacks sits in, keyed by item id. */
 async function loadGroupsForItems(
   db: Database,
   itemIds: string[],
@@ -718,13 +706,9 @@ async function loadGroupsForItems(
   return byItem;
 }
 
-/** Parsed search, or just a page size. A missing flag means that rule is off. */
 type CollectionItemListQuery = Partial<CollectionItemQuery> & { limit: number };
 
-/**
- * Keyset pagination ordered by card name. The cursor carries the last name and
- * row id, so adding a card mid-scroll never duplicates or skips a row.
- */
+/** Keyset pagination by name and id, so a mid-scroll insert cannot duplicate or skip rows. */
 async function pageOfItems(
   db: Database,
   scope: SQL | undefined,
@@ -765,7 +749,6 @@ async function pageOfItems(
   };
 }
 
-/** Every stack this person owns. The owner reads this, groups included. */
 export async function listCollectionItems(
   db: Database,
   userId: string,
@@ -774,10 +757,7 @@ export async function listCollectionItems(
   return pageOfItems(db, eq(collectionItems.userId, userId), pagination, userId, true);
 }
 
-/**
- * Every stack this person marked for trade. Check `assertCanViewTradeBinder` first.
- * Group names are private, so visitors never receive them.
- */
+/** For-trade stacks; call assertCanViewTradeBinder first, and never expose private group names. */
 export async function listTradeBinderItems(
   db: Database,
   ownerId: string,
@@ -793,7 +773,7 @@ export async function listTradeBinderItems(
   );
 }
 
-/** The stacks in one group. Only the owner reaches this, through the groups module. */
+/** Group contents; only the owner reaches this through the groups module. */
 export async function listItemsInGroup(
   db: Database,
   groupId: string,
@@ -833,7 +813,7 @@ export async function listItemsInGroup(
   };
 }
 
-/** Turns a typed name into a safe contains-match. % and _ stay as letters, not wildcards. */
+/** Escapes LIKE wildcards so % and _ in a typed name stay literal. */
 function containsPattern(value: string): string {
   return `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
@@ -880,9 +860,29 @@ function collectionItemFilters(
   if (query.onWantList) {
     if (!viewerId) throw ApiError.unauthorized('Sign in to filter by your want lists.');
     clauses.push(sql`EXISTS (
-      SELECT 1 FROM ${wantItems}
-      WHERE ${wantItems.userId} = ${viewerId}
-        AND ${wantItems.oracleId} = ${cards.oracleId}
+      SELECT 1 FROM ${wantItems} wi
+      WHERE wi.user_id = ${viewerId}
+        AND wi.oracle_id = ${cards.oracleId}
+        AND (cardinality(wi.wanted_languages) = 0 OR ${cards.lang} = ANY(wi.wanted_languages))
+        AND (cardinality(wi.wanted_finishes) = 0 OR ${collectionItems.finish}::text = ANY(wi.wanted_finishes))
+        AND (cardinality(wi.wanted_conditions) = 0 OR ${collectionItems.condition}::text = ANY(wi.wanted_conditions))
+        AND (cardinality(wi.wanted_sets) = 0 OR lower(${cards.setCode}) = ANY(wi.wanted_sets))
+    )`);
+  }
+  if (query.onGenericWant) {
+    if (!viewerId) throw ApiError.unauthorized('Sign in to filter by your generic wants.');
+    clauses.push(sql`EXISTS (
+      SELECT 1 FROM ${genericWants} gw
+      WHERE gw.user_id = ${viewerId}
+        AND (cardinality(gw.languages) = 0 OR ${cards.lang} = ANY(gw.languages))
+        AND (cardinality(gw.finishes) = 0 OR ${collectionItems.finish}::text = ANY(gw.finishes))
+        AND (cardinality(gw.conditions) = 0 OR ${collectionItems.condition}::text = ANY(gw.conditions))
+        AND (cardinality(gw.sets) = 0 OR lower(${cards.setCode}) = ANY(gw.sets))
+        AND (NOT gw.signed OR ${collectionItems.signed})
+        AND (NOT gw.altered OR ${collectionItems.altered})
+        AND (NOT gw.misprint OR ${collectionItems.misprint})
+        AND (NOT gw.miscut OR ${collectionItems.miscut})
+        AND (NOT gw.artist_proof OR ${collectionItems.artistProof})
     )`);
   }
   return clauses;
@@ -907,13 +907,6 @@ export type CollectionItemInput = Omit<
     Pick<AddCollectionItemInput, 'signed' | 'altered' | 'misprint' | 'miscut' | 'artistProof'>
   >;
 
-/**
- * Adds a card, or bumps the quantity if that exact stack is already present.
- * "Exact stack" means same printing, finish, condition, language, and marks.
- * Price is not part of that key, so a second add never makes a second stack.
- *
- * Marks default to unchecked so a caller that only names the printing still works.
- */
 /** A snapshot failure must not fail the card change; the daily job catches up. */
 async function refreshTodayValue(db: Database, userId: string): Promise<void> {
   try {
@@ -923,6 +916,7 @@ async function refreshTodayValue(db: Database, userId: string): Promise<void> {
   }
 }
 
+/** Adds a card or bumps the exact stack; price is not part of the stack key. */
 export async function addCollectionItem(
   db: Database,
   userId: string,
@@ -976,7 +970,7 @@ export async function addCollectionItem(
       ],
       set: {
         quantity: sql`${collectionItems.quantity} + ${input.quantity}`,
-        // The owner may already have priced this stack. Edit it to change the price.
+        // Do not overwrite an existing owner price; edit the stack to change it.
         forTrade: sql`${collectionItems.forTrade} OR excluded.for_trade`,
         updatedAt: new Date(),
       },
@@ -1001,7 +995,6 @@ export async function addCollectionItem(
   return toCollectionItem(row, groups.get(id) ?? []);
 }
 
-/** One stack, with its groups and the card detail the expanded row shows. */
 export async function getCollectionItem(
   db: Database,
   userId: string,
@@ -1035,8 +1028,7 @@ export async function updateCollectionItem(
     const scryfallId = existing[0]?.scryfallId;
     if (!scryfallId) throw ApiError.notFound('Card not found in your collection');
     await assertPrintedLanguage(db, scryfallId, input.language);
-    // The picture and the stored card are the printing, not the language label.
-    // English and Japanese of one set are two Scryfall ids.
+    // A language change moves to that language's printing, which has its own Scryfall id.
     const printings = await listLanguagePrintings(db, scryfallId);
     const nextPrinting = printings.find(
       (card) => cardLanguageOrEnglish(card.lang) === input.language,
@@ -1074,12 +1066,179 @@ export async function updateCollectionItem(
     throw error;
   }
 
+  if (input.groupIds !== undefined) {
+    const groupIds = [...new Set(input.groupIds)];
+    if (groupIds.length > 0) {
+      const owned = await db
+        .select({ id: cardGroups.id })
+        .from(cardGroups)
+        .where(and(eq(cardGroups.userId, userId), inArray(cardGroups.id, groupIds)));
+      if (owned.length !== groupIds.length) {
+        throw ApiError.badRequest('One of those groups is not yours.');
+      }
+    }
+    await db.delete(groupMemberships).where(eq(groupMemberships.itemId, itemId));
+    if (groupIds.length > 0) {
+      await db
+        .insert(groupMemberships)
+        .values(groupIds.map((groupId) => ({ itemId, groupId, userId })))
+        .onConflictDoNothing();
+    }
+  }
+
   const rows = await selectCollectionItems(db).where(eq(collectionItems.id, itemId)).limit(1);
   const row = rows[0];
   if (!row) throw ApiError.notFound('Card not found in your collection');
   const groups = await loadGroupsForItems(db, [itemId]);
   await refreshTodayValue(db, userId);
   return toCollectionItem(row, groups.get(itemId) ?? []);
+}
+
+/** Splits one copy into a new stack; an existing matching stack absorbs it and the original loses one. */
+export async function splitCollectionItem(
+  db: Database,
+  userId: string,
+  itemId: string,
+  input: SplitCollectionItemInput,
+): Promise<void> {
+  const rows = await db
+    .select()
+    .from(collectionItems)
+    .where(and(eq(collectionItems.id, itemId), eq(collectionItems.userId, userId)))
+    .limit(1);
+  const current = rows[0];
+  if (!current) throw ApiError.notFound('Card not found in your collection');
+  if (current.quantity <= 1) {
+    throw ApiError.badRequest('This stack has only one copy. Edit the whole stack instead.');
+  }
+
+  let scryfallId = current.scryfallId;
+  const language = (input.language ?? current.language) as NonNullable<
+    SplitCollectionItemInput['language']
+  >;
+  if (language !== current.language) {
+    await assertPrintedLanguage(db, current.scryfallId, language);
+    const printings = await listLanguagePrintings(db, current.scryfallId);
+    const next = printings.find((card) => cardLanguageOrEnglish(card.lang) === language);
+    if (!next) throw ApiError.badRequest('This card was not printed in that language.');
+    scryfallId = next.scryfallId;
+  }
+
+  const groupIds =
+    input.groupIds !== undefined
+      ? [...new Set(input.groupIds)]
+      : (
+          await db
+            .select({ groupId: groupMemberships.groupId })
+            .from(groupMemberships)
+            .where(eq(groupMemberships.itemId, itemId))
+        ).map((row) => row.groupId);
+
+  if (input.groupIds !== undefined && groupIds.length > 0) {
+    const owned = await db
+      .select({ id: cardGroups.id })
+      .from(cardGroups)
+      .where(and(eq(cardGroups.userId, userId), inArray(cardGroups.id, groupIds)));
+    if (owned.length !== groupIds.length) {
+      throw ApiError.badRequest('One of those groups is not yours.');
+    }
+  }
+
+  const sameStack =
+    scryfallId === current.scryfallId &&
+    (input.finish ?? current.finish) === current.finish &&
+    (input.condition ?? current.condition) === current.condition &&
+    language === current.language &&
+    (input.signed ?? current.signed) === current.signed &&
+    (input.altered ?? current.altered) === current.altered &&
+    (input.misprint ?? current.misprint) === current.misprint &&
+    (input.miscut ?? current.miscut) === current.miscut &&
+    (input.artistProof ?? current.artistProof) === current.artistProof;
+  if (sameStack) {
+    throw ApiError.badRequest(
+      'Change the finish, condition, language, or a mark to split off one copy.',
+    );
+  }
+
+  const price = input.price
+    ? priceColumns(input.price)
+    : {
+        priceKind: current.priceKind,
+        pricePercent: current.pricePercent,
+        priceAmount: current.priceAmount,
+      };
+
+  await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(collectionItems)
+      .values({
+        userId,
+        scryfallId,
+        quantity: 1,
+        finish: input.finish ?? current.finish,
+        condition: input.condition ?? current.condition,
+        language,
+        signed: input.signed ?? current.signed,
+        altered: input.altered ?? current.altered,
+        misprint: input.misprint ?? current.misprint,
+        miscut: input.miscut ?? current.miscut,
+        artistProof: input.artistProof ?? current.artistProof,
+        notes: input.notes !== undefined ? input.notes : current.notes,
+        photoUrl: input.photoUrl !== undefined ? input.photoUrl : current.photoUrl,
+        forTrade: input.forTrade ?? current.forTrade,
+        ...price,
+      })
+      .onConflictDoUpdate({
+        target: [
+          collectionItems.userId,
+          collectionItems.scryfallId,
+          collectionItems.finish,
+          collectionItems.condition,
+          collectionItems.language,
+          collectionItems.signed,
+          collectionItems.altered,
+          collectionItems.misprint,
+          collectionItems.miscut,
+          collectionItems.artistProof,
+        ],
+        set: {
+          quantity: sql`${collectionItems.quantity} + 1`,
+          forTrade: sql`${collectionItems.forTrade} OR excluded.for_trade`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: collectionItems.id });
+
+    const newId = inserted[0]?.id;
+    if (!newId) throw new ApiError('internal_error', 'Could not split the stack');
+
+    const changed = await tx
+      .update(collectionItems)
+      .set({
+        quantity: sql`${collectionItems.quantity} - 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(collectionItems.id, itemId),
+          eq(collectionItems.userId, userId),
+          sql`${collectionItems.quantity} > 1`,
+        ),
+      )
+      .returning({ id: collectionItems.id });
+    if (!changed[0]) {
+      throw ApiError.conflict('That stack changed before the split. Try again.');
+    }
+
+    if (groupIds.length > 0) {
+      await tx
+        .insert(groupMemberships)
+        .values(groupIds.map((groupId) => ({ itemId: newId, groupId, userId })))
+        .onConflictDoNothing();
+    }
+  });
+
+  await refreshTodayValue(db, userId);
 }
 
 /** Postgres reports a broken unique index as SQLSTATE 23505. */
@@ -1092,7 +1251,6 @@ function isStackCollision(error: unknown): boolean {
   });
 }
 
-/** Removes a stack. Its group memberships go with it. */
 export async function removeCollectionItem(
   db: Database,
   userId: string,
@@ -1112,30 +1270,22 @@ interface MatchAggregateRow {
   wantPriority: number;
   availableQuantity: number;
   wantedLanguages: string[] | null;
-  unwantedLanguages: string[] | null;
   wantedFinishes: string[] | null;
-  unwantedFinishes: string[] | null;
   wantedConditions: string[] | null;
-  unwantedConditions: string[] | null;
   wantedSets: string[] | null;
-  unwantedSets: string[] | null;
 }
 
 function textList(value: string[] | null): string[] {
   return value ?? [];
 }
 
-/** Empty keep-lists mean any value. A skip-list always removes that value. */
-function valueAllowed(wanted: string[], unwanted: string[], value: string): boolean {
+/** Empty keep-lists mean any value. */
+function valueAllowed(wanted: string[], value: string): boolean {
   const folded = value.toLowerCase();
   const keep = wanted.map((item) => item.toLowerCase());
-  const skip = unwanted.map((item) => item.toLowerCase());
-  if (keep.length > 0 && !keep.includes(folded)) return false;
-  if (skip.includes(folded)) return false;
-  return true;
+  return keep.length === 0 || keep.includes(folded);
 }
 
-/** Cards on the viewer's want list that this person holds for trade, across their collection. */
 export async function findTradeBinderMatches(
   db: Database,
   ownerId: string,
@@ -1149,14 +1299,7 @@ export async function findTradeBinderMatches(
   );
 }
 
-/**
- * The product in one query: cards on the viewer's want list that the owner is
- * holding for trade.
- *
- * The join goes want_items -> cards (by oracle_id) -> collection_items (by
- * scryfall_id), which is how a want for a card concept reaches every printing
- * of it sitting in the trade binder.
- */
+/** Want-to-printing join resolves a want for a card concept to every for-trade printing in scope. */
 async function matchesWithin(
   db: Database,
   scope: SQL,
@@ -1172,13 +1315,9 @@ async function matchesWithin(
       w.priority                  AS "wantPriority",
       SUM(bi.quantity)::int       AS "availableQuantity",
       w.wanted_languages          AS "wantedLanguages",
-      w.unwanted_languages        AS "unwantedLanguages",
       w.wanted_finishes           AS "wantedFinishes",
-      w.unwanted_finishes         AS "unwantedFinishes",
       w.wanted_conditions         AS "wantedConditions",
-      w.unwanted_conditions       AS "unwantedConditions",
-      w.wanted_sets               AS "wantedSets",
-      w.unwanted_sets             AS "unwantedSets"
+      w.wanted_sets               AS "wantedSets"
     FROM want_items w
     JOIN cards c              ON c.oracle_id = w.oracle_id
     JOIN collection_items bi  ON bi.scryfall_id = c.scryfall_id
@@ -1191,39 +1330,21 @@ async function matchesWithin(
         OR c.lang = ANY(w.wanted_languages)
       )
       AND (
-        cardinality(w.unwanted_languages) = 0
-        OR NOT (c.lang = ANY(w.unwanted_languages))
-      )
-      AND (
         cardinality(w.wanted_finishes) = 0
         OR bi.finish::text = ANY(w.wanted_finishes)
-      )
-      AND (
-        cardinality(w.unwanted_finishes) = 0
-        OR NOT (bi.finish::text = ANY(w.unwanted_finishes))
       )
       AND (
         cardinality(w.wanted_conditions) = 0
         OR bi.condition::text = ANY(w.wanted_conditions)
       )
       AND (
-        cardinality(w.unwanted_conditions) = 0
-        OR NOT (bi.condition::text = ANY(w.unwanted_conditions))
-      )
-      AND (
         cardinality(w.wanted_sets) = 0
         OR lower(c.set_code) = ANY(w.wanted_sets)
       )
-      AND (
-        cardinality(w.unwanted_sets) = 0
-        OR NOT (lower(c.set_code) = ANY(w.unwanted_sets))
-      )
     GROUP BY
       w.id, w.oracle_id, w.quantity, w.priority,
-      w.wanted_languages, w.unwanted_languages,
-      w.wanted_finishes, w.unwanted_finishes,
-      w.wanted_conditions, w.unwanted_conditions,
-      w.wanted_sets, w.unwanted_sets
+      w.wanted_languages, w.wanted_finishes,
+      w.wanted_conditions, w.wanted_sets
     ORDER BY w.priority ASC, MIN(c.name) ASC
   `)) as unknown as MatchAggregateRow[];
 
@@ -1231,8 +1352,7 @@ async function matchesWithin(
 
   const oracleIds = aggregates.map((row) => row.oracleId);
 
-  // Second trip for the individual printings, so the UI can show which exact
-  // copies are on offer without a correlated subquery per row.
+  // Second trip for individual printings avoids a correlated subquery per want row.
   const printingRows = await selectCollectionItems(db).where(
     and(printingScope, eq(collectionItems.forTrade, true), inArray(cards.oracleId, oracleIds)),
   );
@@ -1254,18 +1374,10 @@ async function matchesWithin(
     printings: (printingsByOracle.get(row.oracleId) ?? []).filter((item) => {
       const setCode = item.card?.setCode ?? '';
       return (
-        valueAllowed(
-          textList(row.wantedLanguages),
-          textList(row.unwantedLanguages),
-          item.language,
-        ) &&
-        valueAllowed(textList(row.wantedFinishes), textList(row.unwantedFinishes), item.finish) &&
-        valueAllowed(
-          textList(row.wantedConditions),
-          textList(row.unwantedConditions),
-          item.condition,
-        ) &&
-        valueAllowed(textList(row.wantedSets), textList(row.unwantedSets), setCode)
+        valueAllowed(textList(row.wantedLanguages), item.language) &&
+        valueAllowed(textList(row.wantedFinishes), item.finish) &&
+        valueAllowed(textList(row.wantedConditions), item.condition) &&
+        valueAllowed(textList(row.wantedSets), setCode)
       );
     }),
   }));

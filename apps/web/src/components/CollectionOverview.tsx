@@ -80,13 +80,7 @@ function axisMoney(value: number): string {
 /** Anything smaller than this cannot show an honest wedge, so it joins Other. */
 const MIN_SLICE_SHARE = 0.01;
 
-/**
- * Slices worth drawing, plus one for the long tail.
- *
- * A 0.1 percent share is 0.36 degrees, smaller than the gap between slices and
- * thinner than a pixel. Grouping the tail keeps it visible as one wedge, while
- * the legend still reports true shares.
- */
+/** Slices worth drawing plus one tail wedge: a tiny share is thinner than a pixel. */
 function pieBuckets(buckets: CollectionValueBucket[], total: number): CollectionValueBucket[] {
   if (buckets.length === 0 || total <= 0) return [];
 
@@ -97,7 +91,6 @@ function pieBuckets(buckets: CollectionValueBucket[], total: number): Collection
 
   const value = Math.round(rest.reduce((sum, bucket) => sum + bucket.value, 0) * 100) / 100;
   if (keep.length === 0) {
-    // Every slice is tiny. Keep the eight largest and group the rest.
     const top = buckets.slice(0, 8);
     const topKeys = new Set(top.map((bucket) => bucket.key));
     const tail = buckets.filter((bucket) => !topKeys.has(bucket.key));
@@ -114,11 +107,7 @@ function pieBuckets(buckets: CollectionValueBucket[], total: number): Collection
   return [...keep, { key: 'other', label: `Other (${rest.length})`, value }];
 }
 
-/**
- * The dashboard's first panel: the whole collection's value over time, and how
- * that value splits by one factor. The line follows each stack's own price rule,
- * so a percent card tracks the market and a custom card stays flat.
- */
+/** Value over time and by one factor; each stack follows its own price rule, not one market price. */
 export function CollectionOverview({
   enabled,
   totals,

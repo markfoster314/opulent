@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -12,12 +14,7 @@ import {
 import { binderVisibility } from './enums';
 import { users } from './users';
 
-/**
- * A named group of wants, the same way a binder groups cards for trade.
- *
- * Visibility matches a binder: private, unlisted with a share token, or public.
- * Matching still reads every list the viewer owns.
- */
+/** A named group of wants with binder-like visibility; matching still reads every list the viewer owns. */
 export const wantLists = pgTable(
   'want_lists',
   {
@@ -28,17 +25,14 @@ export const wantLists = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
 
-    /** Combined with the owner username to form /u/:username/wants/:slug. */
+    /** Forms /u/:username/wants/:slug with the owner's username. */
     slug: text('slug').notNull(),
     name: text('name').notNull(),
     description: text('description'),
 
     visibility: binderVisibility('visibility').notNull().default('private'),
 
-    /**
-     * Secret second door. An unlisted list is reachable only with this token.
-     * Rotating the token revokes every link that was handed out before.
-     */
+    /** Secret second door for unlisted lists; rotating it revokes every link already handed out. */
     shareToken: text('share_token')
       .notNull()
       .default(sql`encode(gen_random_bytes(16), 'hex')`),
@@ -49,25 +43,18 @@ export const wantLists = pgTable(
   (table) => [
     index('want_lists_user_id_idx').on(table.userId),
     uniqueIndex('want_lists_user_slug_key').on(table.userId, table.slug),
+    uniqueIndex('want_lists_user_id_id_key').on(table.userId, table.id),
     uniqueIndex('want_lists_share_token_key').on(table.shareToken),
   ],
 );
 
-/**
- * One card the owner is hunting for, inside one list.
- *
- * Keyed on the card concept. Empty choice lists mean any language, printing,
- * condition, or set. A filled list keeps only those values, or skips them.
- */
+/** One card the owner hunts for; an empty choice list means any value. */
 export const wantItems = pgTable(
   'want_items',
   {
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    wantListId: uuid('want_list_id')
-      .notNull()
-      .references(() => wantLists.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -76,7 +63,7 @@ export const wantItems = pgTable(
 
     quantity: integer('quantity').notNull().default(1),
 
-    /** 1 high, 2 medium, 3 low. Drives sort order in match results. */
+    /** 1 high, 2 medium, 3 low; drives match sort order. */
     priority: integer('priority').notNull().default(2),
     notes: text('notes'),
 
@@ -84,15 +71,7 @@ export const wantItems = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
-    unwantedLanguages: text('unwanted_languages')
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
     wantedFinishes: text('wanted_finishes')
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
-    unwantedFinishes: text('unwanted_finishes')
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
@@ -100,38 +79,56 @@ export const wantItems = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
-    unwantedConditions: text('unwanted_conditions')
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
     wantedSets: text('wanted_sets')
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
-    unwantedSets: text('unwanted_sets')
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
+
+    /** Normalized filters; equal keys mean the same want. */
+    scopeKey: text('scope_key').notNull(),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('want_items_list_oracle_key').on(table.wantListId, table.oracleId),
+    uniqueIndex('want_items_user_oracle_scope_key').on(
+      table.userId,
+      table.oracleId,
+      table.scopeKey,
+    ),
+    uniqueIndex('want_items_user_id_id_key').on(table.userId, table.id),
     index('want_items_oracle_id_idx').on(table.oracleId),
     index('want_items_user_id_idx').on(table.userId),
-    index('want_items_list_id_idx').on(table.wantListId),
   ],
 );
 
-/**
- * A wide interest with no one card.
- *
- * Empty lists mean any language, finish, condition, or set. A filled list
- * keeps cards that match one of those values. A mark set to true means the
- * copy must carry that mark. A mark left false is not a filter.
- * `matchKey` is the same choices in a fixed order, so the same mix cannot be saved twice.
- */
+/** A label only: removing the label or its list leaves the global want in All wants. */
+export const wantListItems = pgTable(
+  'want_list_items',
+  {
+    wantListId: uuid('want_list_id').notNull(),
+    wantItemId: uuid('want_item_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.wantListId, table.wantItemId] }),
+    index('want_list_items_item_id_idx').on(table.wantItemId),
+    index('want_list_items_user_id_idx').on(table.userId),
+    foreignKey({
+      name: 'want_list_items_list_fk',
+      columns: [table.userId, table.wantListId],
+      foreignColumns: [wantLists.userId, wantLists.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'want_list_items_item_fk',
+      columns: [table.userId, table.wantItemId],
+      foreignColumns: [wantItems.userId, wantItems.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+/** A wide interest with no single card; a false mark is not a filter, and matchKey blocks duplicates. */
 export const genericWants = pgTable(
   'generic_wants',
   {
@@ -180,5 +177,7 @@ export type WantListRow = typeof wantLists.$inferSelect;
 export type NewWantListRow = typeof wantLists.$inferInsert;
 export type WantItemRow = typeof wantItems.$inferSelect;
 export type NewWantItemRow = typeof wantItems.$inferInsert;
+export type WantListItemRow = typeof wantListItems.$inferSelect;
+export type NewWantListItemRow = typeof wantListItems.$inferInsert;
 export type GenericWantRow = typeof genericWants.$inferSelect;
 export type NewGenericWantRow = typeof genericWants.$inferInsert;

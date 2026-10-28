@@ -37,10 +37,6 @@ export function TradePage() {
   return <TradeEditor key={trade.data.updatedAt} trade={trade.data} />;
 }
 
-/**
- * Two sides of one table. On your turn you can change both: the cards you
- * get from their trade binder, and the cards you give from yours.
- */
 function TradeEditor({ trade }: { trade: TradeDetail }) {
   const choices = useTradeChoices(trade.id, trade.yourTurn);
   const propose = useProposeTrade(trade.id);

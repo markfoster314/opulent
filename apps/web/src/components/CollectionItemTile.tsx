@@ -17,7 +17,6 @@ interface CollectionItemTileProps {
   error?: string | undefined;
 }
 
-/** How long to wait after the last click before sending the new quantity. */
 const QUANTITY_DEBOUNCE_MS = 500;
 
 export function CollectionItemTile({
@@ -30,23 +29,17 @@ export function CollectionItemTile({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftQuantity, setDraftQuantity] = useState(item.quantity);
 
-  // Holding the callback in a ref keeps it out of the debounce effect's
-  // dependencies, so a re-render cannot restart the timer.
+  // A ref keeps the callback out of the debounce deps, so a re-render cannot restart the timer.
   const onUpdateRef = useRef(onUpdate);
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
 
-  // Accept the server's value whenever it genuinely changes.
   useEffect(() => {
     setDraftQuantity(item.quantity);
   }, [item.quantity]);
 
-  /**
-   * Rapid clicks on the stepper collapse into one request. The quantity sent is
-   * absolute rather than a delta, so even if two requests overlap the last one
-   * wins and the result is still what the user sees.
-   */
+  /** Rapid clicks collapse into one request; the quantity is absolute, so the last write wins. */
   useEffect(() => {
     if (draftQuantity === item.quantity) return;
     const timer = setTimeout(

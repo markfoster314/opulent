@@ -15,42 +15,31 @@ import {
 } from './card';
 import { paginationQuerySchema } from './pagination';
 
-/** Lowercase letters, numbers and single hyphens. Used in share URLs. */
 export const slugSchema = z
   .string()
   .min(3)
   .max(60)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and hyphens only');
 
-/**
- * A named lump of cards from someone's collection.
- *
- * Groups are private labels: a card can sit in several or none, and there is no
- * link to share. The public surface is the trade binder, built from the cards
- * marked for trade.
- */
+/** Private labels with no share link; the trade binder is the only public surface. */
 export const cardGroupSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   name: z.string(),
   description: z.string().nullable(),
-  /** Copies in the group. Present when the caller asked for it. */
   itemCount: z.number().int().nonnegative().optional(),
-  /** Total asking value of the copies. Present when the caller asked for it. */
   value: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type CardGroup = z.infer<typeof cardGroupSchema>;
 
-/** The group chip shown on a collection item. */
 export const groupRefSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
 });
 export type GroupRef = z.infer<typeof groupRefSchema>;
 
-/** A dollar string from $0.01 to $99,999.99, normalized to cents. */
 export function parseCustomAmount(value: string): string | null {
   const trimmed = value.trim();
   if (!/^\d{1,5}(?:\.\d{1,2})?$/.test(trimmed)) return null;
@@ -59,12 +48,7 @@ export function parseCustomAmount(value: string): string | null {
   return amount.toFixed(2);
 }
 
-/**
- * How this stack is priced.
- *
- * `percent` is a share of the stored market price, from 0 to 100. `custom` is a
- * dollar amount for this stack alone.
- */
+/** `percent` scales the stored market price; `custom` is a flat dollar amount for this stack. */
 export const itemPriceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('market') }),
   z.object({
@@ -82,10 +66,7 @@ export type ItemPrice = z.infer<typeof itemPriceSchema>;
 
 const PHOTO_LINK_MAX = 2000;
 
-/**
- * A page of photos on an image host. Blank is no link. Anything else must be
- * an http or https address, so a pasted sentence cannot be stored as a link.
- */
+/** Only http(s) addresses are stored, so a pasted sentence cannot become a link. */
 export function parsePhotoLink(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > PHOTO_LINK_MAX) return null;
@@ -101,11 +82,7 @@ export const photoLinkSchema = z
     message: 'Paste a link that starts with http:// or https://.',
   });
 
-/**
- * The dollar amount the owner is asking, before quantity.
- *
- * A percent with no stored market price has no dollar amount yet.
- */
+/** Asking price before quantity; a percent with no stored market price has none yet. */
 export function askingPrice(market: string | null | undefined, price: ItemPrice): string | null {
   if (price.kind === 'custom') return parseCustomAmount(price.amount);
   if (price.kind === 'market') return market ?? null;
@@ -115,7 +92,6 @@ export function askingPrice(market: string | null | undefined, price: ItemPrice)
   return (Math.round((cents * price.percent) / 100) / 100).toFixed(2);
 }
 
-/** Asking price for one finish, using the market price stored for that finish. */
 export function askingPriceForFinish(
   prices: CardPrices | null | undefined,
   finish: CardFinish,
@@ -133,10 +109,7 @@ export type CreateCardGroupInput = z.infer<typeof createCardGroupSchema>;
 export const updateCardGroupSchema = createCardGroupSchema.partial();
 export type UpdateCardGroupInput = z.infer<typeof updateCardGroupSchema>;
 
-/**
- * One stack in a person's collection. `groups` is every group the owner has put
- * it in, and may be empty. `forTrade` puts it in the public trade binder.
- */
+/** `groups` may be empty; `forTrade` is what puts a stack in the public binder. */
 export const collectionItemSchema = z.object({
   id: z.string().uuid(),
   scryfallId: printingIdSchema,
@@ -145,7 +118,6 @@ export const collectionItemSchema = z.object({
   condition: cardConditionSchema,
   language: cardLanguageSchema,
   notes: z.string().nullable(),
-  /** A page of photos of this physical copy. Empty when the owner has not added one. */
   photoUrl: z.string().nullable(),
   forTrade: z.boolean(),
   signed: z.boolean(),
@@ -153,20 +125,16 @@ export const collectionItemSchema = z.object({
   misprint: z.boolean(),
   miscut: z.boolean(),
   artistProof: z.boolean(),
-  /** How the owner priced this stack. Older rows are full market. */
+  /** How this stack is priced; older rows are full market. */
   price: itemPriceSchema,
   /** The groups this stack sits in. Empty when it is filed nowhere. */
   groups: z.array(groupRefSchema),
   card: cardSchema.optional(),
-  /**
-   * Which finishes this printing was actually produced in. The edit form uses
-   * it to avoid offering, say, etched foil for a card that never had one.
-   */
+  /** Finishes this printing actually came in, so the edit form cannot offer a wrong one. */
   availableFinishes: z.array(cardFinishSchema).optional(),
 });
 export type CollectionItem = z.infer<typeof collectionItemSchema>;
 
-/** The longest note a stack can carry. The form shows this and blocks a longer one. */
 export const NOTES_MAX_LENGTH = 280;
 
 export const addCollectionItemSchema = z.object({
@@ -182,50 +150,47 @@ export const addCollectionItemSchema = z.object({
   artistProof: z.boolean().default(false),
   notes: z.string().max(NOTES_MAX_LENGTH).optional(),
   photoUrl: photoLinkSchema.nullable().optional(),
-  /** A personal collection starts private; the owner marks cards for trade. */
+  /** Collections start private; the owner opts in to trade. */
   forTrade: z.boolean().default(false),
   price: itemPriceSchema.default({ kind: 'market' }),
-  /** Optional private groups the new stack should join. */
   groupIds: z.array(z.string().uuid()).max(50).optional(),
 });
 export type AddCollectionItemInput = z.infer<typeof addCollectionItemSchema>;
 
 export const updateCollectionItemSchema = addCollectionItemSchema
   .partial()
-  .omit({ scryfallId: true, groupIds: true });
+  .omit({ scryfallId: true });
 export type UpdateCollectionItemInput = z.infer<typeof updateCollectionItemSchema>;
 
-/** The numbers at the top of the collection page. */
+export const splitCollectionItemSchema = updateCollectionItemSchema.omit({ quantity: true });
+export type SplitCollectionItemInput = z.infer<typeof splitCollectionItemSchema>;
+
 export const collectionSummarySchema = z.object({
-  /** Total copies across every stack. */
   cardCount: z.number().int().nonnegative(),
-  /** Copies marked for trade. */
   forTradeCount: z.number().int().nonnegative(),
-  /** Market value of every copy, as a dollar string. Copies with no price add nothing. */
+  /** Sum of asking prices in dollars; copies with no price add nothing. */
   marketValue: z.string(),
-  /** Market value of the copies marked for trade. */
   forTradeValue: z.string(),
-  /** Your copies in live trades right now. */
   onTheTable: z.number().int().nonnegative(),
 });
 export type CollectionSummary = z.infer<typeof collectionSummarySchema>;
 
-/** One row of the most expensive cards table on the collection dashboard. */
 export const collectionHighlightSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  /** Short set code, for the narrow column. */
   setCode: z.string(),
   finish: cardFinishSchema,
   quantity: z.number().int().positive(),
-  /** True when the card is offered in the trade binder. */
   forTrade: z.boolean(),
+  signed: z.boolean(),
+  altered: z.boolean(),
+  misprint: z.boolean(),
+  miscut: z.boolean(),
+  artistProof: z.boolean(),
   imageUrl: z.string().nullable(),
-  /** Asking price for one copy, in dollars. Null when no price is known. */
   price: z.string().nullable(),
-  /** Dollars gained or lost over the selected window. Null means no change, or nothing to compare. */
+  /** Null means no change, or nothing to compare. */
   change: z.string().nullable(),
-  /** The same move as a percent of the starting price. */
   changePercent: z.string().nullable(),
 });
 export type CollectionHighlight = z.infer<typeof collectionHighlightSchema>;
@@ -235,21 +200,15 @@ export const collectionHighlightsQuerySchema = z.object({
 });
 export type CollectionHighlightsQuery = z.infer<typeof collectionHighlightsQuerySchema>;
 
-/** What a visitor learns about a trade binder before the cards load. */
 export const tradeBinderSchema = z.object({
   username: z.string(),
   visibility: binderVisibilitySchema,
-  /** Total copies marked for trade. */
   cardCount: z.number().int().nonnegative(),
-  /** Present only for the owner. */
+  /** Only the owner receives it. */
   shareToken: z.string().optional(),
 });
 export type TradeBinder = z.infer<typeof tradeBinderSchema>;
 
-/**
- * One row of the headline feature: a card the viewer wants that the collection
- * owner is holding for trade.
- */
 export const tradeMatchSchema = z.object({
   wantId: z.string().uuid(),
   oracleId: z.string().uuid(),
@@ -261,16 +220,12 @@ export const tradeMatchSchema = z.object({
 });
 export type TradeMatch = z.infer<typeof tradeMatchSchema>;
 
-/** One person who holds cards on the viewer's want lists. The Find trades page shows one per paper. */
 export const matchOwnerSchema = z.object({
   username: z.string(),
-  /** Their saved city, or null if they did not set one. */
   city: z.string().nullable(),
-  /** Meters from the viewer's city. Null when either side has no city. */
+  /** Meters from the viewer's city; null when either side has no city. */
   distanceMeters: z.number().int().nonnegative().nullable(),
-  /** How many distinct wants of the viewer this person can fill. */
   matchCount: z.number().int().positive(),
-  /** A few of the card names, for the paper. */
   cardNames: z.array(z.string()),
 });
 export type MatchOwner = z.infer<typeof matchOwnerSchema>;
@@ -280,7 +235,7 @@ export const matchesQuerySchema = z.object({
 });
 export type MatchesQuery = z.infer<typeof matchesQuerySchema>;
 
-/** Rarities a collection search can narrow to. These are the ones Scryfall prints on a card. */
+/** The rarity values Scryfall prints; collection search narrows to these. */
 export const cardRaritySchema = z.enum([
   'common',
   'uncommon',
@@ -306,7 +261,7 @@ function blankToUndefined(value: unknown) {
   return trimmed === '' ? undefined : trimmed;
 }
 
-/** A checked box arrives as the string "true". Missing means leave that rule off. */
+/** Query strings carry "true"/"false"; missing means leave the rule off. */
 function queryFlag() {
   return z
     .enum(['true', 'false'])
@@ -314,12 +269,7 @@ function queryFlag() {
     .transform((value) => value === 'true');
 }
 
-/**
- * Filters for the cards inside a collection or a group.
- *
- * Name and set are typed text. The rest pick one value, or a mark that must be present.
- * `onWantList` keeps cards that sit on one of the signed-in viewer's want lists.
- */
+/** `onWantList` and `onGenericWant` are mutually exclusive in the UI. */
 export const collectionItemQuerySchema = paginationQuerySchema.extend({
   q: z.preprocess(blankToUndefined, z.string().max(80).optional()),
   set: z.preprocess(blankToUndefined, z.string().max(80).optional()),
@@ -327,11 +277,8 @@ export const collectionItemQuerySchema = paginationQuerySchema.extend({
   condition: z.preprocess(blankToUndefined, cardConditionSchema.optional()),
   language: z.preprocess(blankToUndefined, cardLanguageSchema.optional()),
   rarity: z.preprocess(blankToUndefined, cardRaritySchema.optional()),
-  /** Matched against the type line. */
   type: z.preprocess(blankToUndefined, z.string().max(80).optional()),
-  /** Matched against the illustrator. */
   artist: z.preprocess(blankToUndefined, z.string().max(120).optional()),
-  /** Only cards carrying this group label. */
   groupId: z.preprocess(blankToUndefined, z.string().uuid().optional()),
   forTrade: queryFlag(),
   signed: queryFlag(),
@@ -340,30 +287,25 @@ export const collectionItemQuerySchema = paginationQuerySchema.extend({
   miscut: queryFlag(),
   artistProof: queryFlag(),
   onWantList: queryFlag(),
+  onGenericWant: queryFlag(),
 });
 export type CollectionItemQuery = z.infer<typeof collectionItemQuerySchema>;
 
-/** How the full card list is ordered. */
 export const collectionSortSchema = z.enum(['name', 'price', 'change']);
 export type CollectionSort = z.infer<typeof collectionSortSchema>;
 
 export const sortDirectionSchema = z.enum(['asc', 'desc']);
 export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
-/**
- * The full card list: the same filters, plus ordering and the window used for
- * the change column.
- */
 export const collectionCardsQuerySchema = collectionItemQuerySchema.extend({
   sort: collectionSortSchema.default('price'),
   dir: sortDirectionSchema.default('desc'),
   range: priceRangeSchema.default('1w'),
-  /** Which change the "change" sort uses. Display is chosen by the client. */
+  /** Which change the "change" sort uses; display is chosen by the client. */
   changeBy: z.enum(['amount', 'percent']).default('amount'),
 });
 export type CollectionCardsQuery = z.infer<typeof collectionCardsQuerySchema>;
 
-/** The dashboard movers: a few gainers and a few losers for one window. */
 export const collectionMoversQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(5),
   range: priceRangeSchema.default('1w'),
@@ -371,7 +313,6 @@ export const collectionMoversQuerySchema = z.object({
 });
 export type CollectionMoversQuery = z.infer<typeof collectionMoversQuerySchema>;
 
-/** One day of the whole collection's asking value. */
 export const collectionValuePointSchema = z.object({
   date: z.string(),
   value: z.number().nonnegative(),
@@ -388,7 +329,6 @@ export const collectionValueHistoryQuerySchema = z.object({
   range: priceRangeSchema.default('1m'),
 });
 
-/** The factors the value pie can split by. */
 export const collectionValueBreakdownBySchema = z.enum([
   'set',
   'rarity',

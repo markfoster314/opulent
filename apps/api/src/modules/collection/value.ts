@@ -64,20 +64,51 @@ function priceFor(row: HistoryRow | null, finish: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/**
- * The whole collection's asking value, one point per day.
- *
- * Past days come from frozen daily snapshots, so an add today cannot rewrite
- * yesterday. Today is computed live. Days before the snapshot era fall back to
- * the current composition, and the first view freezes that approximation.
- * Each stack follows its own rule: market price on that day, the owner's
- * percent of that price, or a flat custom amount.
- */
+/** Daily asking value: frozen snapshots for past days, live today, per-stack price rules. */
 export async function getCollectionValueHistory(
   db: Database,
   userId: string,
   range: PriceRange,
 ): Promise<CollectionValueHistory> {
+  const to = new Date().toISOString().slice(0, 10);
+  const from = addDays(to, -priceRangeDays[range]);
+  const days: string[] = [];
+  for (let day = from; day <= to; day = addDays(day, 1)) days.push(day);
+  const indexByDay = new Map(days.map((day, index) => [day, index]));
+
+  function finish(points: { date: string; value: number }[]): CollectionValueHistory {
+    // Start at the first priced day; otherwise the chart hugs zero for months.
+    const firstPriced = points.findIndex((point) => point.value > 0);
+    return { range, points: firstPriced === -1 ? [] : points.slice(firstPriced) };
+  }
+
+  const snapshots = await db
+    .select({ day: collectionValueSnapshots.day, value: collectionValueSnapshots.value })
+    .from(collectionValueSnapshots)
+    .where(
+      and(
+        eq(collectionValueSnapshots.userId, userId),
+        gte(collectionValueSnapshots.day, from),
+        lte(collectionValueSnapshots.day, to),
+      ),
+    )
+    .orderBy(asc(collectionValueSnapshots.day));
+
+  const snapshotByDay = new Map(snapshots.map((row) => [row.day, Number(row.value)]));
+  const firstSnapshotDay = snapshots[0]?.day ?? null;
+  const currentValue = await getCollectionCurrentValue(db, userId);
+  const missingPast = days.slice(0, -1).filter((day) => !snapshotByDay.has(day));
+
+  // Warm path: all past days are frozen, so skip stacks and price history.
+  if (snapshots.length > 0 && missingPast.length === 0) {
+    return finish(
+      days.map((date) => ({
+        date,
+        value: date === to ? currentValue : snapshotByDay.get(date)!,
+      })),
+    );
+  }
+
   const stacks = await db
     .select({
       id: collectionItems.id,
@@ -94,143 +125,124 @@ export async function getCollectionValueHistory(
     .leftJoin(englishValueCards, englishMatch())
     .where(and(eq(collectionItems.userId, userId), eq(cards.game, CARD_GAME)));
 
-  if (stacks.length === 0) return { range, points: [] };
-
-  const to = new Date().toISOString().slice(0, 10);
-  const from = addDays(to, -priceRangeDays[range]);
-
-  const ids = Array.from(
-    new Set(
-      stacks
-        .flatMap((stack) => [stack.scryfallId, stack.englishScryfallId])
-        .filter((id): id is string => Boolean(id)),
-    ),
-  );
-
-  const fields = {
-    scryfallId: cardPriceHistory.scryfallId,
-    recordedOn: cardPriceHistory.recordedOn,
-    usd: cardPriceHistory.usd,
-    usdFoil: cardPriceHistory.usdFoil,
-    usdEtched: cardPriceHistory.usdEtched,
-  };
-
-  const [before, inside] = await Promise.all([
-    db
-      .selectDistinctOn([cardPriceHistory.scryfallId], fields)
-      .from(cardPriceHistory)
-      .where(and(inArray(cardPriceHistory.scryfallId, ids), lte(cardPriceHistory.recordedOn, from)))
-      .orderBy(cardPriceHistory.scryfallId, desc(cardPriceHistory.recordedOn)),
-    db
-      .select(fields)
-      .from(cardPriceHistory)
-      .where(
-        and(
-          inArray(cardPriceHistory.scryfallId, ids),
-          gte(cardPriceHistory.recordedOn, from),
-          lte(cardPriceHistory.recordedOn, to),
-        ),
-      )
-      .orderBy(asc(cardPriceHistory.scryfallId), asc(cardPriceHistory.recordedOn)),
-  ]);
-
-  // One price per day. A baseline row on the first day is replaced by the row
-  // inside the window, which is the same price or the newer one.
-  const perCard = new Map<string, Map<string, HistoryRow>>();
-  for (const row of [...before, ...inside]) {
-    let days = perCard.get(row.scryfallId);
-    if (!days) {
-      days = new Map();
-      perCard.set(row.scryfallId, days);
-    }
-    days.set(row.recordedOn, row);
-  }
-  const series = new Map<string, HistoryRow[]>();
-  for (const [id, days] of perCard) {
-    series.set(
-      id,
-      Array.from(days.values()).sort((a, b) => a.recordedOn.localeCompare(b.recordedOn)),
-    );
-  }
-
-  const days: string[] = [];
-  for (let day = from; day <= to; day = addDays(day, 1)) days.push(day);
+  if (stacks.length === 0 && snapshots.length === 0) return { range, points: [] };
 
   const totals = new Array<number>(days.length).fill(0);
 
-  for (const stack of stacks) {
-    const own = series.get(stack.scryfallId) ?? [];
-    const english = stack.englishScryfallId ? (series.get(stack.englishScryfallId) ?? []) : [];
-    const custom = stack.priceKind === 'custom' ? Number(stack.priceAmount) : null;
-    let ownIndex = 0;
-    let englishIndex = 0;
-    let ownRow: HistoryRow | null = null;
-    let englishRow: HistoryRow | null = null;
+  if (stacks.length > 0) {
+    const ids = Array.from(
+      new Set(
+        stacks
+          .flatMap((stack) => [stack.scryfallId, stack.englishScryfallId])
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
 
-    for (let index = 0; index < days.length; index++) {
-      const day = days[index]!;
-      while (ownIndex < own.length && own[ownIndex]!.recordedOn <= day) {
-        ownRow = own[ownIndex]!;
-        ownIndex++;
-      }
-      while (englishIndex < english.length && english[englishIndex]!.recordedOn <= day) {
-        englishRow = english[englishIndex]!;
-        englishIndex++;
-      }
+    const fields = {
+      scryfallId: cardPriceHistory.scryfallId,
+      recordedOn: cardPriceHistory.recordedOn,
+      usd: cardPriceHistory.usd,
+      usdFoil: cardPriceHistory.usdFoil,
+      usdEtched: cardPriceHistory.usdEtched,
+    };
 
-      let unit: number | null;
-      if (custom !== null) {
-        unit = Number.isFinite(custom) ? custom : null;
-      } else {
-        const market = priceFor(ownRow, stack.finish) ?? priceFor(englishRow, stack.finish);
-        unit =
-          market === null
-            ? null
-            : stack.priceKind === 'percent'
-              ? round2((market * stack.pricePercent) / 100)
-              : market;
-      }
+    const [before, inside] = await Promise.all([
+      db
+        .selectDistinctOn([cardPriceHistory.scryfallId], fields)
+        .from(cardPriceHistory)
+        .where(
+          and(inArray(cardPriceHistory.scryfallId, ids), lte(cardPriceHistory.recordedOn, from)),
+        )
+        .orderBy(cardPriceHistory.scryfallId, desc(cardPriceHistory.recordedOn)),
+      db
+        .select(fields)
+        .from(cardPriceHistory)
+        .where(
+          and(
+            inArray(cardPriceHistory.scryfallId, ids),
+            gte(cardPriceHistory.recordedOn, from),
+            lte(cardPriceHistory.recordedOn, to),
+          ),
+        )
+        .orderBy(asc(cardPriceHistory.scryfallId), asc(cardPriceHistory.recordedOn)),
+    ]);
 
-      if (unit !== null && unit > 0) totals[index]! += unit * stack.quantity;
+    // One price per day; a window row replaces the baseline row on the first day.
+    const perCard = new Map<string, Map<string, HistoryRow>>();
+    for (const row of [...before, ...inside]) {
+      let dayRows = perCard.get(row.scryfallId);
+      if (!dayRows) {
+        dayRows = new Map();
+        perCard.set(row.scryfallId, dayRows);
+      }
+      dayRows.set(row.recordedOn, row);
+    }
+    const series = new Map<string, HistoryRow[]>();
+    for (const [id, dayRows] of perCard) {
+      series.set(
+        id,
+        Array.from(dayRows.values()).sort((a, b) => a.recordedOn.localeCompare(b.recordedOn)),
+      );
+    }
+
+    for (const stack of stacks) {
+      const own = series.get(stack.scryfallId) ?? [];
+      const english = stack.englishScryfallId ? (series.get(stack.englishScryfallId) ?? []) : [];
+      const custom = stack.priceKind === 'custom' ? Number(stack.priceAmount) : null;
+      let ownIndex = 0;
+      let englishIndex = 0;
+      let ownRow: HistoryRow | null = null;
+      let englishRow: HistoryRow | null = null;
+
+      for (const [index, day] of days.entries()) {
+        while (ownIndex < own.length && own[ownIndex]!.recordedOn <= day) {
+          ownRow = own[ownIndex]!;
+          ownIndex++;
+        }
+        while (englishIndex < english.length && english[englishIndex]!.recordedOn <= day) {
+          englishRow = english[englishIndex]!;
+          englishIndex++;
+        }
+
+        let unit: number | null;
+        if (custom !== null) {
+          unit = Number.isFinite(custom) ? custom : null;
+        } else {
+          const market = priceFor(ownRow, stack.finish) ?? priceFor(englishRow, stack.finish);
+          unit =
+            market === null
+              ? null
+              : stack.priceKind === 'percent'
+                ? round2((market * stack.pricePercent) / 100)
+                : market;
+        }
+
+        if (unit !== null && unit > 0) totals[index]! += unit * stack.quantity;
+      }
     }
   }
 
-  // Past days come from the frozen daily snapshots. Days before the first
-  // snapshot fall back to the old approximation, and today is always live.
-  const snapshots = await db
-    .select({ day: collectionValueSnapshots.day, value: collectionValueSnapshots.value })
-    .from(collectionValueSnapshots)
-    .where(
-      and(
-        eq(collectionValueSnapshots.userId, userId),
-        gte(collectionValueSnapshots.day, from),
-        lte(collectionValueSnapshots.day, to),
-      ),
-    )
-    .orderBy(asc(collectionValueSnapshots.day));
-
-  const snapshotByDay = new Map(snapshots.map((row) => [row.day, Number(row.value)]));
-  const firstSnapshotDay = snapshots[0]?.day ?? null;
-
-  // The first view freezes the days before the snapshot era. After this, an add
-  // today cannot rewrite yesterday. The approximation is the best data we have.
-  const missingPast = days
-    .map((day, index) => ({ day, value: round2(totals[index]!) }))
-    .filter(({ day }) => day !== to && !snapshotByDay.has(day));
-
+  // Freeze pre-snapshot days so a later add cannot rewrite yesterday; this is the best data we have.
   if (missingPast.length > 0) {
     try {
       await db
         .insert(collectionValueSnapshots)
-        .values(missingPast.map(({ day, value }) => ({ userId, day, value: value.toFixed(2) })))
+        .values(
+          missingPast.map((day) => ({
+            userId,
+            day,
+            value: round2(totals[indexByDay.get(day)!]!).toFixed(2),
+          })),
+        )
         .onConflictDoNothing();
-      for (const { day, value } of missingPast) snapshotByDay.set(day, value);
+      for (const day of missingPast) {
+        snapshotByDay.set(day, round2(totals[indexByDay.get(day)!]!));
+      }
     } catch (error) {
       console.error('collection value backfill failed', error);
     }
   }
 
-  const currentValue = await getCollectionCurrentValue(db, userId);
   let previousSnapshot: number | null = null;
 
   const points = days.map((date, index) => {
@@ -246,19 +258,14 @@ export async function getCollectionValueHistory(
       return { date, value: round2(totals[index]!) };
     }
 
-    // A missed job day keeps the last frozen value instead of re-pricing today's
-    // holdings into the past.
+    // A missed job day keeps the last frozen value instead of repricing today into the past.
     return { date, value: previousSnapshot ?? round2(totals[index]!) };
   });
 
-  // Before the first recorded price there is nothing to show, so the line starts
-  // at the first day with a real value instead of hugging zero for months.
-  const firstPriced = points.findIndex((point) => point.value > 0);
-
-  return { range, points: firstPriced === -1 ? [] : points.slice(firstPriced) };
+  return finish(points);
 }
 
-/** Unit asking price times quantity, for a statement that joins cards and the English fallback. */
+/** Per-stack asking value in SQL, including the English price fallback. */
 function askingValueSql() {
   const marketPrice = sql`CASE ${collectionItems.finish}::text
     WHEN 'foil' THEN NULLIF(${cards.prices}->>'usd_foil', '')::numeric
@@ -280,7 +287,6 @@ function todayDay(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** The collection's asking value right now, with the same price rules as the chart. */
 export async function getCollectionCurrentValue(db: Database, userId: string): Promise<number> {
   const rows = await db
     .select({ value: sql<string>`coalesce(sum(${askingValueSql()}), 0)::text` })
@@ -292,7 +298,6 @@ export async function getCollectionCurrentValue(db: Database, userId: string): P
   return round2(Number(rows[0]?.value ?? 0));
 }
 
-/** Freezes one person's value for a day. Called after a collection change and by the daily job. */
 export async function snapshotUserValue(
   db: Database,
   userId: string,
@@ -308,7 +313,6 @@ export async function snapshotUserValue(
     });
 }
 
-/** Freezes today's value for everyone who owns cards. Returns the number of people written. */
 export async function snapshotCollectionValues(db: Database, day = todayDay()): Promise<number> {
   const rows = await db.execute(sql`
     INSERT INTO collection_value_snapshots (user_id, day, value)
@@ -325,7 +329,6 @@ export async function snapshotCollectionValues(db: Database, day = todayDay()): 
   return rows.length;
 }
 
-/** Group id to the total asking value of its members. */
 export async function getGroupValues(db: Database, userId: string): Promise<Map<string, string>> {
   const rows = await db
     .select({
@@ -342,7 +345,6 @@ export async function getGroupValues(db: Database, userId: string): Promise<Map<
   return new Map(rows.map((row) => [row.groupId, Number(row.value).toFixed(2)]));
 }
 
-/** What share of the current asking value each bucket holds. */
 export async function getCollectionValueBreakdown(
   db: Database,
   userId: string,

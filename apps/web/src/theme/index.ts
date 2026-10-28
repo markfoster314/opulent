@@ -1,40 +1,27 @@
 import { createTheme, type ThemeOptions } from '@mui/material/styles';
 
-/**
- * Black with darkened gold.
- *
- * The rule the palette follows: gold is reserved for things the user can act on
- * or should read first. Surfaces stay near-black. Gold on every surface reads as
- * a gift shop; gold on a few reads as expensive.
- */
+/** Black with dark gold; gold is reserved for actions and first-read copy, not every surface. */
 export const palette = {
-  /** Page background, the darkest layer. */
   background: '#0B0B0C',
-  /** Cards, sheets and app bar sit one step up so edges are visible without borders. */
+  /** One step above the background so edges show without borders. */
   surface: '#16161A',
   surfaceRaised: '#1E1E24',
   divider: 'rgba(197, 160, 71, 0.16)',
 
-  /** Darkened gold. Muted enough to read as metal rather than yellow. */
+  /** Darkened gold, muted enough to read as metal rather than yellow. */
   gold: '#B8860B',
   goldLight: '#D4A62A',
-  /** Lightest gold. The top of a hovered button. */
   goldHighlight: '#F0D48A',
   goldDark: '#8A6508',
 
-  /** The same gold, thinned, for borders, washes, and a selected tile. */
   goldBorder: 'rgba(184, 134, 11, 0.45)',
   goldWash: 'rgba(184, 134, 11, 0.10)',
   goldTint: 'rgba(184, 134, 11, 0.08)',
   goldSelected: 'rgba(184, 134, 11, 0.12)',
 
-  /** Bar over the page, same black as the background with some see-through. */
   appBar: 'rgba(11, 11, 12, 0.82)',
 
-  /**
-   * Muted steel blue. Facts and quiet controls. Gold stays on the action.
-   * steel is the text and icon. steelDeep is a fill. The wash is a thin tint.
-   */
+  /** Steel blue marks facts and quiet controls; gold stays on the action. */
   steel: '#9BB0C0',
   steelDeep: '#4A6574',
   steelWash: 'rgba(155, 176, 192, 0.12)',
@@ -47,23 +34,19 @@ export const palette = {
   textPrimary: '#F2EFE6',
   textSecondary: '#A39B86',
 
-  /** Marks on a binder card. Gold stays the notes mark. These stay distinct from it and from each other. */
+  /** Binder marks use distinct hues; gold stays reserved for notes. */
   markSigned: '#3E6F8C',
   markAltered: '#6B5B8C',
   markMisprint: '#2F7A6E',
   markMiscut: '#8C4E3A',
   markArtistProof: '#8E4A6A',
 
-  /** Marks on a want card. One color for each choice the owner narrowed. */
   markLanguage: '#3E6F8C',
   markPrinting: '#6B5B8C',
   markCondition: '#2F7A6E',
   markSet: '#8C4E3A',
 
-  /**
-   * Gloss laid over a foil card. These are the shine, not a recolor of the scan.
-   * Warm matches goldHighlight. Cool is the other side of the reflection.
-   */
+  /** Foil gloss is a shine overlay, not a recolor of the scan. */
   foilShine: 'rgba(255, 255, 255, 0.7)',
   foilWarm: 'rgba(240, 212, 138, 0.75)',
   foilCool: 'rgba(186, 214, 232, 0.7)',
@@ -157,10 +140,7 @@ const themeOptions: ThemeOptions = {
       defaultProps: { disableElevation: true },
       styleOverrides: {
         containedPrimary: {
-          // The button fades `background-color` on hover. A gradient lives on
-          // `background-image`, which cannot fade, so a flat hover color lets
-          // the black page show through for a frame. Hover stays a gradient,
-          // and `&&` beats the button's own color fade so it does not run.
+          // Hover stays a gradient: a flat background-color would flash through MUI's fade, and && stops that fade.
           '&&': {
             transition:
               'color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -194,7 +174,6 @@ const themeOptions: ThemeOptions = {
   },
 };
 
-/** A paper or row that opens another page. Gold edge and a small lift on hover. */
 export const clickableSurfaceSx = {
   cursor: 'pointer',
   textDecoration: 'none',

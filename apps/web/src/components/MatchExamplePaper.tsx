@@ -1,12 +1,7 @@
 import { Chip, Paper, Stack, Typography } from '@mui/material';
 import { palette } from '../theme';
 
-/**
- * One still picture of a match, for the landing page.
- *
- * It is drawn with the same shapes as MatchOwnerPaper so a visitor sees the
- * real thing, and it says "Example" so nobody reads it as a live record.
- */
+/** Same shapes as MatchOwnerPaper, labelled "Example" so nobody reads it as a live record. */
 export function MatchExamplePaper() {
   return (
     <Paper sx={{ p: 2.5, minWidth: 0, borderColor: palette.steelBorder }}>

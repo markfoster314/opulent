@@ -1,15 +1,8 @@
 import type { CollectionSort, PriceRange, SortDirection } from '@opulent/shared';
 import type { BinderSearch } from './binderSearch';
 
-/**
- * One-shot intent for the card list, carried by the navigation itself.
- *
- * It is never written to the URL: it is not shareable, and it should apply only
- * to the visit that created it. The cards page reads it once, seeds its own
- * state, and clears the history entry.
- */
+/** One-shot, non-shareable card-list intent carried by navigation; never written to the URL. */
 export interface CollectionCardsIntent {
-  /** Open this row on arrival. */
   cardId?: string;
   sort?: CollectionSort;
   dir?: SortDirection;
@@ -37,7 +30,7 @@ export function readCollectionCardsIntent(state: unknown): CollectionCardsIntent
   return intent;
 }
 
-/** Seeds the page state. The card id is handled separately, because it opens a row. */
+/** Seeds page state; card id is separate because it opens a row. */
 export function applyCollectionCardsIntent(
   search: BinderSearch,
   intent: CollectionCardsIntent,

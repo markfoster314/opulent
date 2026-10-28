@@ -6,16 +6,9 @@ export type Database = ReturnType<typeof createDatabase>;
 
 export interface DatabaseOptions {
   connectionString: string;
-  /**
-   * Keep this at 1 inside AWS Lambda. Every warm Lambda copy holds its own pool,
-   * so a large pool multiplied by hundreds of copies exhausts Postgres.
-   * Amazon RDS Proxy is what actually shares connections between them.
-   */
+  /** Keep at 1 in Lambda: each warm copy holds its own pool, and RDS Proxy shares the connections. */
   maxConnections?: number;
-  /**
-   * Prepared statements must be off when traffic goes through RDS Proxy, because
-   * the proxy may hand the next query to a different backend session.
-   */
+  /** Must be false through RDS Proxy, which may hand the next query to a different backend session. */
   usePreparedStatements?: boolean;
 }
 
@@ -32,10 +25,7 @@ export function createDatabase(options: DatabaseOptions) {
 
 let cached: Database | undefined;
 
-/**
- * Reuses one database handle across warm Lambda invocations. Creating a fresh
- * pool on every request is the most common cause of connection exhaustion.
- */
+/** Reuses one handle across warm Lambda invocations; a fresh pool per request is how connections get exhausted. */
 export function getDatabase(): Database {
   if (!cached) {
     const connectionString = process.env.DATABASE_URL;

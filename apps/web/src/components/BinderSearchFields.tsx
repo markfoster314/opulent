@@ -36,18 +36,15 @@ import { ChangeControls } from './ChangeControls';
 interface BinderSearchFieldsProps {
   value: BinderSearch;
   onChange: (value: BinderSearch) => void;
-  /** Signed-out visitors can see the want-list box, but it stays off until they sign in. */
+  /** Signed-out visitors see this filter but cannot enable it. */
   canUseWantList: boolean;
-  /** Shows the change-window control. The full card list uses it. */
   showChangeWindow?: boolean;
-  /** Groups offered in the filter. The control is hidden when omitted. */
   groups?: { id: string; name: string }[];
+  /** Sits beside the change-window control on desktop. */
+  trailing?: ReactNode;
 }
 
-/**
- * How many folded-away rules are on. The name box is always visible, and the
- * ordering and window are choices rather than filters, so none of those count.
- */
+/** Count only folded-away filters; the name, ordering, and range are not filters. */
 function countFilters(search: BinderSearch): number {
   let count = 0;
   if (search.set.trim()) count += 1;
@@ -65,22 +62,18 @@ function countFilters(search: BinderSearch): number {
   if (search.miscut) count += 1;
   if (search.artistProof) count += 1;
   if (search.onWantList) count += 1;
+  if (search.onGenericWant) count += 1;
   return count;
 }
 
-/**
- * One compact bar for every card list.
- *
- * The name field is always visible; everything else folds behind Filters, so
- * the common case stays one line. The panel groups Scryfall facts separately
- * from facts about your own copy.
- */
+/** Name stays visible; other filters fold away so the common case stays one line. */
 export function BinderSearchFields({
   value,
   onChange,
   canUseWantList,
   showChangeWindow = false,
   groups,
+  trailing,
 }: BinderSearchFieldsProps) {
   const [open, setOpen] = useState(false);
   const activeCount = countFilters(value);
@@ -129,16 +122,28 @@ export function BinderSearchFields({
         </Stack>
       </Stack>
 
-      {showChangeWindow && (
-        <ChangeControls
-          range={value.range}
-          changeMode={value.changeMode}
-          onRange={(range) => patch({ range })}
-          onMode={(changeMode) => patch({ changeMode })}
-        />
+      {showChangeWindow ? (
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          alignItems={{ md: 'center' }}
+          justifyContent={{ md: 'space-between' }}
+          useFlexGap
+          flexWrap="wrap"
+        >
+          <ChangeControls
+            range={value.range}
+            changeMode={value.changeMode}
+            onRange={(range) => patch({ range })}
+            onMode={(changeMode) => patch({ changeMode })}
+          />
+          {trailing}
+        </Stack>
+      ) : (
+        trailing
       )}
 
-      {/* marginTop is inline so the Stack spacing cannot reappear at unmount. */}
+      {/* Inline margin stops Stack spacing reappearing at unmount. */}
       <Collapse in={open} unmountOnExit style={{ marginTop: 0 }}>
         <Box sx={{ pt: 1.5 }}>
           <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
@@ -283,19 +288,32 @@ export function BinderSearchFields({
                     <Checkbox
                       checked={canUseWantList && value.onWantList}
                       disabled={!canUseWantList}
-                      onChange={(event) => patch({ onWantList: event.target.checked })}
+                      onChange={(event) =>
+                        patch({
+                          onWantList: event.target.checked,
+                          onGenericWant: false,
+                        })
+                      }
                     />
                   }
-                  label="On my want lists"
+                  label="On my want list"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={canUseWantList && value.onGenericWant}
+                      disabled={!canUseWantList}
+                      onChange={(event) =>
+                        patch({
+                          onGenericWant: event.target.checked,
+                          onWantList: false,
+                        })
+                      }
+                    />
+                  }
+                  label="From generic wants"
                 />
               </FormGroup>
-
-              <Typography variant="caption" color="text.secondary">
-                A checked mark keeps only copies that have it.
-                {canUseWantList
-                  ? ' A checked want-list box keeps cards that are on one of your lists.'
-                  : ' Sign in to filter by your want lists.'}
-              </Typography>
             </Stack>
           </Paper>
         </Box>

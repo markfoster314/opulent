@@ -7,7 +7,6 @@ import { searchPlaces } from './service';
 
 export const placeRoutes = new Hono<AppEnv>();
 
-/** City picker for the welcome screen and profile. Signed-in only. */
 placeRoutes.get(
   '/',
   requireAuth,

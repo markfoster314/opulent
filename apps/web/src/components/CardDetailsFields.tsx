@@ -37,12 +37,7 @@ import {
 } from '@opulent/shared';
 import { useState } from 'react';
 
-/**
- * Everything the owner can decide about a stack of cards.
- *
- * Quantity is a string rather than a number so the text field can hold a
- * half-typed or empty value without snapping back to 1 as the user types.
- */
+/** Quantity is text so a half-typed or empty value does not snap back to 1. */
 export interface CardDetails {
   quantity: string;
   finish: CardFinish;
@@ -59,46 +54,30 @@ export interface CardDetails {
   priceKind: ItemPrice['kind'];
   pricePercent: string;
   priceAmount: string;
-  /** Private groups the new stack should join. */
   groupIds: string[];
 }
 
 interface CardDetailsFieldsProps {
   value: CardDetails;
   onChange: (patch: Partial<CardDetails>) => void;
-  /**
-   * Finishes this printing was actually produced in. Passing an empty list falls
-   * back to every finish, which keeps the form usable if the mirrored card data
-   * is missing the field.
-   */
+  /** An empty list falls back to every finish when mirrored card data lacks the field. */
   finishOptions: CardFinish[];
-  /**
-   * Languages this printing was produced in. While that list is still loading,
-   * pass the language already chosen so the field stays valid.
-   */
+  /** While languages load, include the current choice so the field stays valid. */
   languageOptions: CardLanguage[];
-  /** False until the printed-language list has arrived, so a one-item placeholder is not locked. */
+  /** Wait for the language list so a one-item placeholder is not locked in. */
   languagesReady: boolean;
-  /** Used to price each finish in its dropdown entry. */
   prices?: CardPrices | null;
-  /** Shown under the condition field. Editing and adding need different warnings. */
   stackNote?: string;
-  /**
-   * Price, photo link, and notes fold behind one quiet button. Used on the
-   * landing page, where the form stands between a card and a sign-up.
-   */
+  /** On the landing page, fold advanced fields to keep the form short before sign-up. */
   foldAdvanced?: boolean;
-  /**
-   * Two columns on a wide dialog. The form still stacks on a phone, and the
-   * default stays one column for the narrow add panel.
-   */
+  /** Two columns only on wide dialogs; phones and the narrow add panel stay one column. */
   columns?: 1 | 2;
+  quantityLocked?: boolean;
 }
 
 const MIN_QUANTITY = 1;
 const MAX_QUANTITY = 999;
 
-/** True when the typed quantity is not a whole number in range. */
 export function isQuantityInvalid(quantity: string): boolean {
   const parsed = Number(quantity);
   return (
@@ -109,13 +88,11 @@ export function isQuantityInvalid(quantity: string): boolean {
   );
 }
 
-/** A whole number from 0 to 100, or null when the field is not one. */
 export function parsePercentField(value: string): number | null {
   if (!/^(?:0|[1-9]\d?|100)$/.test(value.trim())) return null;
   return Number(value.trim());
 }
 
-/** The price object to save, or null while the percent or dollar field is unfinished. */
 export function priceFromDetails(details: CardDetails): ItemPrice | null {
   if (details.priceKind === 'market') return { kind: 'market' };
   if (details.priceKind === 'percent') {
@@ -130,12 +107,11 @@ export function isPriceInvalid(details: CardDetails): boolean {
   return priceFromDetails(details) === null;
 }
 
-/** True when the photo field has text that is not an http or https link. */
 export function isPhotoLinkInvalid(photoUrl: string): boolean {
   return photoUrl.trim() !== '' && parsePhotoLink(photoUrl) === null;
 }
 
-/** The finish to start on: plain if the printing has one, otherwise whatever it does have. */
+/** Prefer plain when printed; otherwise use the printing's first finish. */
 export function defaultFinish(finishes: CardFinish[]): CardFinish {
   if (finishes.includes('nonfoil')) return 'nonfoil';
   return finishes[0] ?? 'nonfoil';
@@ -151,6 +127,7 @@ export function CardDetailsFields({
   stackNote,
   foldAdvanced = false,
   columns = 1,
+  quantityLocked = false,
 }: CardDetailsFieldsProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const finishes = finishOptions.length > 0 ? finishOptions : cardFinishSchema.options;
@@ -161,10 +138,7 @@ export function CardDetailsFields({
   const notesTooLong = value.notes.length > NOTES_MAX_LENGTH;
   const marketLabel = formatUsd(priceForFinish(prices, value.finish));
 
-  /**
-   * Closing the fold with an unfinished price or photo link would disable Add
-   * for a reason nobody can see, so those fall back before they are hidden.
-   */
+  /** Falling back before hiding the fold prevents Add being disabled for an unseen reason. */
   function toggleAdvanced() {
     if (!advancedOpen) {
       setAdvancedOpen(true);
@@ -187,6 +161,7 @@ export function CardDetailsFields({
         error={quantityError}
         helperText={quantityError ? `Pick a whole number from 1 to ${MAX_QUANTITY}` : undefined}
         slotProps={{ htmlInput: { min: MIN_QUANTITY, max: MAX_QUANTITY } }}
+        disabled={quantityLocked}
         fullWidth
       />
 

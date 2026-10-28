@@ -21,25 +21,16 @@ import {
   marketPrices,
   priceRangeDays,
 } from '@opulent/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import { ApiError } from '../../lib/http';
 
-/**
- * A Magic printing that exists as a physical card. Arena-only and Magic
- * Online-only rows are left out. Every card list query goes through this, so
- * the game filter rides along for free.
- */
+/** Scryfall marks digital printings in games; binders keep only paper rows. */
 const paperOnly = sql`(${cards.game} = ${CARD_GAME} AND jsonb_exists(${cards.raw}->'games', 'paper'))`;
 
-/**
- * Art Series cards are the extra art pieces in collector boosters. Scryfall
- * stores each one as its own card, named like "Dress Down // Dress Down", with
- * layout art_series. They are paper, so the paper check alone keeps them.
- * IS DISTINCT FROM also keeps rows whose layout is empty.
- */
+/** Scryfall Art Series art uses layout art_series; IS DISTINCT FROM keeps null layouts. */
 const notArtSeries = sql`${cards.layout} IS DISTINCT FROM 'art_series'`;
 
-/** Shop links from the stored Scryfall object. Null fields mean that shop has no page. */
+/** Scryfall shop links; a null link means that shop has no page for the card. */
 const purchaseUrisSql = sql`jsonb_build_object(
   'tcgplayer', ${cards.raw}->'purchase_uris'->>'tcgplayer',
   'cardmarket', ${cards.raw}->'purchase_uris'->>'cardmarket',
@@ -66,29 +57,17 @@ const cardColumns = {
   releasedAt: cards.releasedAt,
 };
 
-/**
- * Card name search against our local mirror. Never calls Scryfall.
- *
- * Two signals are combined: a substring match, which handles "bolt", and a
- * trigram similarity score, which handles typos like "lighning bolt". The `%`
- * operator is what lets the trigram index answer that fuzzy test. Its cutoff
- * is pg_trgm.similarity_threshold, which Postgres defaults to 0.3.
- *
- * `all_cards` stores every language as its own row, and each row keeps the
- * English name. A name dropdown therefore keeps one row per card concept
- * before the limit: the English printing when one exists, otherwise the
- * language the card was actually printed in. The limit then means names, so
- * a typo is not crowded out by ten copies of an exact match.
- */
+/** Local substring plus Postgres pg_trgm typo search (0.3 threshold), deduped per card before the limit. */
 export async function searchCards(db: Database, query: CardSearchQuery): Promise<Card[]> {
   const term = query.q.trim();
-  const nameMatch = sql`(${cards.name} ILIKE ${`%${term}%`} OR ${cards.name} % ${term})`;
+  const substring = sql`${cards.name} ILIKE ${`%${term}%`}`;
+  const fuzzy = sql`(${cards.name} ILIKE ${`%${term}%`} OR ${cards.name} % ${term})`;
 
-  if (!query.uniqueByOracle) {
+  async function flat(match: SQL): Promise<Card[]> {
     const rows = await db
       .select(cardColumns)
       .from(cards)
-      .where(and(paperOnly, notArtSeries, nameMatch))
+      .where(and(paperOnly, notArtSeries, match))
       .orderBy(
         sql`similarity(${cards.name}, ${term}) DESC`,
         sql`${cards.releasedAt} DESC NULLS LAST`,
@@ -97,27 +76,27 @@ export async function searchCards(db: Database, query: CardSearchQuery): Promise
     return rows as Card[];
   }
 
-  const rows = await db.execute<Card>(sql`
-    SELECT
-      "scryfallId",
-      "oracleId",
-      name,
-      "setCode",
-      "setName",
-      "collectorNumber",
-      rarity,
-      lang,
-      layout,
-      "typeLine",
-      "manaCost",
-      finishes,
-      "imageUris",
-      prices,
-      "scryfallUri",
-      "purchaseUris",
-      "releasedAt"
-    FROM (
-      SELECT DISTINCT ON (${cards.oracleId})
+  async function unique(match: SQL): Promise<Card[]> {
+    const rows = await db.execute<Card>(sql`
+      WITH one_per_card AS MATERIALIZED (
+        SELECT DISTINCT ON (${cards.oracleId})
+          ${cards.scryfallId} AS scryfall_id,
+          ${cards.lang} AS lang,
+          similarity(${cards.name}, ${term}) AS score,
+          ${cards.releasedAt} AS released_at
+        FROM ${cards}
+        WHERE ${paperOnly}
+          AND ${notArtSeries}
+          AND ${match}
+        -- The English row is already the first DISTINCT ON pick when it exists.
+        ORDER BY ${cards.oracleId}, (${cards.lang} = 'en') DESC, ${cards.releasedAt} DESC NULLS LAST
+      ),
+      page AS (
+        SELECT * FROM one_per_card
+        ORDER BY score DESC, released_at DESC NULLS LAST
+        LIMIT ${query.limit}
+      )
+      SELECT
         ${cards.scryfallId} AS "scryfallId",
         ${cards.oracleId} AS "oracleId",
         ${cards.name} AS name,
@@ -134,28 +113,18 @@ export async function searchCards(db: Database, query: CardSearchQuery): Promise
         ${cards.prices} AS prices,
         ${cards.scryfallUri} AS "scryfallUri",
         ${purchaseUrisSql} AS "purchaseUris",
-        ${cards.releasedAt} AS "releasedAt",
-        similarity(${cards.name}, ${term}) AS score
-      FROM ${cards}
-      WHERE ${paperOnly}
-        AND ${notArtSeries}
-        AND ${nameMatch}
-        AND (
-          ${cards.lang} = 'en'
-          OR NOT EXISTS (
-            SELECT 1
-            FROM ${cards} AS english_card
-            WHERE english_card.oracle_id = ${cards.oracleId}
-              AND english_card.lang = 'en'
-              AND jsonb_exists(english_card.raw->'games', 'paper')
-          )
-        )
-      ORDER BY ${cards.oracleId}, (${cards.lang} = 'en') DESC, ${cards.releasedAt} DESC NULLS LAST
-    ) AS one_per_card
-    ORDER BY score DESC, "releasedAt" DESC NULLS LAST
-    LIMIT ${query.limit}
-  `);
-  return rows as unknown as Card[];
+        one.released_at AS "releasedAt"
+      FROM page one
+      JOIN ${cards} ON ${cards.scryfallId} = one.scryfall_id
+      ORDER BY one.score DESC, one.released_at DESC NULLS LAST
+    `);
+    return rows as unknown as Card[];
+  }
+
+  // Substring is cheaper, so run the pg_trgm match only when it misses a full page.
+  const first = query.uniqueByOracle ? await unique(substring) : await flat(substring);
+  if (first.length >= query.limit) return first;
+  return query.uniqueByOracle ? unique(fuzzy) : flat(fuzzy);
 }
 
 export async function getCardById(db: Database, scryfallId: string): Promise<Card | undefined> {
@@ -167,22 +136,7 @@ export async function getCardById(db: Database, scryfallId: string): Promise<Car
   return rows[0] as Card | undefined;
 }
 
-/**
- * One tile per printing, for the set picker.
- *
- * The same set and collector number can exist in several languages. The grid
- * shows that printing once: the English copy when it was printed in English,
- * otherwise the language it was printed in. The next screen is where the owner
- * picks the language.
- *
- * English printings sort first because they are what most traders hold, but a
- * card that only ever shipped in Japanese still appears, or it would be unaddable.
- *
- * Paging is by offset, unlike binder items, which use a keyset cursor. Printings
- * are static reference data that only changes when the nightly sync runs, so
- * rows cannot shift underneath a reader mid-scroll. The offset still travels as
- * an opaque cursor so the response matches every other paged endpoint.
- */
+/** One tile per printing, English first; offset paging is safe because printings only change nightly. */
 export async function getPrintingsByOracleId(
   db: Database,
   oracleId: string,
@@ -195,43 +149,13 @@ export async function getPrintingsByOracleId(
     : sql``;
 
   const rows = await db.execute<Card>(sql`
-    SELECT
-      "scryfallId",
-      "oracleId",
-      name,
-      "setCode",
-      "setName",
-      "collectorNumber",
-      rarity,
-      lang,
-      layout,
-      "typeLine",
-      "manaCost",
-      finishes,
-      "imageUris",
-      prices,
-      "scryfallUri",
-      "purchaseUris",
-      "releasedAt"
-    FROM (
+    WITH one_per_printing AS MATERIALIZED (
       SELECT DISTINCT ON (${cards.setCode}, ${cards.collectorNumber})
-        ${cards.scryfallId} AS "scryfallId",
-        ${cards.oracleId} AS "oracleId",
-        ${cards.name} AS name,
-        ${cards.setCode} AS "setCode",
-        ${cards.setName} AS "setName",
-        ${cards.collectorNumber} AS "collectorNumber",
-        ${cards.rarity} AS rarity,
+        ${cards.scryfallId} AS scryfall_id,
         ${cards.lang} AS lang,
-        ${cards.layout} AS layout,
-        ${cards.typeLine} AS "typeLine",
-        ${cards.manaCost} AS "manaCost",
-        ${cards.finishes} AS finishes,
-        ${cards.imageUris} AS "imageUris",
-        ${cards.prices} AS prices,
-        ${cards.scryfallUri} AS "scryfallUri",
-        ${purchaseUrisSql} AS "purchaseUris",
-        ${cards.releasedAt} AS "releasedAt"
+        ${cards.releasedAt} AS released_at,
+        ${cards.setCode} AS set_code,
+        ${cards.collectorNumber} AS collector_number
       FROM ${cards}
       WHERE ${cards.oracleId} = ${oracleId}
         AND ${paperOnly}
@@ -243,12 +167,45 @@ export async function getPrintingsByOracleId(
         (${cards.lang} = 'en') DESC,
         ${cards.releasedAt} DESC NULLS LAST,
         ${cards.scryfallId}
-    ) AS one_per_printing
-    ORDER BY (lang = 'en') DESC, "releasedAt" DESC NULLS LAST, "collectorNumber", "scryfallId"
-    LIMIT ${query.limit + 1}
-    OFFSET ${offset}
+    ),
+    page AS (
+      SELECT * FROM one_per_printing
+      ORDER BY
+        (lang = 'en') DESC,
+        released_at DESC NULLS LAST,
+        collector_number,
+        scryfall_id
+      LIMIT ${query.limit + 1}
+      OFFSET ${offset}
+    )
+    SELECT
+      ${cards.scryfallId} AS "scryfallId",
+      ${cards.oracleId} AS "oracleId",
+      ${cards.name} AS name,
+      ${cards.setCode} AS "setCode",
+      ${cards.setName} AS "setName",
+      ${cards.collectorNumber} AS "collectorNumber",
+      ${cards.rarity} AS rarity,
+      ${cards.lang} AS lang,
+      ${cards.layout} AS layout,
+      ${cards.typeLine} AS "typeLine",
+      ${cards.manaCost} AS "manaCost",
+      ${cards.raw}->>'oracle_text' AS "oracleText",
+      ${cards.raw}->>'artist' AS artist,
+      ${cards.finishes} AS finishes,
+      ${cards.imageUris} AS "imageUris",
+      ${cards.prices} AS prices,
+      ${cards.scryfallUri} AS "scryfallUri",
+      ${purchaseUrisSql} AS "purchaseUris",
+      one.released_at AS "releasedAt"
+    FROM page one
+    JOIN ${cards} ON ${cards.scryfallId} = one.scryfall_id
+    ORDER BY
+      (one.lang = 'en') DESC,
+      one.released_at DESC NULLS LAST,
+      one.collector_number,
+      one.scryfall_id
   `);
-
   const items = rows as unknown as Card[];
   const hasMore = items.length > query.limit;
   return {
@@ -257,12 +214,7 @@ export async function getPrintingsByOracleId(
   };
 }
 
-/**
- * Paper printings of the same set and collector number, one per language.
- *
- * English and Japanese of one set are two rows. A language that was never
- * printed for that card is left out.
- */
+/** Paper printings of one set and collector number, one per existing language. */
 export async function listLanguagePrintings(db: Database, scryfallId: string): Promise<Card[]> {
   const printing = await db
     .select({
@@ -307,7 +259,6 @@ export async function listLanguagePrintings(db: Database, scryfallId: string): P
   return ordered;
 }
 
-/** Languages this exact printing was produced in, in a stable order. */
 export async function listLanguagesForPrinting(
   db: Database,
   scryfallId: string,
@@ -325,7 +276,6 @@ export async function listLanguagesForPrinting(
   return lang ? [cardLanguageOrEnglish(lang)] : [];
 }
 
-/** Refuses a language this printing was never produced in. */
 export async function assertPrintedLanguage(
   db: Database,
   scryfallId: string,
@@ -337,14 +287,7 @@ export async function assertPrintedLanguage(
   }
 }
 
-/**
- * The sets this card was printed in, once each.
- *
- * The choose-a-set box lists these and narrows them as the owner types. A card
- * such as Plains has hundreds of printings but far fewer sets, so one list is
- * enough and the dropdown does not depend on which page of tiles is loaded.
- */
-/** Languages, finishes, and sets this card concept was printed on paper. */
+/** Languages, finishes, and sets on paper; one set entry each so the picker ignores paging. */
 export async function listOracleChoices(db: Database, oracleId: string): Promise<CardChoices> {
   const rows = await db
     .select({
@@ -379,7 +322,6 @@ export async function listOracleChoices(db: Database, oracleId: string): Promise
   };
 }
 
-/** Sets whose name or code matches the typed text. Art cards are left out. */
 export async function searchSets(db: Database, query: SetSearchQuery): Promise<CardSet[]> {
   const pattern = `%${query.q.trim()}%`;
   const rows = (await db.execute(sql`
@@ -414,12 +356,7 @@ export async function listSetsByOracleId(db: Database, oracleId: string): Promis
   return rows;
 }
 
-/**
- * Refuses a printing that was never released on paper, and an Art Series card.
- *
- * Search and the set list already hide those rows. This is the last gate, so a
- * direct add cannot put an Arena-only, Magic Online-only, or art card into a binder.
- */
+/** Last gate: rejects digital-only and Art Series rows that search already hides. */
 export async function assertPaperPrinting(db: Database, scryfallId: string): Promise<void> {
   const rows = await db
     .select({ raw: cards.raw, layout: cards.layout })
@@ -451,11 +388,7 @@ function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Daily prices for one printing over a window, with the last stored price
- * carried forward. History holds change points, so most days have no row of
- * their own; `cardPriceSeries` fills them.
- */
+/** Daily prices with the last stored value carried forward; history stores change points only. */
 export async function getCardPriceSeries(
   db: Database,
   scryfallId: string,

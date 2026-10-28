@@ -6,10 +6,17 @@ import {
   places,
   users,
   wantItems,
+  wantListItems,
   wantLists,
 } from '@opulent/db';
 import { loadEnv } from '@opulent/db/env';
-import { askingPrice, formatUsd, marketPrices, priceForFinish } from '@opulent/shared';
+import {
+  askingPrice,
+  formatUsd,
+  marketPrices,
+  priceForFinish,
+  wantScopeKey,
+} from '@opulent/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   addCollectionItem,
@@ -56,16 +63,7 @@ import {
 
 loadEnv();
 
-/**
- * Exercises the real service functions against a real database, then removes
- * everything it created.
- *
- * This exists because typechecking proves the SQL compiles, not that it runs.
- * The match query in particular joins three tables through two different kinds
- * of card identifier, which is the easiest thing in this schema to get wrong.
- *
- * Run against a local database only.
- */
+/** Runs real services against a real database, cleans up, and must target a local database only. */
 
 // Fixed fake identifiers, so a failed run leaves nothing hard to find.
 const ORACLE_ID = '00000000-0000-4000-8000-00000000f00d';
@@ -159,8 +157,7 @@ async function main() {
       newYorkFull.map((place) => place.label).join(' | '),
     );
 
-    // Two printings of one card concept, so the oracle/printing split is
-    // genuinely under test rather than assumed.
+    // Two printings of one card concept, so the oracle/printing split is under test.
     await db.insert(cards).values([
       {
         scryfallId: PRINTING_A,
@@ -171,9 +168,7 @@ async function main() {
         collectorNumber: '1',
         lang: 'en',
         releasedAt: '2024-01-01',
-        // The third value is deliberately not a finish we model. Scryfall can
-        // add new ones, and unknown values must be dropped rather than offered
-        // to the user in the edit form.
+        // Unknown finish values must drop out; Scryfall can add new ones.
         finishes: ['nonfoil', 'foil', 'not_a_real_finish'],
         prices: { usd: '1.50', usd_foil: '12.00' },
         raw: { games: ['paper'] },
@@ -200,9 +195,7 @@ async function main() {
         releasedAt: '2023-01-01',
         raw: { games: ['paper'] },
       },
-      // Newest of the three, but not English. The printing picker must still
-      // sort it last, or every card would open on a printing the owner is
-      // unlikely to hold.
+      // Newest, but non-English; the picker must still sort it last.
       {
         scryfallId: PRINTING_C,
         oracleId: ORACLE_ID,
@@ -255,10 +248,6 @@ async function main() {
       .returning();
     if (!owner || !viewer) throw new Error('user insert returned nothing');
 
-    // --- Onboarding: the user picks their own username ---
-    //
-    // Both users start unclaimed, exactly as a real account does after its
-    // first API call, so these checks run against the real starting state.
     check('new user is not onboarded', owner.onboardedAt === null);
 
     check(
@@ -283,8 +272,7 @@ async function main() {
       !(await checkUsernameAvailability(db, viewer.username, owner.id)).available,
     );
 
-    // Renaming before the welcome screen is refused, so the two paths cannot
-    // be mixed up: pick at welcome, change later in profile settings.
+    // Rename before onboarding is refused so the two paths cannot be mixed up.
     check(
       'profile rename is blocked before onboarding',
       !(await resolves(() => updateProfile(db, owner.id, { username: `smoke_early_${stamp}` }))),
@@ -306,7 +294,6 @@ async function main() {
       )),
     );
 
-    // The second user claims a username already held by the first.
     const viewerOnboarded = await completeOnboarding(db, viewer.id, {
       username: `smoke_viewer2_${stamp}`,
     });
@@ -338,8 +325,7 @@ async function main() {
     );
     check('profile saved the city', renamedUser.placeId === NYC_ID, String(renamedUser.placeId));
 
-    // About 20 km north of Austin. A 50 km radius includes the owner. A point
-    // 5 degrees north is hundreds of kilometers away and must miss that radius.
+    // About 20 km north of Austin; the farther point is hundreds of km away.
     const nearAustin = await findUsersWithinRadius(
       db,
       viewer.id,
@@ -389,8 +375,6 @@ async function main() {
     });
     check('profile can clear the city', clearedCity.placeId === null);
 
-    // --- The collection model: groups, memberships, one stack per person ---
-
     const group = await createGroup(db, owner.id, { name: 'Smoke Binder' });
     check('a group is owned by its creator', group.userId === owner.id, group.userId);
     check(
@@ -398,7 +382,7 @@ async function main() {
       !(await resolves(() => createGroup(db, owner.id, { name: 'smoke binder' }))),
     );
 
-    /** Every stack belongs to the person. A group is only a label on it. */
+    /** Every stack belongs to the person; a group is only a label on it. */
     const addToBinder = (input: CollectionItemInput) => addCollectionItem(db, owner.id, input);
 
     await addToBinder({
@@ -420,7 +404,6 @@ async function main() {
       price: { kind: 'market' },
     });
 
-    // Adding the same stack again must raise the quantity, not create a row.
     const bumped = await addToBinder({
       scryfallId: PRINTING_A,
       quantity: 3,
@@ -479,7 +462,7 @@ async function main() {
       changedPrice.price.kind === 'percent' && changedPrice.price.percent === 80,
     );
 
-    // A group is a label joined through a membership. It never owns the card.
+    // A group is a label joined through a membership; it never owns the card.
     await addMembership(db, owner.id, group.id, bumped.id);
     const inGroup = await listGroupItems(db, owner.id, group.id, { limit: 10 });
     check(
@@ -551,11 +534,24 @@ async function main() {
       .insert(wantLists)
       .values({ userId: viewer.id, name: 'Smoke wants', slug: 'smoke-wants' })
       .returning({ id: wantLists.id });
-    await db.insert(wantItems).values({
-      userId: viewer.id,
+    const [smokeWant] = await db
+      .insert(wantItems)
+      .values({
+        userId: viewer.id,
+        oracleId: ORACLE_ID,
+        priority: 1,
+        scopeKey: wantScopeKey({
+          wantedLanguages: [],
+          wantedFinishes: [],
+          wantedConditions: [],
+          wantedSets: [],
+        }),
+      })
+      .returning({ id: wantItems.id });
+    await db.insert(wantListItems).values({
       wantListId: smokeList!.id,
-      oracleId: ORACLE_ID,
-      priority: 1,
+      wantItemId: smokeWant!.id,
+      userId: viewer.id,
     });
 
     const matches = await findTradeBinderMatches(db, owner.id, viewer.id);
@@ -570,7 +566,6 @@ async function main() {
     );
     check('match listed the individual stacks', match.printings.length === 3);
 
-    // Cards marked not for trade must drop out of the results.
     await db
       .update(collectionItems)
       .set({ forTrade: false })
@@ -583,8 +578,6 @@ async function main() {
       .update(collectionItems)
       .set({ forTrade: true })
       .where(eq(collectionItems.userId, owner.id));
-
-    // --- Per-stack edits ---
 
     const edited = await updateCollectionItem(db, owner.id, bumped.id, {
       condition: 'LP',
@@ -720,8 +713,6 @@ async function main() {
         }),
       )),
     );
-
-    // --- Dashboard highlights ---
 
     const highlights = await listCollectionHighlights(db, owner.id, 10);
     check('highlights returned rows', highlights.length > 0, `${highlights.length}`);
@@ -917,8 +908,6 @@ async function main() {
       `${groupedCards.items.length}`,
     );
 
-    // --- Expanded row: detail and price history ---
-
     const detail = await getCollectionItem(db, owner.id, bumped.id);
     check(
       'the detail returns the card record',
@@ -964,8 +953,6 @@ async function main() {
     );
     await db.execute(sql`DELETE FROM card_price_history WHERE scryfall_id = ${PRINTING_A}::uuid`);
 
-    // --- Trade binder doors ---
-
     const ownerRow = (await db.select().from(users).where(eq(users.id, owner.id)).limit(1))[0]!;
     check(
       'a trade binder starts private',
@@ -977,8 +964,6 @@ async function main() {
       'a public trade binder opens to a stranger',
       passes(() => assertCanViewTradeBinder(openOwner, { userId: viewer.id })),
     );
-
-    // --- Keyset pagination ---
 
     // Leave three stacks so the page walk has a second page.
     await db.delete(collectionItems).where(inArray(collectionItems.id, [marked.id, proof.id]));
@@ -1000,12 +985,7 @@ async function main() {
     check('second page does not repeat the first', overlap.length === 0, `${overlap.length} dupes`);
     check('pagination ended cleanly', secondPage.nextCursor === null);
 
-    // Fuzzy search must survive a typo, which is what pg_trgm is there for.
-    //
-    // These assertions deliberately do not require our card to be the only
-    // result. Once the Scryfall mirror is populated, real cards match a
-    // misspelling too. What must hold either way is that our card is found,
-    // ranked first, and collapsed to a single row per concept.
+    // A populated mirror can match the typo too; our card must still be found, first, and deduped.
     const typo = await searchCards(db, { q: 'smoke tst bolt', limit: 5, uniqueByOracle: true });
     const ours = typo.filter((card) => card.oracleId === ORACLE_ID);
     check(
@@ -1015,8 +995,6 @@ async function main() {
     );
     check('misspelling ranked our card first', typo[0]?.oracleId === ORACLE_ID, typo[0]?.name);
     check('uniqueByOracle returned one row per concept', ours.length === 1, `${ours.length} rows`);
-
-    // --- Printing picker ---
 
     const printings = await getPrintingsByOracleId(db, ORACLE_ID, { limit: 60 });
     check(
@@ -1130,10 +1108,7 @@ async function main() {
       )),
     );
 
-    // --- Price selection ---
-    //
-    // Reading `usd` for a foil is the mistake this guards against. A foil-only
-    // printing has no `usd` at all and would silently display as unpriced.
+    // A foil-only printing has no usd, so reading usd would silently show it unpriced.
     const alpha = printings.items[0];
     check(
       'foil price comes from the foil field',
@@ -1172,8 +1147,7 @@ async function main() {
       foreignCopy.card?.prices?.usd === '1.50',
       JSON.stringify(foreignCopy.card?.prices),
     );
-    // The English copy of this exact stack already exists, and moving onto an
-    // existing stack is refused. Clear it so the language switch has a target.
+    // The English stack already exists, and moving onto it is refused; clear it first.
     await db
       .delete(collectionItems)
       .where(

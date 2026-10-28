@@ -72,13 +72,7 @@ function matchText({ authenticated, matchesLoading, matchCount }: VisitorProps):
   return { text: `${matchCount} match${matchCount === 1 ? '' : 'es'}`, tone: 'gold' };
 }
 
-/**
- * The leather binder card, used on the collection page and the profile page.
- *
- * The owner sees cards, value, and cards on the table. A visitor sees only
- * whether their want lists meet this binder, and how many matches there are.
- * The whole card is the link. Hovering lifts it and turns a page edge.
- */
+/** Owner sees cards, value, and on-the-table; a visitor sees only the want-list match count. */
 export function TradeBinderPreview(props: OwnerProps | VisitorProps) {
   const { username } = props;
   const visitor = props.variant === 'visitor' ? matchText(props) : null;
@@ -148,7 +142,7 @@ export function TradeBinderPreview(props: OwnerProps | VisitorProps) {
         },
       }}
     >
-      {/* The top page. It turns on hover; it never blocks the link. */}
+      {/* The top page: turns on hover, never blocks the link. */}
       <Box
         aria-hidden
         className="binder-page"
@@ -164,7 +158,7 @@ export function TradeBinderPreview(props: OwnerProps | VisitorProps) {
         }}
       />
 
-      {/* The spine, with three rivets. It only has room from sm up. */}
+      {/* The spine: three rivets, and only room from sm up. */}
       <Box
         aria-hidden
         sx={{

@@ -10,12 +10,7 @@ interface CitySearchFieldProps {
   helperText?: string;
 }
 
-/**
- * Picks one city from our copy of the GeoNames list.
- *
- * The box stores the chosen place, not whatever was typed. Clearing it is how
- * a profile edit removes the city.
- */
+/** Picks a city from our GeoNames copy; the box stores the place, and clearing it removes the city. */
 export function CitySearchField({
   value,
   onChange,
