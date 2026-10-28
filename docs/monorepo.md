@@ -36,4 +36,4 @@ ESLint `boundaries` in `eslint.config.mjs`:
 
 Web folder and feature import rules: [apps/web/README.md](../apps/web/README.md).
 
-Paired dependency versions live in the pnpm catalog in `pnpm-workspace.yaml`.
+Every direct dependency version lives in the pnpm catalog in `pnpm-workspace.yaml`. Packages reference it with `catalog:`. Workspace packages use `workspace:*`.

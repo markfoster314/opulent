@@ -1,6 +1,6 @@
 # @opulent/api
 
-Hono API. One process locally, one Lambda when deployed. Install and run from the repo root. Not a standalone package.
+Hono API. One process locally, one Node 26 Lambda when deployed. Install and run from the repo root. Not a standalone package.
 
 Hono 4, Drizzle, Zod contracts from `@opulent/shared`. Auth0 JWKS. PostgreSQL through `@opulent/db`.
 

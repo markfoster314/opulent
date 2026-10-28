@@ -44,11 +44,11 @@ lib/stage-context.ts    dev defaults and the prod guard
 
 One zone, one NAT. RDS PostgreSQL 16 in a private subnet. The API, the schema step, and the nightly card job use the database host.
 
-API Lambda from `apps/api/dist`. Node 24 on Graviton, 1,024 MB, 20 seconds, concurrency cap 20. Auth0 JWKS stays in the function. Gateway throttle is 20 per second, burst 20.
+API Lambda from `apps/api/dist`. Runtime `nodejs26.x` on Graviton, 1,024 MB, 20 seconds, concurrency cap 20. The schema step uses the same runtime. Amazon lists `nodejs26.x` as a public preview. The name stays when it becomes general. Auth0 JWKS stays in the function. Gateway throttle is 20 per second, burst 20.
 
 `MigrateFunction` runs on deploy. It applies bootstrap, Drizzle migrations from `packages/db/migrations`, then bootstrap again. The API function is created after that step.
 
-Card sync is an ARM Fargate task at 06:00 UTC. Image from `jobs/card-sync/Dockerfile`. Production deploy: [docs/deploy.md](../docs/deploy.md).
+Card sync is an ARM Fargate task at 06:00 UTC. Image from `jobs/card-sync/Dockerfile` (Node 26). Production deploy: [docs/deploy.md](../docs/deploy.md).
 
 Alarms: API Lambda errors, database free storage under 2 GB, a card sync that does not start, and a card sync task that stops with a non-zero exit. Optional `alarmEmail` subscribes to that topic.
 

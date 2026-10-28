@@ -1,6 +1,6 @@
 # @opulent/card-sync
 
-Nightly Scryfall mirror. One process locally, one Fargate task when deployed. Install and run from the repo root. Not a standalone package.
+Nightly Scryfall mirror. One process locally, one Fargate task when deployed. The task image is Node 26. Install and run from the repo root. Not a standalone package.
 
 The task and `pnpm cards:sync` both use bulk type `all_cards` unless `SCRYFALL_BULK_TYPE` is set. That file includes non-English printings.
 

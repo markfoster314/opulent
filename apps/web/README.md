@@ -2,7 +2,7 @@
 
 React SPA. Install and run from the repo root. Not a standalone package.
 
-React 18, Vite 8, MUI 6, React Router 7, TanStack Query 5, Auth0 SPA SDK, Recharts. Contracts from `@opulent/shared`.
+React 19, Vite 8, MUI 9, React Router 7, TanStack Query 5, Auth0 SPA SDK, Recharts. Contracts from `@opulent/shared`.
 
 ## Run
 

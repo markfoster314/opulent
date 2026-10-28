@@ -2,7 +2,7 @@
 
 Magic: The Gathering trade binder. Collection, wants, matches, public binders, trades.
 
-pnpm workspace, Turborepo. Node 24, pnpm 10 via Corepack. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
+pnpm workspace, Turborepo. Node 26. pnpm 10.26.1 via Corepack. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 
 ## Status
 
@@ -14,7 +14,10 @@ Not built: authenticated browser coverage on a dedicated Auth0 tenant.
 
 Quality only. No Docker, Auth0, or card download.
 
+Node 26 does not ship Corepack. Install it once for that Node. Corepack then reads the pnpm pin in `package.json`.
+
 ```bash
+npm install -g corepack
 corepack enable
 pnpm install
 pnpm check
