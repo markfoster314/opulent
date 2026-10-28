@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "drizzle-kit": "^0.31.11",
+    "drizzle-kit": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   }

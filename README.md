@@ -33,6 +33,9 @@ The repository is a pnpm workspace managed by Turborepo. It is designed to run l
 
 - **Node.js 24** (`nvm use` reads [.nvmrc](.nvmrc))
 - **pnpm 10 through Corepack**
+
+For the full local product, also use:
+
 - **Docker** for PostgreSQL with PostGIS
 - An **Auth0 development tenant** for signed-in work. Follow [docs/auth0-development.md](docs/auth0-development.md).
 
@@ -40,10 +43,13 @@ The repository is a pnpm workspace managed by Turborepo. It is designed to run l
 corepack enable
 node --version      # v24.x
 pnpm --version      # 10.x
-docker --version
 ```
 
-### First-time setup
+The GitHub repository is `opulent`. A local folder may use the product name `opulentTutor`.
+
+### Quality only
+
+No Docker, Auth0, or card download.
 
 ```bash
 git clone https://github.com/markfoster314/opulent.git
@@ -51,7 +57,15 @@ cd opulent
 
 corepack enable
 pnpm install
+pnpm check
+```
 
+`pnpm check` runs formatting, ESLint, TypeScript, and unit tests. Use `pnpm check:ci` to match the Quality job, except actionlint.
+
+### Full local product
+
+```bash
+docker --version
 docker compose up -d postgres
 cp .env.example .env
 ```
@@ -71,7 +85,7 @@ The bootstrap step runs twice on purpose:
 1. First pass creates extensions such as PostGIS.
 2. Second pass creates indexes that require the tables to exist.
 
-Load reference data:
+Load reference data (optional for quality work; required to use the product):
 
 ```bash
 pnpm places:sync
@@ -103,31 +117,25 @@ pnpm dev
 - Web: http://localhost:5173
 - API: http://localhost:8787
 
-For a quick quality check before opening a pull request:
-
-```bash
-pnpm check
-```
-
-`pnpm check` runs formatting, ESLint, TypeScript, and unit tests. It does not need PostgreSQL. Use `pnpm smoke` for database checks and `pnpm test:e2e` for browser checks.
+Use `pnpm smoke` for database checks and `pnpm test:e2e` for browser checks.
 
 ---
 
 ## 2. What lives where
 
-| Path                 | Responsibility                                                                                            |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | React single-page application. Pages, shared UI components, browser API client, Auth0 provider, theme.    |
-| `apps/api`           | Hono API. One HTTP service, deployed as one AWS Lambda.                                                   |
-| `packages/shared`    | Zod schemas, TypeScript types, enums, pricing helpers, want-scope keys, CSV formats. Shared by both apps. |
-| `packages/db`        | PostgreSQL schema, Drizzle client, migrations, bootstrap, seed, place import, price partitions.           |
-| `jobs/card-sync`     | Scryfall bulk-data download and database upsert. Runs as a scheduled ECS Fargate task.                    |
-| `infra`              | AWS CDK infrastructure in TypeScript.                                                                     |
-| `e2e`                | Playwright public and optional authenticated browser tests.                                               |
-| `docs`               | Engineering guides, including Auth0 development setup.                                                    |
-| `.github`            | CI, security workflows, CODEOWNERS, pull request and issue templates.                                     |
-| `docker-compose.yml` | Local PostgreSQL 16 with PostGIS.                                                                         |
-| `.env.example`       | Required environment variables. Copy to `.env`; never commit `.env`.                                      |
+| Path                 | Responsibility                                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | React single-page application. Pages, shared UI components, browser API client, Auth0 provider, theme.                      |
+| `apps/api`           | Hono API. One HTTP service, deployed as one AWS Lambda.                                                                     |
+| `packages/shared`    | Zod schemas, TypeScript types, enums, pricing helpers, want-scope keys, CSV formats. Shared by both apps.                   |
+| `packages/db`        | PostgreSQL schema, Drizzle client, migrations, bootstrap, seed, place import, price partitions.                             |
+| `jobs/card-sync`     | Scryfall bulk-data download and database upsert. Runs as a scheduled ECS Fargate task.                                      |
+| `infra`              | AWS CDK infrastructure in TypeScript.                                                                                       |
+| `e2e`                | Playwright public and optional authenticated browser tests.                                                                 |
+| `docs`               | Engineering guides: [monorepo](docs/monorepo.md), [GitHub setup](docs/github-setup.md), [Auth0](docs/auth0-development.md). |
+| `.github`            | CI, security workflows, CODEOWNERS, pull request and issue templates.                                                       |
+| `docker-compose.yml` | Local PostgreSQL 16 with PostGIS.                                                                                           |
+| `.env.example`       | Required environment variables. Copy to `.env`; never commit `.env`.                                                        |
 
 ### Web app map
 
@@ -293,7 +301,7 @@ VITE_AUTH0_CLIENT_ID=your-spa-client-id
 VITE_AUTH0_AUDIENCE=https://api.opulenttutor.com
 ```
 
-If you want seeded data under your real login, map the test Auth0 `sub` to a seeded user row in the development database. Seeded users otherwise have subjects such as `seed|mark`, which do not match a real login.
+If you want seeded data under your real login, map the test Auth0 `sub` to a seeded user row in the development database. The `mark` seed user already uses an `auth0|...` subject. Other demo users use subjects such as `seed|ava_lane`. A login that does not match a seed subject creates an empty account.
 
 ### Authenticated browser tests
 
@@ -317,6 +325,7 @@ The storage state contains access and refresh tokens. It is ignored by Git. Neve
 | `pnpm dev`            | Runs the API and web app with Turbo                        |
 | `pnpm build`          | Builds API, web, and card-sync artifacts                   |
 | `pnpm check`          | Format check, ESLint, TypeScript, and unit tests           |
+| `pnpm check:ci`       | Quality job gates, except actionlint                       |
 | `pnpm lint`           | ESLint across the repository                               |
 | `pnpm lint:fix`       | ESLint with automatic fixes                                |
 | `pnpm format`         | Prettier write                                             |
@@ -366,11 +375,14 @@ GitHub Actions runs:
 - **Quality** — format check, ESLint, typecheck, coverage, build, manypkg, Knip, CDK synth, actionlint.
 - **Database** — bootstraps a PostGIS service, applies migrations, checks migration drift, runs the smoke test.
 - **Browser smoke** — Playwright public tests; authenticated tests run when the Auth0 test-tenant values are configured.
-- **Security** — CodeQL, Dependency Review, gitleaks, and a production dependency audit.
+- **Analyze** — CodeQL.
+- **Dependency Review** — high-severity dependency review on pull requests.
+- **Secret scan** — gitleaks.
+- **Production dependency audit** — `pnpm audit --prod`.
 
-Pull requests also require a Conventional Commit-style title.
+Pull requests also require a Conventional Commit-style title (**PR title**).
 
-Required checks and branch protection rules are documented in [CONTRIBUTING.md](CONTRIBUTING.md). The short version: protect `main`, require a pull request and one approval, and require the quality, database, and security checks.
+Required checks and branch protection rules are in [docs/github-setup.md](docs/github-setup.md). The short version: protect `main`, require a pull request and one approval, and require **Quality**, **Database**, **Secret scan**, and **Production dependency audit**. Add **Analyze** and **Dependency Review** when GitHub Advanced Security is on. **Browser smoke** stays optional until its run history is stable.
 
 ### Remote build cache
 
@@ -381,7 +393,7 @@ pnpm exec turbo login
 pnpm exec turbo link
 ```
 
-CI reads `TURBO_TOKEN` from repository secrets and `TURBO_TEAM` from repository variables. Do not put the token in `.env`; Turbo does not read the app `.env` for this, and a `VITE_` prefix would expose it to the browser.
+CI reads `TURBO_TOKEN` from repository secrets and `TURBO_TEAM` from repository variables. Do not put the token in `.env`; Turbo does not read the app `.env` for this, and a `VITE_` prefix would expose it to the browser. The full list is in [docs/github-setup.md](docs/github-setup.md).
 
 Without those values, CI still runs. It simply does not use the shared cache.
 
@@ -472,7 +484,7 @@ CI does not deploy today. It validates formatting, types, tests, builds, migrati
 
 **Seed data does not belong to my login**
 
-- Seeded users use fake Auth0 subjects. Map your development Auth0 `sub` to a seeded row, or create a fresh account.
+- The `mark` seed user already uses an `auth0|...` subject. Other demo users use subjects such as `seed|ava_lane`. Map your development Auth0 `sub` to a seeded row, or create a fresh account.
 
 **`pnpm smoke` cannot connect**
 

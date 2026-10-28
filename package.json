@@ -32,10 +32,10 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "check:ci": "pnpm check && pnpm check:packages && pnpm knip && pnpm infra:synth",
+    "check:ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm check:packages && pnpm knip && pnpm infra:synth",
     "check:packages": "manypkg check",
     "knip": "knip",
-    "infra:synth": "pnpm --filter @opulent/infra run synth",
+    "infra:synth": "turbo run synth --filter=@opulent/infra",
     "db:drift": "pnpm db:generate && git diff --exit-code -- packages/db/migrations",
     "prepare": "husky"
   },

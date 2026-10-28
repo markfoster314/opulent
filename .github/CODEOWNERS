@@ -1,6 +1,14 @@
 # Owners are asked for review on pull requests that touch these paths.
-# Replace the personal handle with team handles as the team grows.
+# Keep the personal handle until GitHub teams exist. Then replace per path:
+#   /apps/api/     API
+#   /apps/web/     Web
+#   /packages/     Shared libraries
+#   /jobs/         Background jobs
+#   /infra/        AWS CDK
+#   /.github/      CI and repository rules
+#   /docs/         Engineering docs
 # The last matching pattern wins, so keep `*` first.
+# See docs/github-setup.md.
 
 *                     @markfoster314
 

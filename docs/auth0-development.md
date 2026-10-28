@@ -37,7 +37,7 @@ The API verifies JWTs with the tenant JWKS. It does not use an Auth0 client secr
 
 ## Seed data
 
-Seeded users have fake subjects such as `seed|mark`. A real Auth0 login has a subject such as `auth0|...`. If no user row has that subject, the API creates a new empty account.
+The `mark` seed user already uses an `auth0|...` subject. Other demo users use subjects such as `seed|ava_lane`. A real Auth0 login has a subject such as `auth0|...`. If no user row has that subject, the API creates a new empty account.
 
 To use seeded data locally, update one seeded row's `auth0Sub` to the development user's Auth0 subject. Do this only in the development database, never in production.
 

@@ -26,6 +26,3 @@ test-results/
 infra/cdk.context.json
 .dsh-worktrees/
 playwright/.auth/
-
-# Turborepo
-.turbo
