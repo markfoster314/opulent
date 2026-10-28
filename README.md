@@ -42,7 +42,7 @@ pnpm dev
 | Path              | Role                                                                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------ |
 | `apps/web`        | React SPA. [apps/web/README.md](apps/web/README.md)                                              |
-| `apps/api`        | Hono API. One Lambda. `src/modules` per domain. `src/index.ts` local, `src/lambda.ts` deploy     |
+| `apps/api`        | Hono API. One Lambda. [apps/api/README.md](apps/api/README.md)                                   |
 | `packages/shared` | Zod schemas and shared types                                                                     |
 | `packages/db`     | Drizzle schema, migrations, seed                                                                 |
 | `jobs/card-sync`  | Scryfall mirror. Scheduled ECS task                                                              |

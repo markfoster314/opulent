@@ -4,6 +4,7 @@
   "globalDependencies": ["tsconfig.base.json", "tsconfig.json"],
   "globalEnv": [
     "NODE_ENV",
+    "LOG_LEVEL",
     "DATABASE_URL",
     "AUTH0_DOMAIN",
     "AUTH0_AUDIENCE",

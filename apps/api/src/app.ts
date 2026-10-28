@@ -2,11 +2,11 @@ import { ensureDatabaseUrl, getDatabase } from '@opulent/db';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import { getEnv } from './env';
 import type { AppEnv } from './lib/context';
+import { log } from './lib/log';
 import { onError, onNotFound } from './middleware/error';
 import { cardRoutes } from './modules/cards/routes';
 import { groupRoutes } from './modules/groups/routes';
@@ -32,8 +32,18 @@ export function createApp() {
   const app = new Hono<AppEnv>();
 
   app.use('*', requestId());
+  app.use('*', async (c, next) => {
+    const started = performance.now();
+    await next();
+    log.info({
+      requestId: c.get('requestId'),
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      duration: Math.round(performance.now() - started),
+    });
+  });
   app.use('*', limitBody);
-  app.use('*', logger());
   app.use('*', secureHeaders());
   app.use(
     '*',

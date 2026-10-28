@@ -10,6 +10,7 @@ export interface Auth0Claims {
 
 export interface AppEnv {
   Variables: {
+    requestId?: string;
     db: Database;
     /** Present after requireAuth. */
     auth: Auth0Claims;

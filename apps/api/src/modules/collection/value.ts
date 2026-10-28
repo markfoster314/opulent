@@ -24,6 +24,7 @@ import {
   type CollectionValueHistory,
   type PriceRange,
 } from '@opulent/shared';
+import { errorText, log } from '../../lib/log';
 
 /** The English printing, used for a price when the owned printing has none. */
 const englishValueCards = alias(cards, 'english_value_card');
@@ -239,7 +240,7 @@ export async function getCollectionValueHistory(
         snapshotByDay.set(day, round2(totals[indexByDay.get(day)!]!));
       }
     } catch (error) {
-      console.error('collection value backfill failed', error);
+      log.error({ message: errorText(error) }, 'collection value backfill failed');
     }
   }
 

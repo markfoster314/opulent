@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts | pino-pretty --colorize --singleLine --translateTime SYS:HH:MM:ss --ignore pid,hostname,method,path,status,duration,message --messageFormat '{if method}{method} {path}{end}{if status} {status} {duration}ms{end}{if msg} {msg}{end}{if message} - {message}{end}'",
     "smoke": "tsx src/smoke-test.ts",
     "build": "esbuild src/lambda.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/lambda.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
     "typecheck": "tsc --noEmit"
@@ -17,11 +17,13 @@
     "drizzle-orm": "catalog:",
     "hono": "^4.13.14",
     "jose": "^5.9.6",
+    "pino": "^10.4.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "esbuild": "catalog:",
+    "pino-pretty": "^13.2.0",
     "tsx": "catalog:",
     "typescript": "catalog:"
   }

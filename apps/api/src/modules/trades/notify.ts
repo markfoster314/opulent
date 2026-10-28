@@ -2,6 +2,7 @@ import type { Database, TradeRow } from '@opulent/db';
 import { users } from '@opulent/db';
 import { eq } from 'drizzle-orm';
 import { getEnv } from '../../env';
+import { errorText, log } from '../../lib/log';
 
 export function notifyTurn(db: Database, trade: TradeRow, actorId: string): void {
   const env = getEnv();
@@ -12,7 +13,7 @@ export function notifyTurn(db: Database, trade: TradeRow, actorId: string): void
 
   // Never let email trouble fail the trade request itself.
   void sendTurnEmail(db, trade, actorId, env.RESEND_API_KEY, env.EMAIL_FROM).catch((error) => {
-    console.error('trade email failed', error);
+    log.error({ message: errorText(error) }, 'trade email failed');
   });
 }
 

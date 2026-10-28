@@ -2,10 +2,12 @@ import type { ApiErrorBody } from '@opulent/shared';
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { ZodError } from 'zod';
+import type { AppEnv } from '../lib/context';
 import { ApiError } from '../lib/http';
+import { errorText, log, redactEmails } from '../lib/log';
 
 /** Single failure exit: hide internals from responses but log enough to debug. */
-export function onError(error: Error, c: Context): Response {
+export function onError(error: Error, c: Context<AppEnv>): Response {
   if (error instanceof ApiError) {
     const body: ApiErrorBody = {
       error: {
@@ -31,12 +33,16 @@ export function onError(error: Error, c: Context): Response {
     return c.json(body, error.status as 400);
   }
 
-  console.error('unhandled_error', {
-    path: c.req.path,
-    method: c.req.method,
-    message: error.message,
-    stack: error.stack,
-  });
+  log.error(
+    {
+      requestId: c.get('requestId'),
+      path: c.req.path,
+      method: c.req.method,
+      message: errorText(error),
+      stack: error.stack ? redactEmails(error.stack) : undefined,
+    },
+    'unhandled_error',
+  );
 
   const body: ApiErrorBody = {
     error: { code: 'internal_error', message: 'Something went wrong on our side' },
