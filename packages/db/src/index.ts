@@ -1,4 +1,5 @@
 export * from './client';
+export * from './collection-value';
 export * from './connection-string';
 export * from './price-partitions';
 export * from './price-series';

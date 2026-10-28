@@ -6,21 +6,26 @@ export type Database = ReturnType<typeof createDatabase>;
 
 export interface DatabaseOptions {
   connectionString: string;
-  /** Keep at 1 in Lambda: each warm copy holds its own pool, and RDS Proxy shares the connections. */
+  /** One connection per Lambda copy. The function concurrency cap keeps the total under the database limit. */
   maxConnections?: number;
-  /** Must be false through RDS Proxy, which may hand the next query to a different backend session. */
+  /** On for a direct session. Turn off only if a pool may move the next query to another session. */
   usePreparedStatements?: boolean;
 }
 
 export function createDatabase(options: DatabaseOptions) {
   const sql = postgres(options.connectionString, {
     max: options.maxConnections ?? 1,
-    prepare: options.usePreparedStatements ?? false,
+    prepare: options.usePreparedStatements ?? true,
     idle_timeout: 20,
     connect_timeout: 10,
   });
 
   return drizzle(sql, { schema, logger: process.env.DB_LOG === 'true' });
+}
+
+/** Ends the pool so a one-shot job can exit. An open pool keeps the process alive. */
+export async function closeDatabase(db: Database): Promise<void> {
+  await db.$client.end({ timeout: 5 });
 }
 
 let cached: Database | undefined;

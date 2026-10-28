@@ -3,7 +3,7 @@ import { cards } from '@opulent/db';
 import { sql } from 'drizzle-orm';
 import type { CatalogSource } from './catalog';
 
-const BATCH_SIZE = 500;
+export const BATCH_SIZE = 500;
 
 /** Refresh existing rows instead of skipping; daily price changes are the point. */
 async function writeBatch(db: Database, batch: NewCardRow[]): Promise<void> {

@@ -6,6 +6,8 @@ import { CARD_GAME, type CardImageUris, type CardPrices } from '@opulent/shared'
 import type { CatalogSource } from './catalog';
 
 const BULK_DATA_URL = 'https://api.scryfall.com/bulk-data';
+const LISTING_TIMEOUT_MS = 30_000;
+const DOWNLOAD_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** Scryfall requires a real User-Agent and explicit Accept; generic defaults can get us blocked. */
 function headers(): Record<string, string> {
@@ -24,11 +26,47 @@ export interface BulkDataEntry {
   compressed_size: number;
 }
 
-export async function listBulkData(): Promise<BulkDataEntry[]> {
-  const response = await fetch(BULK_DATA_URL, { headers: headers() });
-  if (!response.ok) {
-    throw new Error(`Scryfall bulk-data listing failed: ${response.status} ${response.statusText}`);
+function retryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+class ScryfallHttpError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
   }
+}
+
+/** One retry. A 503 or a stall should not fail the night. A 404 should. */
+async function fetchScryfall(url: string, timeoutMs: number): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: headers(),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (response.ok && response.body) return response;
+      await response.body?.cancel();
+      throw new ScryfallHttpError(
+        `Scryfall request failed: ${response.status} ${response.statusText}`,
+        retryableStatus(response.status),
+      );
+    } catch (error) {
+      if (error instanceof ScryfallHttpError && !error.retryable) throw error;
+      lastError = error;
+      if (attempt === 1) throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Scryfall request failed');
+}
+
+export async function listBulkData(): Promise<BulkDataEntry[]> {
+  const response = await fetchScryfall(BULK_DATA_URL, LISTING_TIMEOUT_MS);
   const body = (await response.json()) as { data: BulkDataEntry[] };
   return body.data;
 }
@@ -43,25 +81,34 @@ export async function findBulkData(type: string): Promise<BulkDataEntry> {
   return entry;
 }
 
-/** Gzipped JSONL (~80 MB) streams line by line; nothing is held whole or written to disk. */
-export async function* streamBulkCards(entry: BulkDataEntry): AsyncGenerator<ScryfallCard> {
-  const response = await fetch(entry.jsonl_download_uri, { headers: headers() });
-  if (!response.ok || !response.body) {
-    throw new Error(`Bulk download failed: ${response.status} ${response.statusText}`);
-  }
-
+/** Gzipped JSONL streams line by line; nothing is held whole or written to disk. */
+export async function* streamBulkCards(
+  entry: BulkDataEntry,
+  maxRows?: number,
+): AsyncGenerator<ScryfallCard> {
+  const response = await fetchScryfall(entry.jsonl_download_uri, DOWNLOAD_TIMEOUT_MS);
+  if (!response.body) throw new Error('Scryfall download has no body');
   const lines = createInterface({
     input: Readable.fromWeb(response.body).pipe(createGunzip()),
     crlfDelay: Infinity,
   });
 
-  for await (const line of lines) {
-    if (!line.trim()) continue;
-    yield JSON.parse(line) as ScryfallCard;
+  try {
+    let seen = 0;
+    for await (const line of lines) {
+      if (maxRows !== undefined && seen >= maxRows) break;
+      if (!line.trim()) continue;
+      seen += 1;
+      yield JSON.parse(line) as ScryfallCard;
+    }
+  } finally {
+    lines.close();
+    // The reader may already be done. Cancel stops a capped download.
+    await response.body.cancel().catch(() => undefined);
   }
 }
 
-export function scryfallSource(bulkType: string): CatalogSource<ScryfallCard> {
+export function scryfallSource(bulkType: string, maxRows?: number): CatalogSource<ScryfallCard> {
   return {
     name: `scryfall:${bulkType}`,
     game: CARD_GAME,
@@ -71,7 +118,7 @@ export function scryfallSource(bulkType: string): CatalogSource<ScryfallCard> {
         `source: ${entry.name} (${bulkType}), updated ${entry.updated_at}, ` +
           `${(entry.compressed_size / 1024 / 1024).toFixed(1)} MB compressed`,
       );
-      yield* streamBulkCards(entry);
+      yield* streamBulkCards(entry, maxRows);
     },
     toRow: toCardRow,
   };

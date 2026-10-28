@@ -6,6 +6,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -45,10 +46,10 @@ export class OpulentTutorStack extends cdk.Stack {
 
     // Network
 
-    // One NAT, not one per AZ: a second costs about 32 USD a month for redundancy the MVP does not need.
+    // One zone and one NAT. The database is already single-zone, so a second zone does not keep the site up.
     const vpc = new ec2.Vpc(this, 'Vpc', {
-      maxAzs: 2,
-      natGateways: isProd ? 1 : 1,
+      maxAzs: 1,
+      natGateways: 1,
     });
 
     // Database
@@ -57,10 +58,10 @@ export class OpulentTutorStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_16_6,
       }),
-      // t4g.micro is roughly 12 USD a month and is enough for the MVP.
+      // t4g.micro is about 12 USD a month. Move to small when memory or CPU credits get tight.
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE4_GRAVITON,
-        isProd ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO,
+        ec2.InstanceSize.MICRO,
       ),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -74,44 +75,32 @@ export class OpulentTutorStack extends cdk.Stack {
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    /** RDS Proxy keeps one shared Postgres pool, so a traffic spike cannot exhaust the database with per-copy connections. */
-    const dbProxy = database.addProxy('DbProxy', {
-      vpc,
-      secrets: [database.secret!],
-      requireTLS: true,
-      // Prepared statements must be disabled in the client when pinning is off.
-      borrowTimeout: cdk.Duration.seconds(30),
-      maxConnectionsPercent: 90,
-    });
-
     /** No DATABASE_URL with a password: that would put it in the CloudFormation template and the Lambda console, so compute assembles it from Secrets Manager. */
-    const proxyDatabaseEnvironment = {
+    const databaseEnvironment = {
       DB_SECRET_ARN: database.secret!.secretArn,
-      DB_HOST: dbProxy.endpoint,
+      DB_HOST: database.instanceEndpoint.hostname,
       DB_NAME: 'opulent_tutor',
       DB_PORT: '5432',
-    };
-    // One long job does not need the proxy, and the proxy blocks session locks the migrator uses.
-    const directDatabaseEnvironment = {
-      ...proxyDatabaseEnvironment,
-      DB_HOST: database.instanceEndpoint.hostname,
     };
 
     // API: the whole backend in one Lambda function
 
     const apiFunction = new lambda.Function(this, 'ApiFunction', {
       runtime: lambda.Runtime.NODEJS_24_X,
+      architecture: lambda.Architecture.ARM_64,
       handler: 'lambda.handler',
       // Built by `pnpm --filter @opulent/api run build` before deploying.
       code: lambda.Code.fromAsset(path.join(repoRoot, 'apps', 'api', 'dist')),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      memorySize: 512,
+      memorySize: 1024,
       timeout: cdk.Duration.seconds(20),
+      // One connection per copy. The cap keeps the total under the database limit.
+      reservedConcurrentExecutions: 20,
       logRetention: logs.RetentionDays.TWO_WEEKS,
       environment: {
         NODE_ENV: 'production',
-        ...proxyDatabaseEnvironment,
+        ...databaseEnvironment,
         AUTH0_DOMAIN: props.auth0Domain,
         AUTH0_AUDIENCE: props.auth0Audience,
         CORS_ORIGIN: props.corsOrigin,
@@ -122,8 +111,7 @@ export class OpulentTutorStack extends cdk.Stack {
       },
     });
 
-    dbProxy.grantConnect(apiFunction, 'opulent');
-    dbProxy.connections.allowFrom(apiFunction, ec2.Port.tcp(5432));
+    database.connections.allowFrom(apiFunction, ec2.Port.tcp(5432), 'api');
     database.secret!.grantRead(apiFunction);
 
     const migrationsHash = createHash('sha256')
@@ -144,6 +132,7 @@ export class OpulentTutorStack extends cdk.Stack {
       projectRoot: repoRoot,
       depsLockFilePath: path.join(repoRoot, 'pnpm-lock.yaml'),
       runtime: lambda.Runtime.NODEJS_24_X,
+      architecture: lambda.Architecture.ARM_64,
       handler: 'handler',
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -152,7 +141,7 @@ export class OpulentTutorStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       logRetention: logs.RetentionDays.TWO_WEEKS,
       environment: {
-        ...directDatabaseEnvironment,
+        ...databaseEnvironment,
         MIGRATIONS_HASH: migrationsHash,
       },
       bundling: {
@@ -195,11 +184,11 @@ export class OpulentTutorStack extends cdk.Stack {
       createDefaultStage: false,
     });
 
-    // One throttle for the whole API. A per-user limit would need another store.
+    // Matches the function cap. A per-user limit would need another store.
     httpApi.addStage('DefaultStage', {
       stageName: '$default',
       autoDeploy: true,
-      throttle: { rateLimit: 20, burstLimit: 50 },
+      throttle: { rateLimit: 20, burstLimit: 20 },
     });
 
     // Nightly Scryfall mirror refresh
@@ -210,11 +199,16 @@ export class OpulentTutorStack extends cdk.Stack {
     const cardSyncTask = new ecs.FargateTaskDefinition(this, 'CardSyncTask', {
       cpu: 512,
       memoryLimitMiB: 1024,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
     });
 
     cardSyncTask.addContainer('card-sync', {
       image: ecs.ContainerImage.fromAsset(repoRoot, {
         file: path.join('jobs', 'card-sync', 'Dockerfile'),
+        platform: ecrAssets.Platform.LINUX_ARM64,
         exclude: [
           'cdk.out',
           'infra/cdk.out',
@@ -234,7 +228,7 @@ export class OpulentTutorStack extends cdk.Stack {
         logRetention: logs.RetentionDays.ONE_MONTH,
       }),
       environment: {
-        ...directDatabaseEnvironment,
+        ...databaseEnvironment,
         SCRYFALL_BULK_TYPE: 'all_cards',
         // Scryfall requires an accurate User-Agent on every request.
         SCRYFALL_USER_AGENT: 'OpulentTutor/0.1 (+https://opulenttutor.com)',
@@ -243,7 +237,6 @@ export class OpulentTutorStack extends cdk.Stack {
 
     database.secret!.grantRead(cardSyncTask.taskRole);
 
-    // The batch writer connects straight to the instance: one long-lived connection gains nothing from the proxy.
     const cardSyncSecurityGroup = new ec2.SecurityGroup(this, 'CardSyncSecurityGroup', {
       vpc,
       description: 'Nightly Scryfall mirror refresh task',

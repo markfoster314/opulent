@@ -1,10 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import {
+  askingValueSql,
   cardPriceHistory,
   cards,
   collectionItems,
   collectionValueSnapshots,
+  englishMatch,
+  englishValueCards,
   groupMemberships,
   type Database,
 } from '@opulent/db';
@@ -26,18 +28,7 @@ import {
 } from '@opulent/shared';
 import { errorText, log } from '../../lib/log';
 
-/** The English printing, used for a price when the owned printing has none. */
-const englishValueCards = alias(cards, 'english_value_card');
-
-function englishMatch() {
-  return and(
-    eq(englishValueCards.setCode, cards.setCode),
-    eq(englishValueCards.collectorNumber, cards.collectorNumber),
-    eq(englishValueCards.lang, 'en'),
-    sql`jsonb_exists(${englishValueCards.raw}->'games', 'paper')`,
-    sql`${englishValueCards.layout} IS DISTINCT FROM 'art_series'`,
-  );
-}
+export { snapshotCollectionValues } from '@opulent/db';
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -266,24 +257,6 @@ export async function getCollectionValueHistory(
   return finish(points);
 }
 
-/** Per-stack asking value in SQL, including the English price fallback. */
-function askingValueSql() {
-  const marketPrice = sql`CASE ${collectionItems.finish}::text
-    WHEN 'foil' THEN NULLIF(${cards.prices}->>'usd_foil', '')::numeric
-    WHEN 'etched' THEN NULLIF(${cards.prices}->>'usd_etched', '')::numeric
-    ELSE NULLIF(${cards.prices}->>'usd', '')::numeric END`;
-  const englishPrice = sql`CASE ${collectionItems.finish}::text
-    WHEN 'foil' THEN NULLIF(${englishValueCards.prices}->>'usd_foil', '')::numeric
-    WHEN 'etched' THEN NULLIF(${englishValueCards.prices}->>'usd_etched', '')::numeric
-    ELSE NULLIF(${englishValueCards.prices}->>'usd', '')::numeric END`;
-  const market = sql`COALESCE(${marketPrice}, ${englishPrice})`;
-  const asking = sql`CASE ${collectionItems.priceKind}::text
-    WHEN 'custom' THEN NULLIF(${collectionItems.priceAmount}, '')::numeric
-    WHEN 'percent' THEN ROUND(${market} * ${collectionItems.pricePercent} / 100.0, 2)
-    ELSE ${market} END`;
-  return sql<string>`COALESCE(${asking}, 0) * ${collectionItems.quantity}`;
-}
-
 function todayDay(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -312,22 +285,6 @@ export async function snapshotUserValue(
       target: [collectionValueSnapshots.userId, collectionValueSnapshots.day],
       set: { value: sql`excluded.value` },
     });
-}
-
-export async function snapshotCollectionValues(db: Database, day = todayDay()): Promise<number> {
-  const rows = await db.execute(sql`
-    INSERT INTO collection_value_snapshots (user_id, day, value)
-    SELECT collection_items.user_id, ${day}::date, COALESCE(SUM(${askingValueSql()}), 0)
-    FROM collection_items
-    INNER JOIN cards ON cards.scryfall_id = collection_items.scryfall_id
-    LEFT JOIN cards AS english_value_card ON ${englishMatch()}
-    WHERE cards.game = ${CARD_GAME}
-    GROUP BY collection_items.user_id
-    ON CONFLICT (user_id, day) DO UPDATE SET value = EXCLUDED.value
-    RETURNING user_id
-  `);
-
-  return rows.length;
 }
 
 export async function getGroupValues(db: Database, userId: string): Promise<Map<string, string>> {

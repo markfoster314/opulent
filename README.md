@@ -8,7 +8,7 @@ pnpm workspace, Turborepo. Node 24, pnpm 10 via Corepack. GitHub repo `opulent`.
 
 Built: accounts, collection, groups, wants, matches, binders, trades, CSV import/export, nightly Scryfall mirror.
 
-Not built: a CI deploy to AWS, authenticated browser coverage on a dedicated Auth0 tenant.
+Not built: authenticated browser coverage on a dedicated Auth0 tenant.
 
 ## Run
 
@@ -45,7 +45,7 @@ pnpm dev
 | `apps/api`        | Hono API. One Lambda. [apps/api/README.md](apps/api/README.md)                                   |
 | `packages/shared` | Zod schemas and shared types                                                                     |
 | `packages/db`     | Drizzle schema, migrations, seed                                                                 |
-| `jobs/card-sync`  | Scryfall mirror. Scheduled ECS task                                                              |
+| `jobs/card-sync`  | Scryfall mirror. [jobs/card-sync/README.md](jobs/card-sync/README.md)                            |
 | `infra`           | AWS CDK. [infra/README.md](infra/README.md)                                                      |
 | `e2e`             | Playwright                                                                                       |
 | `docs`            | [Monorepo](docs/monorepo.md), [GitHub](docs/github-setup.md), [Auth0](docs/auth0-development.md) |
@@ -54,9 +54,9 @@ API prefixes: `/health`, `/v1/users`, `/v1/places`, `/v1/cards`, `/v1/collection
 
 ## Shape
 
-Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → RDS Proxy → PostgreSQL 16 + PostGIS.
+Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → PostgreSQL 16 + PostGIS.
 
-Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. `cdk deploy` applies the schema and uploads the site. CI synths the stack and checks the template. It does not deploy.
+Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. A green push to `main` deploys production. Setup: [docs/deploy.md](docs/deploy.md).
 
 ## Commands
 
@@ -85,7 +85,7 @@ pnpm --filter @opulent/infra run deploy -- \
   --context corsOrigin=...
 ```
 
-`pnpm build` first. Deploy runs the schema migration and uploads `apps/web/dist`. The site reads `/config.json` for the API address and Auth0 settings. A prod deploy (`stage=prod`) also requires `webOrigin` (https), `emailFrom`, and `resendApiKey`. Optional: `alarmEmail`.
+`pnpm build` first. Deploy runs the schema migration and uploads `apps/web/dist`. The site reads `/config.json` for the API address and Auth0 settings. A prod deploy (`stage=prod`) also requires `webOrigin` (https), `emailFrom`, and `resendApiKey`. Optional: `alarmEmail`. Production from GitHub: [docs/deploy.md](docs/deploy.md).
 
 ## Credits
 

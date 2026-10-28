@@ -1,5 +1,9 @@
-import type { Database } from '@opulent/db';
-import { ensurePricePartitions, pricePartitionWindow } from '@opulent/db';
+import {
+  ensurePricePartitions,
+  heavyStatementTimeout,
+  pricePartitionWindow,
+  type Database,
+} from '@opulent/db';
 import { sql } from 'drizzle-orm';
 
 /** Change points only; cast numerics compare by value and CURRENT_DATE makes reruns idempotent. */
@@ -8,7 +12,9 @@ export async function recordDailyPrices(db: Database): Promise<number> {
   const window = pricePartitionWindow();
   await ensurePricePartitions(db, window.from, window.to);
 
-  const result = await db.execute(sql`
+  return db.transaction(async (tx) => {
+    await tx.execute(heavyStatementTimeout);
+    const result = await tx.execute(sql`
     WITH latest AS (
       SELECT DISTINCT ON (scryfall_id)
         scryfall_id, usd, usd_foil, usd_etched, eur, eur_foil, tix
@@ -47,5 +53,6 @@ export async function recordDailyPrices(db: Database): Promise<number> {
       tix = excluded.tix
   `);
 
-  return Number((result as unknown as { count?: number }).count ?? 0);
+    return Number((result as unknown as { count?: number }).count ?? 0);
+  });
 }

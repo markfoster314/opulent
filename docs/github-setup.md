@@ -1,6 +1,6 @@
 # GitHub setup
 
-Settings that match `.github` workflows. Deploy and AWS OIDC are not here yet.
+Settings that match `.github` workflows. Production deploy: [deploy.md](deploy.md).
 
 ## `main`
 
@@ -32,7 +32,7 @@ Private repos: CodeQL and Dependency Review need GitHub Advanced Security. If it
 
 ## Secrets and variables
 
-Secrets: `TURBO_TOKEN`, `E2E_AUTH0_EMAIL`, `E2E_AUTH0_PASSWORD`, `GITLEAKS_LICENSE` (org repos).
+Secrets: `TURBO_TOKEN`, `E2E_AUTH0_EMAIL`, `E2E_AUTH0_PASSWORD`, `GITLEAKS_LICENSE` (org repos). Production deploy secrets live on the `production` environment. [deploy.md](deploy.md).
 
 Variables: `TURBO_TEAM`, `E2E_AUTH0_DOMAIN`, `E2E_AUTH0_CLIENT_ID`, `E2E_AUTH0_AUDIENCE`.
 

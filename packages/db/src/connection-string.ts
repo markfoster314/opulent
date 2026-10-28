@@ -14,19 +14,24 @@ async function resolve(): Promise<string> {
   }
 
   const client = new SecretsManagerClient({});
-  const response = await client.send(new GetSecretValueCommand({ SecretId: secretArn }));
-  if (!response.SecretString) {
-    throw new Error(`Secret ${secretArn} has no string value`);
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretArn }));
+    if (!response.SecretString) {
+      throw new Error(`Secret ${secretArn} has no string value`);
+    }
+
+    const secret = JSON.parse(response.SecretString) as { username: string; password: string };
+    const database = process.env.DB_NAME ?? 'opulent_tutor';
+    const port = process.env.DB_PORT ?? '5432';
+
+    return (
+      `postgres://${encodeURIComponent(secret.username)}:${encodeURIComponent(secret.password)}` +
+      `@${host}:${port}/${database}?sslmode=require`
+    );
+  } finally {
+    // A live client keeps the process open after the job has finished.
+    client.destroy();
   }
-
-  const secret = JSON.parse(response.SecretString) as { username: string; password: string };
-  const database = process.env.DB_NAME ?? 'opulent_tutor';
-  const port = process.env.DB_PORT ?? '5432';
-
-  return (
-    `postgres://${encodeURIComponent(secret.username)}:${encodeURIComponent(secret.password)}` +
-    `@${host}:${port}/${database}?sslmode=require`
-  );
 }
 
 export function resolveConnectionString(): Promise<string> {

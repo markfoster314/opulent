@@ -1,0 +1,83 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Production
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      TURBO_TELEMETRY_DISABLED: '1'
+      VITE_AUTH0_DOMAIN: ci.invalid
+      VITE_AUTH0_CLIENT_ID: ci-client
+      VITE_AUTH0_AUDIENCE: https://api.invalid
+      VITE_API_BASE_URL: http://127.0.0.1:8787
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - run: pnpm install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+      - run: pnpm build
+      - name: Deploy
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ steps.account.outputs.id }}
+          CDK_DEFAULT_REGION: us-east-1
+          AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+          AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+          AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+          WEB_ORIGIN: ${{ secrets.WEB_ORIGIN }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALARM_EMAIL: ${{ secrets.ALARM_EMAIL }}
+        run: |
+          args=(
+            --require-approval never
+            --context stage=prod
+            --context "auth0Domain=${AUTH0_DOMAIN}"
+            --context "auth0Audience=${AUTH0_AUDIENCE}"
+            --context "auth0ClientId=${AUTH0_CLIENT_ID}"
+            --context "corsOrigin=${CORS_ORIGIN}"
+            --context "webOrigin=${WEB_ORIGIN}"
+            --context "emailFrom=${EMAIL_FROM}"
+            --context "resendApiKey=${RESEND_API_KEY}"
+          )
+          if [ -n "${ALARM_EMAIL}" ]; then
+            args+=(--context "alarmEmail=${ALARM_EMAIL}")
+          fi
+          pnpm --filter @opulent/infra run deploy -- "${args[@]}"
