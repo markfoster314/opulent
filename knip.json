@@ -12,6 +12,5 @@
       "entry": ["src/migrate-aws.ts"]
     }
   },
-  "ignoreDependencies": ["tsx", "esbuild"],
-  "ignore": ["eslint/**"]
+  "ignoreDependencies": ["esbuild"]
 }
