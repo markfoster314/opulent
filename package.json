@@ -4,10 +4,10 @@
   "private": true,
   "license": "UNLICENSED",
   "description": "Trade binders for Magic: The Gathering players and collectors",
-  "packageManager": "pnpm@10.34.9",
+  "packageManager": "pnpm@12.16.1",
   "engines": {
     "node": ">=26.13.0 <27",
-    "pnpm": ">=10.26.1 <11"
+    "pnpm": ">=10.26.1 <13"
   },
   "scripts": {
     "dev": "turbo run dev",
