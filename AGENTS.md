@@ -36,11 +36,12 @@ Swap `path/to/file` for the file you changed.
 ```bash
 pnpm check
 pnpm dev
+pnpm dev:tools
 pnpm test:e2e
 pnpm smoke
 ```
 
-`pnpm check` is format, lint, types, and unit tests. No Docker or Auth0. `pnpm test:e2e` is for a browser change. `pnpm smoke` is for a database change. When to add a test: [docs/testing.md](docs/testing.md).
+`pnpm check` is format, lint, types, and unit tests. No Docker or Auth0. `pnpm test:e2e` is for a browser change. `pnpm smoke` is for a database change. When to add a test: [docs/testing.md](docs/testing.md). `pnpm dev:tools` opens the console at http://localhost:5173/__dev; run `pnpm dev` first.
 
 # Code style
 
@@ -48,18 +49,19 @@ pnpm smoke
 - ESLint allows zero warnings. Do not add `eslint-disable` to hide a new problem.
 - A comment earns its place only when it explains why, flags a gotcha, or cites an external constraint.
 - New dependency versions go in the pnpm catalog in `pnpm-workspace.yaml`. Workspace packages use `workspace:*`.
-- `@opulent/shared` and `@opulent/db` export TypeScript source. Do not add a `build` script to those packages or to `@opulent/infra`.
+- `@opulent/shared`, `@opulent/db`, and `@opulent/devtools` export TypeScript source. Do not add a `build` script to those packages or to `@opulent/infra`.
 
 # Packages
 
 - `@opulent/web` — [apps/web/AGENTS.md](apps/web/AGENTS.md)
+- `@opulent/devtools` — [tools/devtools/README.md](tools/devtools/README.md)
 - `@opulent/api` — [apps/api/AGENTS.md](apps/api/AGENTS.md)
 - `@opulent/shared` — [packages/shared/AGENTS.md](packages/shared/AGENTS.md)
 - `@opulent/db` — [packages/db/AGENTS.md](packages/db/AGENTS.md)
 - `@opulent/card-sync` — [jobs/card-sync/AGENTS.md](jobs/card-sync/AGENTS.md)
 - `@opulent/infra` — [infra/AGENTS.md](infra/AGENTS.md)
 
-An app does not import another app, a job, or infra. A package does not import an app, a job, or infra. A job does not import an app or infra. Infra imports no workspace package.
+An app does not import another app, a job, or infra. A package does not import an app, a job, or infra. A job does not import an app or infra. A tool does not import an app, a job, or infra. Infra imports no workspace package.
 
 # Security
 

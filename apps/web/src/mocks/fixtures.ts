@@ -235,3 +235,11 @@ export const emptySummary = {
   forTradeValue: '0.00',
   onTheTable: 0,
 } satisfies CollectionSummary;
+
+export const mockNewUser = {
+  ...mockMe,
+  username: 'new_tutor',
+  onboarded: false,
+  city: null,
+  bio: null,
+} satisfies Me;

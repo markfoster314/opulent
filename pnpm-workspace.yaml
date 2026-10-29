@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'jobs/*'
+  - 'tools/*'
   - 'infra'
 allowBuilds:
   esbuild: true

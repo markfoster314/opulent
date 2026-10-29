@@ -1,36 +1,34 @@
+import type { AuthPreset } from '@opulent/devtools/state';
+import { readDevState } from '@opulent/devtools/state';
 import { HttpResponse, http } from 'msw/http';
 import { delay } from 'msw/utils/delay';
+import { passthrough } from 'msw/utils/passthrough';
+import { currentAuthPreset } from '@/app/session';
 import {
   emptySummary,
   mockCards,
   mockCollectionItem,
   mockGroup,
   mockHighlight,
-  mockMatch,
   mockMe,
+  mockNewUser,
   mockProfile,
-  mockSummary,
-  mockTrade,
   mockTradeBinder,
   mockTradeDetail,
   mockWantItem,
   mockWantList,
 } from './fixtures';
-import { readScenario } from './scenario';
+import { live } from './live';
+import { resolveMock } from './plan';
 
 function errorBody(status: number, code: string, message: string) {
   return HttpResponse.json({ error: { code, message } }, { status });
 }
 
-/** Failures and the slow wait apply to every `/v1` call, including saves. */
-async function forcedResponse() {
-  const scenario = readScenario();
-  if (scenario === 'slow') await delay(2000);
-  if (scenario === 'offline') return HttpResponse.error();
-  if (scenario === '401') return errorBody(401, 'unauthorized', 'Sign in again.');
-  if (scenario === '404') return errorBody(404, 'not_found', 'Not found.');
-  if (scenario === '500') return errorBody(500, 'internal_error', 'Something went wrong.');
-  return null;
+function failureFor(status: 401 | 404 | 500) {
+  if (status === 401) return errorBody(401, 'unauthorized', 'Sign in again.');
+  if (status === 404) return errorBody(404, 'not_found', 'Not found.');
+  return errorBody(500, 'internal_error', 'Something went wrong.');
 }
 
 function withoutLists(body: unknown): unknown {
@@ -45,8 +43,11 @@ function withoutLists(body: unknown): unknown {
   return body;
 }
 
-function fixtureFor(path: string, url: URL): unknown {
-  if (path === '/v1/users/me') return mockMe;
+function fixtureFor(path: string, url: URL, preset: AuthPreset | null): unknown {
+  if (path === '/v1/users/me') {
+    if (live.me) return live.me;
+    return preset === 'newUser' ? mockNewUser : mockMe;
+  }
   if (path === '/v1/users/me/username-available') {
     return {
       username: url.searchParams.get('username') ?? '',
@@ -58,7 +59,7 @@ function fixtureFor(path: string, url: URL): unknown {
     return { items: [mockCollectionItem], nextCursor: null };
   }
   if (path.endsWith('/trade-binder')) return mockTradeBinder;
-  if (path === '/v1/collection/summary') return mockSummary;
+  if (path === '/v1/collection/summary') return live.summary;
   if (path === '/v1/collection/cards') return { items: [mockHighlight], nextCursor: null };
   if (path === '/v1/collection/highlights') return { items: [mockHighlight] };
   if (path === '/v1/collection/movers') return { gainers: [mockHighlight], losers: [] };
@@ -83,8 +84,8 @@ function fixtureFor(path: string, url: URL): unknown {
   if (path === '/v1/wants/mine/items' || path.endsWith('/items')) {
     return { items: [mockWantItem] };
   }
-  if (path === '/v1/matches') return { items: [mockMatch] };
-  if (path === '/v1/trades') return { items: [mockTrade] };
+  if (path === '/v1/matches') return { items: live.matches };
+  if (path === '/v1/trades') return { items: live.trades };
   if (/^\/v1\/trades\/[^/]+$/.test(path)) return mockTradeDetail;
   if (path.endsWith('/choices')) return { items: [], mine: [] };
   if (path === '/v1/cards/search') return { items: mockCards };
@@ -98,21 +99,48 @@ function fixtureFor(path: string, url: URL): unknown {
 
 export const handlers = [
   http.all(/\/v1\//, async ({ request }) => {
-    const forced = await forcedResponse();
-    if (forced) return forced;
-
+    const state = readDevState();
     const url = new URL(request.url);
     const path = url.pathname;
+    const preset = currentAuthPreset();
+    const plan = resolveMock({ state, auth: preset ?? 'returning', path });
+
+    if (plan.slow) await delay(2000);
+    else if (state.latencyMs > 0) await delay(state.latencyMs);
+
+    if (plan.kind === 'pass') return passthrough();
+    if (plan.kind === 'network-error') return HttpResponse.error();
+    if (plan.kind === 'timeout') {
+      await delay('infinite');
+      return new HttpResponse(null);
+    }
+    if (plan.kind === 'status') return failureFor(plan.status ?? 500);
+
+    if (request.method === 'POST' && path === '/v1/users/me/onboarding') {
+      const body = (await request.json().catch(() => ({}))) as {
+        username?: string;
+        placeId?: number | null;
+      };
+      const base = live.me ?? mockNewUser;
+      live.me = {
+        ...base,
+        username: body.username ?? base.username,
+        onboarded: true,
+        city: body.placeId ? { geonameId: body.placeId, label: 'Mock City' } : base.city,
+      };
+      return HttpResponse.json(live.me);
+    }
 
     if (request.method === 'GET' && path.endsWith('.csv')) {
-      const text = readScenario() === 'empty' ? '' : 'Name,Set,Quantity\nSolitude,mh2,1\n';
+      const text = plan.kind === 'empty' ? '' : 'Name,Set,Quantity\nSolitude,mh2,1\n';
       return new HttpResponse(text, { headers: { 'Content-Type': 'text/csv' } });
     }
 
     if (request.method === 'GET') {
-      const body = fixtureFor(path, url);
-      const payload = readScenario() === 'empty' ? withoutLists(body) : body;
-      return HttpResponse.json(payload as Record<string, unknown>);
+      const body = fixtureFor(path, url, preset);
+      return HttpResponse.json(
+        (plan.kind === 'empty' ? withoutLists(body) : body) as Record<string, unknown>,
+      );
     }
 
     if (request.method === 'DELETE') return new HttpResponse(null, { status: 204 });

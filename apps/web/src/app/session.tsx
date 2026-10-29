@@ -1,31 +1,57 @@
-import { Auth0Provider, useAuth0, type Auth0ContextInterface } from '@auth0/auth0-react';
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { Auth0Provider, useAuth0 } from '@auth0/auth0-react';
+import type { AuthPreset } from '@opulent/devtools/state';
+import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { env } from './env';
+import { sessionFor, type Session } from './sessionPresets';
 
-export type Session = Pick<
-  Auth0ContextInterface,
-  | 'isAuthenticated'
-  | 'isLoading'
-  | 'user'
-  | 'loginWithRedirect'
-  | 'logout'
-  | 'getAccessTokenSilently'
->;
+export type { AuthPreset, Session };
 
 const SessionContext = createContext<Session | null>(null);
 
-const mockSession: Session = {
-  isAuthenticated: true,
-  isLoading: false,
-  user: { name: 'Mock User', email: 'mock@example.com', sub: 'mock|user' },
-  loginWithRedirect: () => Promise.resolve(),
-  logout: () => Promise.resolve(),
-  getAccessTokenSilently: (() => Promise.resolve('mock')) as Session['getAccessTokenSilently'],
+let override: AuthPreset | null = null;
+const overrideListeners = new Set<() => void>();
+
+export function setAuthOverride(next: AuthPreset | null): void {
+  if (override === next) return;
+  override = next;
+  for (const listener of overrideListeners) listener();
+}
+
+export function currentAuthPreset(): AuthPreset | null {
+  return override;
+}
+
+export function subscribeAuthOverride(listener: () => void): () => void {
+  overrideListeners.add(listener);
+  return () => {
+    overrideListeners.delete(listener);
+  };
+}
+
+function useAuthOverride(): AuthPreset | null {
+  return useSyncExternalStore(
+    subscribeAuthOverride,
+    () => override,
+    () => override,
+  );
+}
+
+const sessionHandlers = {
+  onSignIn: () => setAuthOverride('newUser'),
+  onSignOut: () => setAuthOverride('signedOut'),
 };
 
-function Auth0Session({ children }: { children: ReactNode }) {
+const devMocks = import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true';
+
+function useDevSession(): Session {
+  const preset = useAuthOverride();
+  return useMemo(() => sessionFor(preset ?? 'returning', sessionHandlers), [preset]);
+}
+
+function Auth0Session({ children, devSession }: { children: ReactNode; devSession: Session }) {
   const auth = useAuth0();
-  const value = useMemo<Session>(
+  const preset = useAuthOverride();
+  const real = useMemo<Session>(
     () => ({
       isAuthenticated: auth.isAuthenticated,
       isLoading: auth.isLoading,
@@ -43,12 +69,16 @@ function Auth0Session({ children }: { children: ReactNode }) {
       auth.getAccessTokenSilently,
     ],
   );
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={preset ? devSession : real}>{children}</SessionContext.Provider>
+  );
 }
 
 export function AppSession({ children }: { children: ReactNode }) {
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true') {
-    return <SessionContext.Provider value={mockSession}>{children}</SessionContext.Provider>;
+  const devSession = useDevSession();
+
+  if (devMocks) {
+    return <SessionContext.Provider value={devSession}>{children}</SessionContext.Provider>;
   }
 
   return (
@@ -62,7 +92,7 @@ export function AppSession({ children }: { children: ReactNode }) {
       useRefreshTokens
       cacheLocation="localstorage"
     >
-      <Auth0Session>{children}</Auth0Session>
+      <Auth0Session devSession={devSession}>{children}</Auth0Session>
     </Auth0Provider>
   );
 }

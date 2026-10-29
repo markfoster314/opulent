@@ -35,6 +35,7 @@ src/
   env.ts
   middleware/    auth, errors
   lib/           http, csv, log
+  devtools/      local-only routes for the dev console
   modules/       users, places, cards, collection, groups, wants, matches, trades, health
   smoke/         service checks, run by smoke-test.ts
   smoke-test.ts  entry for pnpm smoke
@@ -47,6 +48,19 @@ Collection also has `browse.ts`, `items.ts`, `binder.ts`, `rows.ts`, `value.ts`,
 ## Imports
 
 A module may import another module's `service.ts` only. Not its tables, and not a sibling such as `csv.ts` or `value.ts`. Lint rejects that import.
+
+## Dev routes
+
+`src/index.ts` mounts `/__dev` when `NODE_ENV` is `development`. `src/lambda.ts` never imports those routes, so the deployed bundle has no such path. Every route calls `assertLocalDatabase()` first.
+
+| Method | Path             | Use                             |
+| ------ | ---------------- | ------------------------------- |
+| GET    | `/__dev/places`  | City search for the dev console |
+| GET    | `/__dev/viewers` | Users with the most wants       |
+| POST   | `/__dev/users`   | Create 1 to 100 demo users      |
+| DELETE | `/__dev/users`   | Remove demo users               |
+
+The console is `tools/devtools` and opens with `pnpm dev:tools`.
 
 ## Logs
 

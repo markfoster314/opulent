@@ -1,17 +1,18 @@
 # Monorepo
 
-pnpm workspace, Turborepo. `@opulent/shared` and `@opulent/db` export TypeScript source. Consumers compile it. Do not add a `build` script to those packages or to `@opulent/infra`. Turbo `build` emits `dist/**` for api, web, and card-sync. Infra uses `synth`.
+pnpm workspace, Turborepo. `@opulent/shared`, `@opulent/db`, and `@opulent/devtools` export TypeScript source. Consumers compile it. Do not add a `build` script to those packages or to `@opulent/infra`. Turbo `build` emits `dist/**` for api, web, and card-sync. Infra uses `synth`.
 
 | Package              | Path              | Role                          |
 | -------------------- | ----------------- | ----------------------------- |
 | `@opulent/shared`    | `packages/shared` | Zod schemas and shared types  |
 | `@opulent/db`        | `packages/db`     | Drizzle schema and DB scripts |
+| `@opulent/devtools`  | `tools/devtools`  | Dev console and mock state    |
 | `@opulent/web`       | `apps/web`        | Vite React app                |
 | `@opulent/api`       | `apps/api`        | Hono API                      |
 | `@opulent/card-sync` | `jobs/card-sync`  | Scryfall job                  |
 | `@opulent/infra`     | `infra`           | AWS CDK                       |
 
-`shared` is used by web, api, db, and card-sync. `db` is used by api and card-sync. Infra depends on no workspace package.
+`shared` is used by web, api, db, card-sync, and devtools. `db` is used by api and card-sync. Infra depends on no workspace package.
 
 GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 
@@ -20,6 +21,7 @@ GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 | `pnpm check`       | Format, lint, types, unit tests. No Docker or Auth0. |
 | `pnpm check:ci`    | Quality job, except actionlint                       |
 | `pnpm dev`         | API and web. Needs `.env` and Postgres               |
+| `pnpm dev:tools`   | Open the dev console at http://localhost:5173/__dev  |
 | `pnpm build`       | API, web, and card-sync artifacts                    |
 | `pnpm infra:synth` | CDK synth                                            |
 
@@ -33,6 +35,7 @@ ESLint `boundaries` in `eslint.config.mjs`:
 - A package does not import an app, a job, or infra.
 - A job does not import an app or infra.
 - Infra does not import an app, a package, or a job.
+- A tool does not import an app, a job, or infra.
 
 Web folder and feature import rules: [apps/web/README.md](../apps/web/README.md).
 

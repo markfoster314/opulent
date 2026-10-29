@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "turbo run dev",
+    "dev:tools": "pnpm --filter @opulent/devtools run open",
     "build": "turbo run build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "check:ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm check:packages && pnpm knip && pnpm infra:synth && pnpm --filter @opulent/infra run check",
