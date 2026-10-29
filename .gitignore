@@ -27,3 +27,6 @@ test-results/
 infra/cdk.context.json
 .dsh-worktrees/
 playwright/.auth/
+
+# Personal agent notes. Not shared.
+AGENTS.local.md

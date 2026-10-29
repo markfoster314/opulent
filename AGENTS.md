@@ -1,36 +1,69 @@
 This file is for the coding agent. People should start at [README.md](README.md).
 
-# Communication Tone (global — applies to all projects)
+# Personal notes
 
-## You must strictly communicate using a combination of the 'ELI5' format and the ASD-STE-100 (Simplified Technical English) language standard.
+If `AGENTS.local.md` sits beside this file, read it and follow it. It holds tone and private notes. Do not commit it. The same rule applies to an `AGENTS.local.md` beside any nested `AGENTS.md`.
 
-- Enforce a highly restricted, plain-English vocabulary.
-- Do not invent, infer, or provide unmapped acronyms or domain-specific fluff.
-- Lead directly with a bolded high-value takeaway or a single-sentence resolution.
-- Break down walls of text into sequenced, scannable elements using concrete visual analogies.
+# Setup
 
-# Frontend layout
+Node version is in [.nvmrc](.nvmrc) (`26.13.0`). pnpm is `10.26.1` via Corepack. Full steps: [README.md](README.md).
 
-When you change a screen, start from the phone and then add space for a wider window.
+```bash
+npm install -g corepack
+corepack enable
+pnpm install
+```
 
-- The first styles are for a narrow screen. Use `sm` and `md` only to relax those styles, not to repair a desktop layout that breaks on a phone.
-- A row of buttons, fields, or bar items must wrap or stack. Nothing should sit past the edge of the screen.
-- Titles, binder names, and usernames must be allowed to wrap or shorten. Do not give them a fixed width that assumes a wide window.
-- Touch targets stay easy to tap. Do not shrink a button just so a row fits.
-- Write the layout for a phone and for a wider window. Do not open a browser to check the screen. The owner does that check.
+# Commands
 
-# UI copy
+From the repo root:
 
-Do not add helper sentences under a section title. The purpose of a section must be clear from its title, its controls, and its data.
+```bash
+pnpm check
+pnpm dev
+```
 
-- No subtitles such as "Ranked by the price of one copy" or "The biggest gains and drops in the chosen window."
-- A short control label ("Window", "Split by") is fine. A sentence about what the section does is not.
-- If data needs context, put it in the data, a tooltip, or a label. Do not write a paragraph.
-- When you touch a section, remove this kind of helper text.
+Prefer a check on one file:
+
+```bash
+pnpm exec eslint path/to/file.ts
+pnpm exec prettier --check path/to/file.ts
+pnpm exec vitest run path/to/file.test.ts
+```
+
+`pnpm check` is format, lint, types, and unit tests. `pnpm dev` starts the API and the web app. Postgres and `.env` setup: [README.md](README.md).
+
+# Packages
+
+Nested `AGENTS.md` files add rules for that folder. They do not replace this file.
+
+- `@opulent/web` in `apps/web`. [apps/web/AGENTS.md](apps/web/AGENTS.md).
+- `@opulent/api` in `apps/api`. [apps/api/AGENTS.md](apps/api/AGENTS.md).
+- `@opulent/shared` in `packages/shared`. [packages/shared/AGENTS.md](packages/shared/AGENTS.md).
+- `@opulent/db` in `packages/db`. [packages/db/AGENTS.md](packages/db/AGENTS.md).
+- `@opulent/card-sync` in `jobs/card-sync`. [jobs/card-sync/AGENTS.md](jobs/card-sync/AGENTS.md).
+- `@opulent/infra` in `infra`. [infra/AGENTS.md](infra/AGENTS.md).
+
+Boundaries and the full map: [docs/monorepo.md](docs/monorepo.md).
+
+New dependency versions go in the pnpm catalog in `pnpm-workspace.yaml`. Workspace packages use `workspace:*`.
+
+`@opulent/shared` and `@opulent/db` export TypeScript source. Do not add a `build` script to those packages or to `@opulent/infra`.
 
 # Comments
 
 Comment sparingly and keep comments short. A comment earns its place only when it explains WHY a decision was made, flags a non-obvious gotcha, or cites an external constraint. Never restate what the code plainly does. If the code is self-explanatory, leave no comment. Prefer clear variable names and small functions over explanatory comments
+
+# Safety
+
+- Do not commit `.env`.
+- Do not run `db:push`, `db:seed`, or `db:reset` against a remote database.
+- Do not deploy or destroy a stack unless asked.
+- Prefer the file-scoped checks above. Run `pnpm test:e2e` for browser changes and `pnpm smoke` for database changes.
+
+# Pull requests
+
+Branch, commits, and checks: [CONTRIBUTING.md](CONTRIBUTING.md). Do not commit `.env` or credentials.
 
 <!-- BEGIN:turborepo-agent-rules -->
 
