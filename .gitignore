@@ -30,3 +30,6 @@ playwright/.auth/
 
 # Personal agent notes. Not shared.
 AGENTS.local.md
+
+# Turborepo
+.turbo
