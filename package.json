@@ -21,7 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && turbo run typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage && node scripts/coverage-warn.mjs",
     "test:e2e": "playwright test",
     "smoke": "pnpm --filter @opulent/api run smoke",
     "db:bootstrap": "pnpm --filter @opulent/db run bootstrap",

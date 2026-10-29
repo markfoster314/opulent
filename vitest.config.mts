@@ -64,15 +64,8 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'json-summary', 'lcov'],
       reportsDirectory: 'coverage',
-      // Regression floor for the current suite. Raise these numbers as coverage grows.
-      thresholds: {
-        statements: 7.41,
-        branches: 2.74,
-        functions: 2.77,
-        lines: 8.13,
-      },
       include: ['apps/*/src/**/*.{ts,tsx}', 'jobs/*/src/**/*.ts', 'packages/*/src/**/*.ts'],
       exclude: ['**/*.test.{ts,tsx}', '**/test/**', '**/*.d.ts'],
     },

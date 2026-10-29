@@ -40,7 +40,7 @@ pnpm test:e2e
 pnpm smoke
 ```
 
-`pnpm check` is format, lint, types, and unit tests. No Docker or Auth0. `pnpm test:e2e` is for a browser change. `pnpm smoke` is for a database change.
+`pnpm check` is format, lint, types, and unit tests. No Docker or Auth0. `pnpm test:e2e` is for a browser change. `pnpm smoke` is for a database change. When to add a test: [docs/testing.md](docs/testing.md).
 
 # Code style
 
