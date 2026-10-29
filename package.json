@@ -46,6 +46,7 @@
     "@manypkg/cli": "catalog:",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "eslint-config-prettier": "catalog:",

@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "aws-cdk": "catalog:",
     "esbuild": "catalog:",
     "tsx": "catalog:",

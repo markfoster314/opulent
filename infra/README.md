@@ -42,7 +42,7 @@ lib/stage-context.ts    dev defaults and the prod guard
 
 ## Stack
 
-One zone, one NAT. RDS PostgreSQL 16 in a private subnet. The API, the schema step, and the nightly card job use the database host.
+One zone, one NAT. RDS PostgreSQL 16 in a private subnet. Local Postgres is the PostGIS 17 image in `docker-compose.yml`. The API, the schema step, and the nightly card job use the database host.
 
 API Lambda from `apps/api/dist`. Runtime `nodejs26.x` on Graviton, 1,024 MB, 20 seconds, concurrency cap 20. The schema step uses the same runtime. Amazon lists `nodejs26.x` as a public preview. The name stays when it becomes general. Auth0 JWKS stays in the function. Gateway throttle is 20 per second, burst 20.
 
