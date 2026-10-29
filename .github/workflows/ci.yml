@@ -97,6 +97,8 @@ jobs:
 
   e2e:
     name: Browser smoke
+    # Auth0 login from a GitHub runner is not set up yet. Remove this line to run the job again.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

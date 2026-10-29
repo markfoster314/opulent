@@ -15,6 +15,8 @@ permissions:
 jobs:
   analyze:
     name: Analyze
+    # Personal private repos cannot enable code scanning. Remove this line to run the job again.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

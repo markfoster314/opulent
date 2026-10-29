@@ -17,16 +17,16 @@ Settings → Branches, rule for `main`:
 
 Exact job names:
 
-| Job                         | Workflow          | Required                            |
-| --------------------------- | ----------------- | ----------------------------------- |
-| Quality                     | CI                | Yes                                 |
-| Database                    | CI                | Yes                                 |
-| Analyze                     | CodeQL            | Yes, when GHAS is on                |
-| Dependency Review           | Dependency Review | Yes, when GHAS is on                |
-| Secret scan                 | Security          | Yes                                 |
-| Production dependency audit | Security          | Yes                                 |
-| PR title                    | CI                | Pull requests only                  |
-| Browser smoke               | CI                | No, until the run history is stable |
+| Job                         | Workflow          | Required                                                |
+| --------------------------- | ----------------- | ------------------------------------------------------- |
+| Quality                     | CI                | Yes                                                     |
+| Database                    | CI                | Yes                                                     |
+| Analyze                     | CodeQL            | No. The job is skipped until code scanning is available |
+| Dependency Review           | Dependency Review | Yes, when GHAS is on                                    |
+| Secret scan                 | Security          | Yes                                                     |
+| Production dependency audit | Security          | Yes                                                     |
+| PR title                    | CI                | Pull requests only                                      |
+| Browser smoke               | CI                | No. The job is skipped until Auth0 login works here     |
 
 Private repos: CodeQL and Dependency Review need GitHub Advanced Security. If it is off, leave **Analyze** and **Dependency Review** off the required list.
 

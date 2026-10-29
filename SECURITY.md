@@ -8,4 +8,5 @@ CI, settings in [docs/github-setup.md](docs/github-setup.md):
 
 - **Production dependency audit** — `pnpm audit --prod --audit-level high`
 - **Secret scan** — gitleaks. Org-owned repos need a `GITLEAKS_LICENSE` secret.
-- **Analyze** and **Dependency Review** — need GitHub Advanced Security on private repos. If GHAS is off, do not mark those jobs required.
+- **Analyze** — skipped in `.github/workflows/codeql.yml` until code scanning is available. Do not mark it required.
+- **Dependency Review** — needs GitHub Advanced Security on private repos. If GHAS is off, do not mark it required.
