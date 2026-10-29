@@ -8,9 +8,10 @@ If `AGENTS.local.md` sits beside this file, read it and follow it. Do not commit
 pnpm --filter @opulent/web typecheck
 pnpm exec vitest run apps/web/src/features/wants/WantBinderView.test.tsx
 pnpm --filter @opulent/web dev:mock
+pnpm dev:tools
 ```
 
-Swap the test path for the file you changed. `dev:mock` serves the UI with no API. Run `pnpm test:e2e` only when a browser flow changes, and only after a yes.
+Swap the test path for the file you changed. `dev:mock` serves the UI with no API. `dev:tools` opens the console at `/__dev`; run `pnpm dev` first. Run `pnpm test:e2e` only when a browser flow changes, and only after a yes.
 
 # Code style
 

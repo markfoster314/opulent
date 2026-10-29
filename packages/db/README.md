@@ -35,6 +35,8 @@ Cities come from [GeoNames](https://www.geonames.org/), [CC BY 4.0](https://crea
 
 Nine demo users use a `seed|` subject. `mark` is the local Auth0 account. See [docs/auth0-development.md](../../docs/auth0-development.md).
 
+`src/demo-users.ts` creates and removes `seed|dev_` users for the dev console. With a viewer selected, each new user gets two for-trade cards from that viewer's wants. The `/__dev` routes call it, and `assertLocalDatabase()` runs first.
+
 Lint, test, and format are root commands. Repo map: [README.md](../../README.md).
 
 ## Tree
@@ -45,6 +47,7 @@ migrations/            SQL files
 drizzle.config.ts
 src/bootstrap-sql.ts   extensions and indexes
 src/seed.ts            demo data
+src/demo-users.ts      demo users for the dev console
 src/reset.ts           truncate, then seed
 src/migrate-aws.ts     Lambda entry
 src/connection-string.ts

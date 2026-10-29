@@ -1,6 +1,9 @@
 export * from './client';
 export * from './collection-value';
 export * from './connection-string';
+export { assertLocalDatabase } from './local-only';
+export { createDemoUsers, deleteDemoUsers } from './demo-users';
+export type { DemoUserOptions } from './demo-users';
 export * from './price-partitions';
 export * from './price-series';
 export * as schema from './schema';

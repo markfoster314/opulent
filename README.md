@@ -36,6 +36,8 @@ pnpm dev
 - Web: http://localhost:5173
 - API: http://localhost:8787
 
+`pnpm dev:tools` opens the dev console at http://localhost:5173/__dev. Run `pnpm dev` first.
+
 `places:sync` and `cards:sync` are required to use the product. `cards:sync` needs `SCRYFALL_USER_AGENT`. Auth0: [docs/auth0-development.md](docs/auth0-development.md). UI without the API: `pnpm --filter @opulent/web dev:mock`.
 
 `pnpm db:bootstrap` runs before and after migrate. `pnpm db:seed` replaces demo-user rows. `pnpm db:push` is local only. `pnpm smoke` needs Postgres.
@@ -49,6 +51,7 @@ pnpm dev
 | `packages/shared` | Zod schemas and shared types. [packages/shared/README.md](packages/shared/README.md)             |
 | `packages/db`     | Drizzle schema, migrations, seed. [packages/db/README.md](packages/db/README.md)                 |
 | `jobs/card-sync`  | Scryfall mirror. [jobs/card-sync/README.md](jobs/card-sync/README.md)                            |
+| `tools/devtools`  | Dev console. [tools/devtools/README.md](tools/devtools/README.md)                                |
 | `infra`           | AWS CDK. [infra/README.md](infra/README.md)                                                      |
 | `e2e`             | Playwright                                                                                       |
 | `docs`            | [Monorepo](docs/monorepo.md), [GitHub](docs/github-setup.md), [Auth0](docs/auth0-development.md) |
@@ -66,6 +69,7 @@ Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC
 | Command                                        | Use                             |
 | ---------------------------------------------- | ------------------------------- |
 | `pnpm dev`                                     | API and web                     |
+| `pnpm dev:tools`                               | Dev console tab                 |
 | `pnpm check`                                   | Format, lint, types, unit tests |
 | `pnpm check:ci`                                | Quality job, except actionlint  |
 | `pnpm test` / `pnpm test:e2e` / `pnpm smoke`   | Unit / browser / database       |

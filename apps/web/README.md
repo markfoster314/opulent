@@ -12,13 +12,22 @@ pnpm dev
 
 Web http://localhost:5173. API http://localhost:8787. Vite reads `.env` from the repo root (`envDir`). Missing `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, or `VITE_AUTH0_AUDIENCE` throws at boot. `VITE_API_BASE_URL` defaults to `http://localhost:8787`. A production build reads those four values from `/config.json` before it renders.
 
+## Dev console
+
+```bash
+pnpm dev        # in one terminal
+pnpm dev:tools  # opens http://localhost:5173/__dev
+```
+
+The console edits the running app tab: session preset, one endpoint or every call, delay, offline, timeout, events, and demo users. Demo users need the local API and Postgres. The console mounts only in dev at `/__dev`; a production build drops it.
+
 UI only, no database or Auth0:
 
 ```bash
 pnpm --filter @opulent/web dev:mock
 ```
 
-Signed-in session, fixtures in `src/mocks`. **Mocks** (bottom left) sets Ok, Empty, Slow, 401, 404, 500, or Offline for every `/v1` call. `pnpm dev` has no panel.
+Every `/v1` call comes from fixtures in `src/mocks`, and the session is mocked.
 
 | Command                                | Use                            |
 | -------------------------------------- | ------------------------------ |
@@ -35,6 +44,7 @@ src/
   app/       routes, providers, env
   layout/    shell
   api/       fetch client, query keys
+  devtools/  app-side console agent
   theme/
   shared/    cards, binder, ui, hooks
   features/  home, auth, collection, groups, wants, matches, trades, profile

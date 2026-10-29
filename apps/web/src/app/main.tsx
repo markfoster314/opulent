@@ -8,8 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ApiProvider } from '@/api/ApiProvider';
 import { theme } from '@/theme';
 import { App } from './App';
-import { loadPublicEnv } from './env';
-import { MockPanel } from './MockPanel';
+import { env, loadPublicEnv } from './env';
 import { AppSession } from './session';
 
 const queryClient = new QueryClient({
@@ -23,14 +22,21 @@ const queryClient = new QueryClient({
   },
 });
 
-const useMocks = import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true';
-
 async function start() {
   await loadPublicEnv();
 
-  if (useMocks) {
-    const { worker } = await import('@/mocks/browser');
-    await worker.start({ onUnhandledFrame: 'bypass' });
+  if (import.meta.env.DEV && window.location.pathname === '/__dev') {
+    const { mountDevConsole } = await import('../devtools/mount');
+    mountDevConsole({
+      apiBaseUrl: env.apiBaseUrl,
+      mockOnly: import.meta.env.VITE_USE_MOCKS === 'true',
+    });
+    return;
+  }
+
+  if (import.meta.env.DEV) {
+    const { startDevAgent } = await import('../devtools/boot');
+    await startDevAgent(queryClient);
   }
 
   const container = document.getElementById('root');
@@ -47,7 +53,6 @@ async function start() {
               <BrowserRouter>
                 <App />
               </BrowserRouter>
-              {useMocks ? <MockPanel /> : null}
               {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
             </ThemeProvider>
           </QueryClientProvider>

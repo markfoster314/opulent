@@ -47,6 +47,10 @@ const boundaryPolicy = [
         disallow: { to: { element: { types: { anyOf: ['app', 'infra'] } } } },
       },
       {
+        from: { element: { type: 'tool' } },
+        disallow: { to: { element: { types: { anyOf: ['app', 'job', 'infra'] } } } },
+      },
+      {
         from: { element: { type: 'infra' } },
         disallow: { to: { element: { types: { anyOf: ['app', 'package', 'job'] } } } },
       },
@@ -131,6 +135,7 @@ export default tseslint.config(
         { type: 'app', pattern: 'apps/*' },
         { type: 'package', pattern: 'packages/*' },
         { type: 'job', pattern: 'jobs/*' },
+        { type: 'tool', pattern: 'tools/*' },
         { type: 'infra', pattern: 'infra' },
       ],
       'boundaries/files': [{ category: 'web-queries', pattern: 'apps/web/src/**/queries.ts' }],

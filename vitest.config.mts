@@ -61,6 +61,13 @@ export default defineConfig({
           setupFiles: ['apps/web/src/test/setup.ts'],
         },
       },
+      {
+        test: {
+          name: 'devtools',
+          environment: 'jsdom',
+          include: ['tools/devtools/src/**/*.test.ts'],
+        },
+      },
     ],
     coverage: {
       provider: 'v8',
@@ -86,9 +93,11 @@ export default defineConfig({
         // Screens and the dev mock server belong to the browser checks.
         'apps/web/src/**/*.tsx',
         'apps/web/src/mocks/**',
+        'apps/web/src/devtools/**',
         'apps/web/src/**/queries.ts',
         'apps/web/src/api/queryKeys.ts',
         'apps/web/src/theme/**',
+        'tools/devtools/**',
         'jobs/card-sync/src/index.ts',
       ],
     },

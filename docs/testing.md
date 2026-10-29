@@ -20,12 +20,16 @@ Coverage under 50% prints a warning. The Quality job stays green. At or above 50
 
 `pnpm test:e2e`. `e2e/public.spec.ts` opens the landing page and the unknown route. The authenticated spec stays off in CI until the `RUN_BROWSER_SMOKE` repository variable is `true`.
 
+## Dev console
+
+`pnpm dev:tools` opens `http://localhost:5173/__dev` after `pnpm dev`. It is a manual check, not a test layer. It controls the app tab through the MSW worker and session presets. The route is dev-only, so the browser checks stay unchanged.
+
 ## A new test
 
 - Name it `[outcome] when [condition]`. Leave existing names alone.
 - Arrange, act, assert. Expected values are literals or fixtures. Do not compute the expected value with the function under test.
 - Use `it.each` when one function has many similar inputs. Do not convert the current files.
-- Mock at a seam this repo owns. The web API client in `apps/web/src/api/client.ts` and `renderWithProviders` are that seam. MSW is for `dev:mock`, not for Vitest. Do not mock Auth0, Drizzle, or jose.
+- Mock at a seam this repo owns. The web API client in `apps/web/src/api/client.ts` and `renderWithProviders` are that seam. MSW and the dev console are for `dev:mock` and `pnpm dev:tools`, not for Vitest. Do not mock Auth0, Drizzle, or jose.
 - Pure functions stay pure tests. Scryfall mapping is the model: test `toCardRow`, not `fetch`.
 - Browser selectors stay `getByRole` and visible text. Add `data-testid` only when the accessible name is not stable.
 - Playwright waits with `expect(...).toBeVisible()`. Do not add `waitForTimeout`.
