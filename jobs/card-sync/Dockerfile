@@ -1,6 +1,6 @@
 # Built from the monorepo root:
 #   docker build -f jobs/card-sync/Dockerfile -t opulent-card-sync .
-FROM node:26-alpine AS build
+FROM node:26.13.0-alpine AS build
 WORKDIR /repo
 
 RUN corepack enable
@@ -19,7 +19,7 @@ COPY packages ./packages
 COPY jobs/card-sync ./jobs/card-sync
 RUN pnpm --filter @opulent/card-sync run build
 
-FROM node:26-alpine AS runtime
+FROM node:26.13.0-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/jobs/card-sync/dist/index.mjs ./index.mjs
