@@ -6,7 +6,7 @@ If `AGENTS.local.md` sits beside this file, read it and follow it. It holds tone
 
 # Stack
 
-Node `26.13.0` ([.nvmrc](.nvmrc)). pnpm 10 via Corepack. The pin is `packageManager` in [package.json](package.json). TypeScript, Vitest, Prettier, ESLint. Package map: [docs/monorepo.md](docs/monorepo.md).
+Node `26.13.0` ([.nvmrc](.nvmrc)). pnpm 12 via Corepack. The pin is `packageManager` in [package.json](package.json). TypeScript, Vitest, Prettier, ESLint. Package map: [docs/monorepo.md](docs/monorepo.md).
 
 # Setup
 

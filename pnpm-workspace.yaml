@@ -3,6 +3,12 @@ packages:
   - 'packages/*'
   - 'jobs/*'
   - 'infra'
+allowBuilds:
+  esbuild: true
+  browser-tabs-lock: false
+strictPeerDependencies: true
+# Exact catalog versions can be published the same day Renovate opens the pull request.
+minimumReleaseAge: 0
 catalog:
   '@auth0/auth0-react': 2.29.0
   '@aws-sdk/client-secrets-manager': 3.1159.0
