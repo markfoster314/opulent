@@ -1,6 +1,6 @@
 # GitHub setup
 
-Settings that match `.github` workflows. Production deploy: [deploy.md](deploy.md).
+Settings that match `.github` workflows. Production deploy is **Actions → Deploy → Run workflow**. A push to `main` does not deploy. Setup: [deploy.md](deploy.md).
 
 ## `main`
 

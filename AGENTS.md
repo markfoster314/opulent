@@ -85,7 +85,7 @@ Copy `.env.example` to `.env`. Production secrets stay in AWS Secrets Manager. N
 
 # Pull requests
 
-Conventional Commits. Branch from `main`. Steps: [CONTRIBUTING.md](CONTRIBUTING.md). CI: [.github/workflows/ci.yml](.github/workflows/ci.yml). Deploy: [docs/deploy.md](docs/deploy.md).
+Conventional Commits. Branch from `main`. Steps: [CONTRIBUTING.md](CONTRIBUTING.md). CI: [.github/workflows/ci.yml](.github/workflows/ci.yml). Production deploy is **Actions → Deploy → Run workflow**, not a push to `main`. Details: [docs/deploy.md](docs/deploy.md).
 
 # When stuck
 

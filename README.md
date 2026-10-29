@@ -59,7 +59,7 @@ API prefixes: `/health`, `/v1/users`, `/v1/places`, `/v1/cards`, `/v1/collection
 
 Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → PostgreSQL 16 + PostGIS.
 
-Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. A green push to `main` deploys production. Setup: [docs/deploy.md](docs/deploy.md).
+Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. Production deploy is **Actions → Deploy → Run workflow**. Setup: [docs/deploy.md](docs/deploy.md).
 
 ## Commands
 
@@ -78,4 +78,4 @@ Required checks: [docs/github-setup.md](docs/github-setup.md).
 
 Conventional Commits. Branch from `main`. Squash merge. [CONTRIBUTING.md](CONTRIBUTING.md).
 
-A green push to `main` deploys production. First-time setup and the one-time deploy command: [docs/deploy.md](docs/deploy.md).
+Production deploy is **Actions → Deploy → Run workflow**. A push to `main` does not deploy. First-time setup and the one-time deploy command: [docs/deploy.md](docs/deploy.md).

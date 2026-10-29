@@ -45,7 +45,7 @@ The card image is `linux/arm64`. An x86 machine needs Docker Buildx and QEMU. An
 
 ## GitHub
 
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) deploys after the [CI](../.github/workflows/ci.yml) workflow succeeds on a push to `main`. It can also be run with **Run workflow**.
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) deploys only when someone chooses **Actions → Deploy → Run workflow**. A push to `main` does not deploy. Pick the branch in that dialog. The usual choice is `main` after CI is green.
 
 The job checks out that commit, installs, builds, and runs `cdk deploy --require-approval never`. The web build uses placeholder `VITE_` values. The live site reads `/config.json`.
 
@@ -103,4 +103,4 @@ Secrets:
 
 Region is `us-east-1` in the workflow. The account id comes from the assumed role.
 
-Create the environment and the role before the first green push to `main`. Until then, use the first-deploy command.
+Create the environment and the role before the first **Run workflow**. Until then, use the first-deploy command.
