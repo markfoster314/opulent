@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "esbuild": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"

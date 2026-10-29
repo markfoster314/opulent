@@ -15,6 +15,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@typescript/native": "catalog:",
     "typescript": "catalog:"
   }
 }

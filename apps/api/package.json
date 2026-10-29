@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "esbuild": "catalog:",
     "pino-pretty": "catalog:",
     "tsx": "catalog:",
