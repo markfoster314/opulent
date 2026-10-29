@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { BODY_MAX_BYTES, limitBody } from './app';
 import type { AppEnv } from './lib/context';
+import { ApiError } from './lib/http';
 import { zValidator } from './lib/validate';
 import { requireAuth } from './middleware/auth';
 import { onError, onNotFound } from './middleware/error';
@@ -54,6 +56,66 @@ describe('http edges', () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'bad_request', message: 'Request validation failed' },
+    });
+  });
+
+  it('returns the query when validation passes', async () => {
+    const app = testApp();
+    app.get('/search', zValidator('query', z.object({ q: z.string().min(1) })), (c) =>
+      c.json({ q: c.req.valid('query').q }),
+    );
+    const response = await app.request('/search?q=bolt');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ q: 'bolt' });
+  });
+
+  it('returns the api error when a handler throws one', async () => {
+    const app = testApp();
+    app.get('/bad', () => {
+      throw ApiError.badRequest('nope', { field: 'q' });
+    });
+    const response = await app.request('/bad');
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'bad_request', message: 'nope', details: { field: 'q' } },
+    });
+  });
+
+  it('returns bad_request when a handler throws a schema error', async () => {
+    const app = testApp();
+    app.get('/schema', (c) => {
+      const parsed = z.object({ q: z.string() }).safeParse({});
+      if (!parsed.success) throw parsed.error;
+      return c.json(parsed.data);
+    });
+    const response = await app.request('/schema');
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'bad_request', message: 'Request validation failed' },
+    });
+  });
+
+  it('returns the http exception status', async () => {
+    const app = testApp();
+    app.get('/large', () => {
+      throw new HTTPException(413, { message: 'too big' });
+    });
+    const response = await app.request('/large');
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'bad_request', message: 'too big' },
+    });
+  });
+
+  it('returns internal_error when a handler throws', async () => {
+    const app = testApp();
+    app.get('/boom', () => {
+      throw new Error('boom');
+    });
+    const response = await app.request('/boom');
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'internal_error', message: 'Something went wrong on our side' },
     });
   });
 });

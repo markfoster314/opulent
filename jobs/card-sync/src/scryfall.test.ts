@@ -40,4 +40,30 @@ describe('toCardRow', () => {
   it('skips cards without an oracle id', () => {
     expect(toCardRow({ ...card, oracle_id: undefined })).toBeNull();
   });
+
+  it('fills blanks when the bulk row omits optional fields', () => {
+    const row = toCardRow({
+      id: card.id,
+      oracle_id: card.oracle_id,
+      name: card.name,
+      set: card.set,
+      collector_number: card.collector_number,
+    });
+    expect(row?.setName).toBeNull();
+    expect(row?.lang).toBe('en');
+    expect(row?.finishes).toEqual([]);
+    expect(row?.imageUris).toBeNull();
+    expect(row?.prices).toBeNull();
+  });
+
+  it('reads type and mana cost from the front face', () => {
+    const row = toCardRow({
+      ...card,
+      type_line: undefined,
+      mana_cost: undefined,
+      card_faces: [{ type_line: 'Creature', mana_cost: '{G}' }],
+    });
+    expect(row?.typeLine).toBe('Creature');
+    expect(row?.manaCost).toBe('{G}');
+  });
 });

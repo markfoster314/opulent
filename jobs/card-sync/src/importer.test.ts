@@ -63,6 +63,13 @@ describe('importCatalog', () => {
     expect(batches[0]).toHaveLength(2);
   });
 
+  it('writes nothing when every row is skipped', async () => {
+    const batches: NewCardRow[][] = [];
+    const stats = await importCatalog(fakeDb(batches), source([null]));
+    expect(stats).toEqual({ read: 1, written: 0, skipped: 1 });
+    expect(batches).toHaveLength(0);
+  });
+
   it('rejects a row for a different game before writing it', async () => {
     const batches: NewCardRow[][] = [];
     await expect(importCatalog(fakeDb(batches), source([row(1, 'other')]))).rejects.toThrow(

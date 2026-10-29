@@ -16,6 +16,18 @@ describe('assertLocalDatabase', () => {
     expect(() =>
       assertLocalDatabase('postgres://opulent:opulent@127.0.0.1:5432/opulent_tutor'),
     ).not.toThrow();
+    expect(() =>
+      assertLocalDatabase('postgres://opulent:opulent@[::1]:5432/opulent_tutor'),
+    ).not.toThrow();
+  });
+
+  it('refuses a missing address', () => {
+    expect(() => assertLocalDatabase(undefined)).toThrow(/DATABASE_URL is not set/);
+    expect(() => assertLocalDatabase('')).toThrow(/DATABASE_URL is not set/);
+  });
+
+  it('refuses a value that is not a url', () => {
+    expect(() => assertLocalDatabase('not a url')).toThrow(/not a valid URL/);
   });
 
   it('refuses a remote host', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from './client';
-import { ensurePricePartitions } from './price-partitions';
+import { ensurePricePartitions, pricePartitionWindow } from './price-partitions';
 
 function sqlText(query: unknown): string {
   const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
@@ -64,6 +64,13 @@ describe('ensurePricePartitions', () => {
     expect(creates).toHaveLength(1);
     expect(creates[0]).toContain('card_price_history_2026_02');
     expect(creates[0]).not.toContain('card_price_history_2026_01');
+  });
+
+  it('returns a day range around today', () => {
+    const window = pricePartitionWindow();
+    expect(window.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(window.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(window.from < window.to).toBe(true);
   });
 
   it('rejects a date that is not a day', async () => {

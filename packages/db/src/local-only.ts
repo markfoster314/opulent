@@ -9,7 +9,8 @@ export function assertLocalDatabase(connectionString = process.env.DATABASE_URL)
 
   let host: string;
   try {
-    host = new URL(connectionString).hostname;
+    // URL.hostname keeps the brackets on an IPv6 address.
+    host = new URL(connectionString).hostname.replace(/^\[|\]$/g, '');
   } catch {
     throw new Error('DATABASE_URL is not a valid URL');
   }

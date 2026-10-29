@@ -67,7 +67,30 @@ export default defineConfig({
       reporter: ['text', 'json-summary', 'lcov'],
       reportsDirectory: 'coverage',
       include: ['apps/*/src/**/*.{ts,tsx}', 'jobs/*/src/**/*.ts', 'packages/*/src/**/*.ts'],
-      exclude: ['**/*.test.{ts,tsx}', '**/test/**', '**/*.d.ts'],
+      exclude: [
+        '**/*.test.{ts,tsx}',
+        '**/test/**',
+        '**/*.d.ts',
+        // The database job runs these against Postgres.
+        'apps/api/src/smoke/**',
+        'apps/api/src/smoke-test.ts',
+        'apps/api/src/modules/**/routes.ts',
+        'apps/api/src/modules/**/service.ts',
+        'apps/api/src/modules/**/{items,lists,generic,import,browse,write,read,notify,value,binder}.ts',
+        'apps/api/src/{index,lambda,app}.ts',
+        // Token checks need the identity provider. The fast suite does not call it.
+        'apps/api/src/middleware/auth.ts',
+        // Scripts, table declarations, and the certificate file.
+        'packages/db/src/{seed,rds-ca,import-places,bootstrap,bootstrap-sql,migrate-aws,reset,load-env,client,assert-local-db}.ts',
+        'packages/db/src/schema/**',
+        // Screens and the dev mock server belong to the browser checks.
+        'apps/web/src/**/*.tsx',
+        'apps/web/src/mocks/**',
+        'apps/web/src/**/queries.ts',
+        'apps/web/src/api/queryKeys.ts',
+        'apps/web/src/theme/**',
+        'jobs/card-sync/src/index.ts',
+      ],
     },
   },
 });

@@ -6,7 +6,9 @@ Three layers. Add a test only when a change can break silently. One example for 
 
 `pnpm test`. Vitest. No Docker and no Auth0. The CI Quality job runs `pnpm test:coverage`.
 
-These files cover pure behavior: Zod contracts in `packages/shared`, HTTP edges in `apps/api/src/app.test.ts`, Scryfall row mapping, price partitions, and one web behavior in `WantBinderView.test.tsx`.
+These files cover pure behavior: Zod contracts in `packages/shared`, HTTP edges in `apps/api/src/app.test.ts`, Scryfall row mapping, price partitions, CSV parsing, and one web behavior in `WantBinderView.test.tsx`.
+
+The 50% number counts that fast layer. It leaves out screens, database services, the seed script, and the certificate file. Those belong to the browser checks and the database checks.
 
 Coverage under 50% prints a warning. The Quality job stays green. At or above 50% there is no warning.
 
