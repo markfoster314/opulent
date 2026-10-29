@@ -17,6 +17,13 @@ function jsonResponse(status: number, body: unknown, statusText = 'OK') {
   } as Response;
 }
 
+function firstFetchCall(mock: ReturnType<typeof vi.fn>): [URL, RequestInit] {
+  const call = mock.mock.calls[0];
+  expect(call).toBeDefined();
+  expect(call).toHaveLength(2);
+  return call as unknown as [URL, RequestInit];
+}
+
 describe('createApiClient', () => {
   it('sends a bearer token and returns the json body', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(200, { status: 'ok' })));
@@ -25,7 +32,7 @@ describe('createApiClient', () => {
 
     await expect(request('/v1/users/me')).resolves.toEqual({ status: 'ok' });
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe('http://127.0.0.1:8787/v1/users/me');
     expect(init.headers).toMatchObject({
       Accept: 'application/json',
@@ -39,7 +46,7 @@ describe('createApiClient', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     const request = createApiClient(() => Promise.resolve(null));
     await request('/v1/health');
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const [, init] = firstFetchCall(fetchMock);
     expect(init.headers).not.toHaveProperty('Authorization');
   });
 
@@ -56,7 +63,7 @@ describe('createApiClient', () => {
         signal,
       }),
     ).resolves.toBeUndefined();
-    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe('http://127.0.0.1:8787/v1/wants?t=share-1');
     expect(init.method).toBe('POST');
     expect(init.body).toBe('{"name":"Trades"}');

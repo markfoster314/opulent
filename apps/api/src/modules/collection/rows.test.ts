@@ -84,7 +84,7 @@ describe('toCollectionItem', () => {
     expect(item.language).toBe('en');
     expect(item.price).toEqual({ kind: 'market' });
     expect(item.availableFinishes).toEqual(['foil']);
-    expect(item.card.prices).toEqual({ usd: '2.00', usd_foil: '8.00' });
+    expect(item.card?.prices).toEqual({ usd: '2.00', usd_foil: '8.00' });
   });
 
   it('keeps a percent price and the printing language', () => {
@@ -92,7 +92,7 @@ describe('toCollectionItem', () => {
     expect(item.language).toBe('fr');
     expect(item.price).toEqual({ kind: 'percent', percent: 40 });
     expect(item.groups).toEqual([{ id: groupId, name: 'Trades' }]);
-    expect(item.card.prices?.usd_foil).toBe('4.00');
+    expect(item.card?.prices?.usd_foil).toBe('4.00');
   });
 
   it('keeps a custom price', () => {
