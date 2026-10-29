@@ -138,7 +138,10 @@ export default tseslint.config(
     },
     rules: {
       'boundaries/dependencies': boundaryPolicy,
-      'turbo/no-undeclared-env-vars': ['error', { allowList: ['^CI$', '^DEV$', '^E2E_AUTH0_'] }],
+      'turbo/no-undeclared-env-vars': [
+        'error',
+        { allowList: ['^CI$', '^DEV$', '^E2E_AUTH0_', '^GITHUB_ACTIONS$'] },
+      ],
       '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     },
   },
@@ -190,6 +193,8 @@ export default tseslint.config(
   {
     files: ['**/*.{js,mjs,cjs}'],
     ...js.configs.recommended,
+    // Plain scripts are not in a tsconfig. Typed rules need one, so they stay off here.
+    extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },
   prettier,
