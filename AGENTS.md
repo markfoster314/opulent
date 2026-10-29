@@ -81,7 +81,7 @@ Copy `.env.example` to `.env`. Production secrets stay in AWS Secrets Manager. N
 - `pnpm check`, `pnpm build`, `pnpm test:e2e`, or `pnpm smoke`
 - `pnpm db:push`, `pnpm db:seed`, or `pnpm db:reset`
 - Deploy or destroy a stack
-- Edit `.github/workflows/`. A job `if` must be a string, such as `if: ${{ false }}`. actionlint runs in CI only.
+- Edit `.github/workflows/`. A job `if` must be a string. actionlint rejects a constant `false`. Use a repository variable comparison instead. actionlint runs in CI only.
 
 # Pull requests
 
