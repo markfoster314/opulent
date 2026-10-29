@@ -2,6 +2,8 @@
 
 Nightly Scryfall mirror. One process locally, one Fargate task when deployed. The task image is Node 26. Install and run from the repo root. Not a standalone package.
 
+Card data is from [Scryfall](https://scryfall.com). Unofficial Fan Content under the Wizards of the Coast Fan Content Policy.
+
 The task and `pnpm cards:sync` both use bulk type `all_cards` unless `SCRYFALL_BULK_TYPE` is set. That file includes non-English printings.
 
 ## Run

@@ -72,16 +72,10 @@ Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC
 | `pnpm db:generate` / `db:migrate` / `db:drift` | Migrations                      |
 | `pnpm infra:synth`                             | CDK synth                       |
 
-CI: Quality, Database, Browser smoke, Analyze, Dependency Review, Secret scan, Production dependency audit, PR title. Required checks: [docs/github-setup.md](docs/github-setup.md).
+Required checks: [docs/github-setup.md](docs/github-setup.md).
 
 ## Ship
 
 Conventional Commits. Branch from `main`. Squash merge. [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A green push to `main` deploys production. First-time setup and the one-time deploy command: [docs/deploy.md](docs/deploy.md).
-
-## Credits
-
-Card data: [Scryfall](https://scryfall.com). Unofficial Fan Content under the Wizards of the Coast Fan Content Policy.
-
-Cities: [GeoNames](https://www.geonames.org/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

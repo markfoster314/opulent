@@ -29,6 +29,8 @@ Bootstrap runs twice: once so extensions exist, again after migrate so indexes e
 | `pnpm db:studio`    | Row browser                                     |
 | `pnpm places:sync`  | GeoNames city list                              |
 
+Cities come from [GeoNames](https://www.geonames.org/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 `db:seed`, `db:reset`, and `db:push` refuse any host other than `localhost`, `127.0.0.1`, or `::1`. `ALLOW_REMOTE_DB=1` overrides that.
 
 Demo users use a `seed|` subject. See [docs/auth0-development.md](../../docs/auth0-development.md).
