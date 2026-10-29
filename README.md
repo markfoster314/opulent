@@ -2,7 +2,7 @@
 
 Magic: The Gathering trade binder. Collection, wants, matches, public binders, trades.
 
-pnpm workspace, Turborepo. Node 26. pnpm 10 via Corepack. The pin is `packageManager` in `package.json`. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
+pnpm workspace, Turborepo. Node 26. pnpm 12 via Corepack. The pin is `packageManager` in `package.json`. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 
 ## Status
 
