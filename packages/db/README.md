@@ -2,7 +2,7 @@
 
 Drizzle schema, migrations, and seed. Install and run from the repo root. Not a standalone package.
 
-PostgreSQL 16 and PostGIS. The API and `jobs/card-sync` import this package. Source is TypeScript. There is no build step.
+Production RDS is PostgreSQL 16. Local Postgres is the PostGIS 17 image in `docker-compose.yml`. The API and `jobs/card-sync` import this package. Source is TypeScript. There is no build step.
 
 ## Run
 

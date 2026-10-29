@@ -37,3 +37,5 @@ ESLint `boundaries` in `eslint.config.mjs`:
 Web folder and feature import rules: [apps/web/README.md](../apps/web/README.md).
 
 Every direct dependency version lives in the pnpm catalog in `pnpm-workspace.yaml`. Packages reference it with `catalog:`. Workspace packages use `workspace:*`.
+
+`tsc` comes from `@typescript/native` (TypeScript 7). The package named `typescript` is the TypeScript 6 API that ESLint loads.

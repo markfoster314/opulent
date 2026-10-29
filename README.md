@@ -2,7 +2,7 @@
 
 Magic: The Gathering trade binder. Collection, wants, matches, public binders, trades.
 
-pnpm workspace, Turborepo. Node 26. pnpm 10.26.1 via Corepack. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
+pnpm workspace, Turborepo. Node 26. pnpm 10 via Corepack. The pin is `packageManager` in `package.json`. GitHub repo `opulent`. A local folder may be named `opulentTutor`.
 
 ## Status
 
@@ -57,7 +57,7 @@ API prefixes: `/health`, `/v1/users`, `/v1/places`, `/v1/cards`, `/v1/collection
 
 ## Shape
 
-Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → PostgreSQL 16 + PostGIS.
+Browser → CloudFront/S3 → API Gateway → Lambda (Hono, Auth0 JWKS, Zod) → RDS PostgreSQL 16 + PostGIS. Local Postgres is the PostGIS 17 image in `docker-compose.yml`.
 
 Card images load from Scryfall. `jobs/card-sync` upserts the mirror at 06:00 UTC. Production deploy is **Actions → Deploy → Run workflow**. Setup: [docs/deploy.md](docs/deploy.md).
 
