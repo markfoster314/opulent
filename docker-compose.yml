@@ -2,7 +2,7 @@ services:
   postgres:
     # PostGIS ships in the image. Radius search uses ST_DWithin, which the plain
     # Postgres image cannot install.
-    image: postgis/postgis:16-3.5-alpine
+    image: postgis/postgis:17-3.5-alpine
     container_name: opulent-postgres
     restart: unless-stopped
     environment:
