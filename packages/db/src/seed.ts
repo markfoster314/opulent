@@ -62,6 +62,8 @@ type Visibility = 'public' | 'private';
 type Person = {
   username: string;
   auth0Sub: string;
+  /** Set for the one local account that can sign in. Other people get a seed address. */
+  email?: string;
   place: string;
   visibility: Visibility;
   bio: string;
@@ -70,7 +72,8 @@ type Person = {
 const PEOPLE: Person[] = [
   {
     username: 'mark',
-    auth0Sub: 'seed|mark',
+    auth0Sub: 'auth0|6ad52793a07a8bf37e40baf6',
+    email: 'markfoster314@yahoo.com',
     place: 'Atlanta, Georgia, United States',
     visibility: 'public',
     bio: 'Trading from Atlanta. Near mint copies preferred.',
@@ -1011,12 +1014,19 @@ async function upsertPerson(
 ): Promise<string> {
   const bySub = await db.select().from(users).where(eq(users.auth0Sub, person.auth0Sub)).limit(1);
   const byName = await db.select().from(users).where(eq(users.username, person.username)).limit(1);
-  const subRow = bySub[0];
+  let subRow = bySub[0];
   const nameRow = byName[0];
   if (subRow && nameRow && subRow.id !== nameRow.id) {
-    throw new Error(
-      `${person.username} and ${person.auth0Sub} already belong to two different users.`,
-    );
+    // An earlier sign-in created a second row for this Auth0 account. Keep the
+    // seeded username, which holds the demo collection, and drop the extra row.
+    if (nameRow.auth0Sub.startsWith('seed|') && !person.auth0Sub.startsWith('seed|')) {
+      await db.delete(users).where(eq(users.id, subRow.id));
+      subRow = undefined;
+    } else {
+      throw new Error(
+        `${person.username} and ${person.auth0Sub} already belong to two different users.`,
+      );
+    }
   }
   const existing = subRow ?? nameRow;
   if (existing && person.auth0Sub.startsWith('seed|') && !existing.auth0Sub.startsWith('seed|')) {
@@ -1026,6 +1036,7 @@ async function upsertPerson(
   const patch = {
     auth0Sub: person.auth0Sub,
     username: person.username,
+    email: personEmail(person),
     placeId,
     profileVisibility: person.visibility,
     tradeBinderVisibility: person.visibility,
@@ -1038,15 +1049,15 @@ async function upsertPerson(
     return existing.id;
   }
 
-  const [created] = await db
-    .insert(users)
-    .values({
-      ...patch,
-      email: person.auth0Sub.startsWith('seed|') ? `${person.username}@seed.opulent.local` : null,
-    })
-    .returning({ id: users.id });
+  const [created] = await db.insert(users).values(patch).returning({ id: users.id });
   if (!created) throw new Error(`Could not create ${person.username}`);
   return created.id;
+}
+
+function personEmail(person: Person): string | null {
+  if (person.email) return person.email;
+  if (person.auth0Sub.startsWith('seed|')) return `${person.username}@seed.opulent.local`;
+  return null;
 }
 
 function toCollectionItem(userId: string, copy: OwnedCopy) {

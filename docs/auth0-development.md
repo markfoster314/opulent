@@ -27,7 +27,9 @@ VITE_API_BASE_URL=http://localhost:8787
 
 ## Seed users
 
-Every demo user has a `seed|...` subject. A login whose `sub` is missing creates an empty account. To open the `mark` collection, set that row's `auth0_sub` to your dev subject in the local database only.
+`pnpm db:seed` fills ten local traders. Nine use a `seed|` subject and cannot sign in.
+
+`mark` is the local Auth0 account `markfoster314@yahoo.com`. The subject is `auth0|6ad52793a07a8bf37e40baf6`. Sign in as that account to open the seeded collection. If an earlier sign-in created a second row for that same subject, the next seed removes the extra row and keeps the `mark` collection.
 
 ## Playwright
 

@@ -33,7 +33,7 @@ Cities come from [GeoNames](https://www.geonames.org/), [CC BY 4.0](https://crea
 
 `db:seed`, `db:reset`, and `db:push` refuse any host other than `localhost`, `127.0.0.1`, or `::1`. `ALLOW_REMOTE_DB=1` overrides that.
 
-Demo users use a `seed|` subject. See [docs/auth0-development.md](../../docs/auth0-development.md).
+Nine demo users use a `seed|` subject. `mark` is the local Auth0 account. See [docs/auth0-development.md](../../docs/auth0-development.md).
 
 Lint, test, and format are root commands. Repo map: [README.md](../../README.md).
 
