@@ -1,28 +1,26 @@
 This file adds rules for `apps/web`. Tree, imports, and routes: [README.md](README.md).
 
-If `AGENTS.local.md` sits beside this file, read it and follow it. It holds tone and private notes. Do not commit it.
+If `AGENTS.local.md` sits beside this file, read it and follow it. Do not commit it.
 
 # Commands
 
 ```bash
 pnpm --filter @opulent/web typecheck
-pnpm exec vitest run apps/web/src/<file>.test.tsx
+pnpm exec vitest run apps/web/src/features/wants/WantBinderView.test.tsx
 pnpm --filter @opulent/web dev:mock
 ```
 
-`dev:mock` runs the UI with no API. Run `pnpm test:e2e` only when the browser flow changes.
+Swap the test path for the file you changed. `dev:mock` serves the UI with no API. Run `pnpm test:e2e` only when a browser flow changes, and only after a yes.
 
-# Data
+# Code style
 
-Use `@opulent/shared` for contracts. Fetch through `src/api/client.ts`. Query keys live in `src/api/queryKeys.ts`. Server state is TanStack Query.
+React 19, Vite, MUI, React Router, TanStack Query. Contracts come from `@opulent/shared`.
 
-# Imports
-
-Feature folders stay flat. A feature `index.ts` does not use `export *`. Import boundaries stay as written in [README.md](README.md).
-
-# Tests
-
-Tests sit next to source. Vitest project name is `web`.
+- Fetch through `src/api/client.ts`. Query keys live in `src/api/queryKeys.ts`. Server state is TanStack Query.
+- Feature folders stay flat. No `utils/`, `pages/`, or `components/` under a feature.
+- A feature `index.ts` uses named exports. Do not use `export *`. `app/` and `layout/` import that barrel.
+- `shared/` does not import `features/`. Features do not import each other, except the pairs in [README.md](README.md). `queries.ts` may cross features.
+- Tests sit next to source. Vitest project name is `web` (jsdom).
 
 # Frontend layout
 
@@ -42,3 +40,18 @@ Do not add helper sentences under a section title. The purpose of a section must
 - A short control label ("Window", "Split by") is fine. A sentence about what the section does is not.
 - If data needs context, put it in the data, a tooltip, or a label. Do not write a paragraph.
 - When you touch a section, remove this kind of helper text.
+
+# Good
+
+- Client: `src/api/client.ts`
+- Feature barrel: `src/features/home/index.ts`
+
+# Avoid
+
+- A raw `fetch` beside `src/api/client.ts`
+- A Zod object in this app that copies `@opulent/shared`
+- A helper sentence under a section title
+
+# When stuck
+
+Ask. Do not open a browser to judge a layout.

@@ -1,29 +1,27 @@
-This file is for the coding agent. People should start at [README.md](README.md).
+This file is for the coding agent. People start at [README.md](README.md).
 
-# Personal notes
+Nested `AGENTS.md` files add rules for that folder. On a conflict, the nearer file wins.
 
-If `AGENTS.local.md` sits beside this file, read it and follow it. It holds tone and private notes. Do not commit it. The same rule applies to an `AGENTS.local.md` beside any nested `AGENTS.md`.
+If `AGENTS.local.md` sits beside this file, read it and follow it. It holds tone and private notes. Do not commit it. The same rule applies beside any nested `AGENTS.md`.
+
+# Stack
+
+Node `26.13.0` ([.nvmrc](.nvmrc)). pnpm `10.26.1` via Corepack. TypeScript, Vitest, Prettier, ESLint. Package map: [docs/monorepo.md](docs/monorepo.md).
 
 # Setup
-
-Node version is in [.nvmrc](.nvmrc) (`26.13.0`). pnpm is `10.26.1` via Corepack. Full steps: [README.md](README.md).
 
 ```bash
 npm install -g corepack
 corepack enable
 pnpm install
+cp .env.example .env
 ```
+
+Full product also needs Postgres: `docker compose up -d postgres`, then the database steps in [README.md](README.md).
 
 # Commands
 
-From the repo root:
-
-```bash
-pnpm check
-pnpm dev
-```
-
-Prefer a check on one file:
+## File-scoped (preferred)
 
 ```bash
 pnpm exec eslint path/to/file.ts
@@ -31,39 +29,67 @@ pnpm exec prettier --check path/to/file.ts
 pnpm exec vitest run path/to/file.test.ts
 ```
 
-`pnpm check` is format, lint, types, and unit tests. `pnpm dev` starts the API and the web app. Postgres and `.env` setup: [README.md](README.md).
+Swap `path/to/file` for the file you changed.
+
+## Full suite (only when the change needs it, and only after a yes)
+
+```bash
+pnpm check
+pnpm dev
+pnpm test:e2e
+pnpm smoke
+```
+
+`pnpm check` is format, lint, types, and unit tests. No Docker or Auth0. `pnpm test:e2e` is for a browser change. `pnpm smoke` is for a database change.
+
+# Code style
+
+- Prettier: single quotes, semicolons, print width 100. See [`.prettierrc.json`](.prettierrc.json).
+- ESLint allows zero warnings. Do not add `eslint-disable` to hide a new problem.
+- A comment earns its place only when it explains why, flags a gotcha, or cites an external constraint.
+- New dependency versions go in the pnpm catalog in `pnpm-workspace.yaml`. Workspace packages use `workspace:*`.
+- `@opulent/shared` and `@opulent/db` export TypeScript source. Do not add a `build` script to those packages or to `@opulent/infra`.
 
 # Packages
 
-Nested `AGENTS.md` files add rules for that folder. They do not replace this file.
+- `@opulent/web` — [apps/web/AGENTS.md](apps/web/AGENTS.md)
+- `@opulent/api` — [apps/api/AGENTS.md](apps/api/AGENTS.md)
+- `@opulent/shared` — [packages/shared/AGENTS.md](packages/shared/AGENTS.md)
+- `@opulent/db` — [packages/db/AGENTS.md](packages/db/AGENTS.md)
+- `@opulent/card-sync` — [jobs/card-sync/AGENTS.md](jobs/card-sync/AGENTS.md)
+- `@opulent/infra` — [infra/AGENTS.md](infra/AGENTS.md)
 
-- `@opulent/web` in `apps/web`. [apps/web/AGENTS.md](apps/web/AGENTS.md).
-- `@opulent/api` in `apps/api`. [apps/api/AGENTS.md](apps/api/AGENTS.md).
-- `@opulent/shared` in `packages/shared`. [packages/shared/AGENTS.md](packages/shared/AGENTS.md).
-- `@opulent/db` in `packages/db`. [packages/db/AGENTS.md](packages/db/AGENTS.md).
-- `@opulent/card-sync` in `jobs/card-sync`. [jobs/card-sync/AGENTS.md](jobs/card-sync/AGENTS.md).
-- `@opulent/infra` in `infra`. [infra/AGENTS.md](infra/AGENTS.md).
+An app does not import another app, a job, or infra. A package does not import an app, a job, or infra. A job does not import an app or infra. Infra imports no workspace package.
 
-Boundaries and the full map: [docs/monorepo.md](docs/monorepo.md).
+# Security
 
-New dependency versions go in the pnpm catalog in `pnpm-workspace.yaml`. Workspace packages use `workspace:*`.
+Copy `.env.example` to `.env`. Production secrets stay in AWS Secrets Manager. Never commit a password, token, or live database URL. Do not log an `Authorization` header, a request body, or an email.
 
-`@opulent/shared` and `@opulent/db` export TypeScript source. Do not add a `build` script to those packages or to `@opulent/infra`.
+# Permissions
 
-# Comments
+## Allowed without prompting
 
-Comment sparingly and keep comments short. A comment earns its place only when it explains WHY a decision was made, flags a non-obvious gotcha, or cites an external constraint. Never restate what the code plainly does. If the code is self-explanatory, leave no comment. Prefer clear variable names and small functions over explanatory comments
+- Read files
+- Lint, format, or type-check one file
+- Run one unit test file
 
-# Safety
+## Ask first
 
-- Do not commit `.env`.
-- Do not run `db:push`, `db:seed`, or `db:reset` against a remote database.
-- Do not deploy or destroy a stack unless asked.
-- Prefer the file-scoped checks above. Run `pnpm test:e2e` for browser changes and `pnpm smoke` for database changes.
+- Install or upgrade a package
+- `git commit` or `git push`
+- Delete a file
+- `pnpm check`, `pnpm build`, `pnpm test:e2e`, or `pnpm smoke`
+- `pnpm db:push`, `pnpm db:seed`, or `pnpm db:reset`
+- Deploy or destroy a stack
+- Edit `.github/workflows/`
 
 # Pull requests
 
-Branch, commits, and checks: [CONTRIBUTING.md](CONTRIBUTING.md). Do not commit `.env` or credentials.
+Conventional Commits. Branch from `main`. Steps: [CONTRIBUTING.md](CONTRIBUTING.md). CI: [.github/workflows/ci.yml](.github/workflows/ci.yml). Deploy: [docs/deploy.md](docs/deploy.md).
+
+# When stuck
+
+If the same check fails twice, or the right command is unclear, ask. Do not guess a secret or a production change.
 
 <!-- BEGIN:turborepo-agent-rules -->
 
