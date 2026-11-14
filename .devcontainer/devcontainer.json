@@ -6,7 +6,7 @@
   "features": {
     "ghcr.io/devcontainers/features/node:2": {
       // Keep this equal to .nvmrc.
-      "version": "26.13.0"
+      "version": "26.13.1"
     }
   },
   "postCreateCommand": "sudo npm install -g corepack && sudo corepack enable && pnpm install",
